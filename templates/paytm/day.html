@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Paytm {{ op_date.strftime('%d %b %Y') }} — PumpVision{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-2 mb-4">
+  <a href="{{ url_for('paytm.index') }}" class="text-indigo-600 text-sm">← Back</a>
+  <h1 class="text-xl font-bold text-gray-800">{{ op_date.strftime('%d %b %Y') }}</h1>
+</div>
+
+<!-- Summary cards -->
+<div class="grid grid-cols-3 gap-3 mb-5">
+  <div class="bg-white rounded-xl shadow p-3 text-center">
+    <p class="text-xs text-gray-500 mb-1">UPI</p>
+    <p class="text-lg font-bold text-green-700">₹{{ "{:,.0f}".format(upi_total) }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-3 text-center">
+    <p class="text-xs text-gray-500 mb-1">Card</p>
+    <p class="text-lg font-bold text-blue-700">₹{{ "{:,.0f}".format(card_total) }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-3 text-center">
+    <p class="text-xs text-gray-500 mb-1">Total</p>
+    <p class="text-lg font-bold text-indigo-700">₹{{ "{:,.0f}".format(grand_total) }}</p>
+  </div>
+</div>
+
+<!-- Transaction list -->
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+    <span class="font-semibold text-gray-700 text-sm">Transactions</span>
+    <span class="text-xs text-gray-400">{{ txns|length }} total</span>
+  </div>
+
+  {% if txns %}
+  <div class="divide-y divide-gray-50">
+    {% for t in txns %}
+    <div class="px-4 py-3 flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          {% if t.payment_category == 'UPI' %}
+            <span class="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded">UPI</span>
+          {% else %}
+            <span class="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Card</span>
+          {% endif %}
+          <span class="text-xs text-gray-400">{{ t.transaction_datetime.strftime('%H:%M') }}</span>
+          {% if t.pos_id and t.pos_id not in ('DEFAULT', '') %}
+            <span class="text-xs text-gray-400">{{ t.pos_id }}</span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-gray-400 mt-0.5">{{ t.payment_mode }}</p>
+      </div>
+      <span class="font-semibold text-gray-800">₹{{ "{:,.0f}".format(t.amount) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="px-4 py-6 text-center text-sm text-gray-400">No transactions.</p>
+  {% endif %}
+</div>
+{% endblock %}

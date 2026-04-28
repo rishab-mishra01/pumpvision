@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Get Totalizer — PumpVision{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-2 mb-4">
+  <a href="{{ url_for('recon.index') }}" class="text-indigo-600 text-sm">← Back</a>
+  <h1 class="text-xl font-bold text-gray-800">Get Totalizer Data</h1>
+</div>
+
+<div class="bg-white rounded-xl shadow p-5 space-y-4 text-sm text-gray-700">
+  <p>The scraper runs fully automatically in the background — no browser window, no CAPTCHA to solve.</p>
+
+  <div>
+    <p class="font-semibold text-gray-800 mb-2">What happens when you tap Get Totalizer:</p>
+    <ol class="list-decimal list-inside space-y-2">
+      <li>The daily scraper launches silently in the background</li>
+      <li>It opens IRAS, reads the CAPTCHA image, and solves it using AI</li>
+      <li>It downloads Price, Shift Totalizer, and ISS boundary data for the selected date</li>
+      <li>Results are saved directly to the database</li>
+      <li>Come back to this page and refresh — Step 1 will show green</li>
+    </ol>
+  </div>
+
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800 text-xs">
+    <p class="font-semibold mb-1">Timing</p>
+    <p>The scraper typically takes 1–2 minutes. If it doesn't show green after 3 minutes, check <code class="bg-blue-100 px-1 rounded font-mono">instance/scraper.log</code> for errors.</p>
+  </div>
+
+  <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-xs">
+    <p class="font-semibold mb-1">Note</p>
+    <p>The scraper needs readings for both the target date AND the previous day (opening + closing totalizers). Both are fetched automatically in a single run.</p>
+  </div>
+</div>
+{% endblock %}

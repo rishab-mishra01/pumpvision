@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Customers — PumpVision Credit{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Customers</h1>
+  <a href="{{ url_for('owner.new_customer') }}"
+     class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Add</a>
+</div>
+
+{% if customers %}
+<div class="space-y-2">
+  {% for c in customers %}
+  <div class="bg-white rounded-xl shadow p-4">
+    <div class="flex justify-between items-start">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <p class="font-semibold text-gray-800 truncate">{{ c.company_name }}</p>
+          {% if not c.is_active %}
+            <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">Inactive</span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-gray-500 mt-0.5">{{ c.fleet_manager_name }} · {{ c.whatsapp_number }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          Limit: ₹{{ "{:,.0f}".format(c.credit_limit) }} · {{ c.payment_terms_days }}-day terms
+        </p>
+        {% set vehicles = c.vehicles | selectattr('is_active') | list %}
+        {% if vehicles %}
+        <p class="text-xs text-gray-400 mt-0.5">
+          Vehicles: {{ vehicles | map(attribute='vehicle_number') | join(', ') }}
+        </p>
+        {% endif %}
+      </div>
+      <div class="flex flex-col gap-1 ml-3 flex-shrink-0">
+        <a href="{{ url_for('owner.ledger', customer_id=c.customer_id) }}"
+           class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-center">Ledger</a>
+        <a href="{{ url_for('owner.edit_customer', customer_id=c.customer_id) }}"
+           class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-center">Edit</a>
+      </div>
+    </div>
+    <div class="mt-3">
+      <div class="flex justify-between text-xs text-gray-500 mb-1">
+        <span>Outstanding: ₹{{ "{:,.0f}".format(c.outstanding_balance) }}</span>
+        <span>{{ "{:.0f}".format(c.utilization_pct) }}%</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5">
+        <div class="h-1.5 rounded-full {% if c.utilization_pct >= 80 %}bg-red-500{% elif c.utilization_pct >= 60 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+             style="width: {{ [c.utilization_pct, 100]|min }}%"></div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
+  No customers yet.
+</div>
+{% endif %}
+{% endblock %}

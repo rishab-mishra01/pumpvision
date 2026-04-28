@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Ledger: {{ customer.company_name }} — PumpVision{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+  <div class="flex justify-between items-start">
+    <div>
+      <h1 class="text-lg font-bold text-gray-800">{{ customer.company_name }}</h1>
+      <p class="text-sm text-gray-500">{{ customer.fleet_manager_name }} · {{ customer.whatsapp_number }}</p>
+    </div>
+    <a href="{{ url_for('credit.edit_customer', customer_id=customer.customer_id) }}"
+       class="text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg">Edit</a>
+  </div>
+  <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
+    <div class="bg-gray-50 rounded-lg p-2 text-center">
+      <p class="text-xs text-gray-400">Outstanding</p>
+      <p class="font-bold text-red-600">₹{{ "{:,.2f}".format(customer.outstanding_balance) }}</p>
+    </div>
+    <div class="bg-gray-50 rounded-lg p-2 text-center">
+      <p class="text-xs text-gray-400">Credit Limit</p>
+      <p class="font-bold text-gray-700">₹{{ "{:,.0f}".format(customer.credit_limit) }}</p>
+    </div>
+  </div>
+  <div class="mt-2">
+    <div class="w-full bg-gray-200 rounded-full h-2">
+      <div class="h-2 rounded-full {% if customer.utilization_pct >= 80 %}bg-red-500{% elif customer.utilization_pct >= 60 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+           style="width: {{ [customer.utilization_pct, 100]|min }}%"></div>
+    </div>
+    <p class="text-xs text-gray-400 mt-1">{{ "{:.0f}".format(customer.utilization_pct) }}% utilized · {{ customer.payment_terms_days }}-day terms</p>
+  </div>
+</div>
+
+<div class="flex bg-white rounded-xl shadow mb-4 overflow-hidden">
+  <button onclick="showTab('transactions')" id="tab-transactions"
+          class="flex-1 py-3 text-sm font-semibold tab-active">Transactions</button>
+  <button onclick="showTab('invoices')" id="tab-invoices"
+          class="flex-1 py-3 text-sm font-semibold text-gray-500">Invoices</button>
+  <button onclick="showTab('payments')" id="tab-payments"
+          class="flex-1 py-3 text-sm font-semibold text-gray-500">Payments</button>
+</div>
+
+<div id="pane-transactions">
+  {% if transactions %}
+  <div class="space-y-2">
+    {% for t in transactions %}
+    <div class="bg-white rounded-xl shadow p-3">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-sm font-semibold text-gray-800">{{ t.vehicle_number }} · {{ t.product }}</p>
+          <p class="text-xs text-gray-500">{{ t.transaction_date.strftime('%d %b %Y') }} {{ t.transaction_time.strftime('%H:%M') }}</p>
+          <p class="text-xs text-gray-400">{{ t.litres }}L · ₹{{ t.rate_per_litre }}/L · {{ t.attendant_name }}</p>
+          {% if t.is_legacy_entry %}<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Legacy</span>{% endif %}
+          {% if t.notes %}<p class="text-xs text-gray-400 italic mt-0.5">{{ t.notes }}</p>{% endif %}
+        </div>
+        <p class="font-bold text-gray-800 text-sm">₹{{ "{:,.2f}".format(t.amount) }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-center text-gray-400 py-8">No transactions yet.</p>
+  {% endif %}
+</div>
+
+<div id="pane-invoices" class="hidden">
+  {% if invoices %}
+  <div class="space-y-2">
+    {% for inv in invoices %}
+    <div class="bg-white rounded-xl shadow p-3">
+      <div class="flex justify-between items-start mb-2">
+        <div>
+          <p class="text-sm font-semibold text-gray-800">{{ inv.invoice_number }}</p>
+          <p class="text-xs text-gray-500">{{ inv.period_from.strftime('%d %b') }} – {{ inv.period_to.strftime('%d %b %Y') }}</p>
+          <p class="text-xs text-gray-400">Due: {{ inv.due_date.strftime('%d %b %Y') if inv.due_date else '—' }}</p>
+        </div>
+        <div class="text-right">
+          <p class="font-bold text-gray-800">₹{{ "{:,.2f}".format(inv.total_amount) }}</p>
+          {% if inv.is_paid %}
+            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Paid</span>
+          {% else %}
+            <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Unpaid</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a href="{{ url_for('credit.invoice_pdf', invoice_id=inv.invoice_id) }}"
+           class="flex-1 text-center text-xs bg-indigo-50 text-indigo-700 py-2 rounded-lg">Download PDF</a>
+        {% if not inv.is_paid %}
+        <button onclick="openPaymentModal({{ inv.invoice_id }}, '{{ inv.invoice_number }}', {{ inv.total_amount }})"
+                class="flex-1 text-xs bg-green-50 text-green-700 py-2 rounded-lg">Record Payment</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-center text-gray-400 py-8">No invoices yet.</p>
+  {% endif %}
+</div>
+
+<div id="pane-payments" class="hidden">
+  {% if payments %}
+  <div class="space-y-2">
+    {% for p in payments %}
+    <div class="bg-white rounded-xl shadow p-3">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-sm font-semibold text-gray-800">{{ p.payment_mode or 'Payment' }}</p>
+          <p class="text-xs text-gray-500">{{ p.payment_date.strftime('%d %b %Y') }}</p>
+          {% if p.reference_number %}<p class="text-xs text-gray-400">Ref: {{ p.reference_number }}</p>{% endif %}
+        </div>
+        <p class="font-bold text-green-700">₹{{ "{:,.2f}".format(p.amount) }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-center text-gray-400 py-8">No payments recorded yet.</p>
+  {% endif %}
+</div>
+
+<div id="payment-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end">
+  <div class="bg-white rounded-t-2xl w-full p-5 max-w-2xl mx-auto">
+    <h2 class="text-lg font-bold text-gray-800 mb-4">Record Payment</h2>
+    <p class="text-sm text-gray-500 mb-4" id="modal-invoice-label"></p>
+    <form method="POST" action="{{ url_for('credit.record_payment', customer_id=customer.customer_id) }}" class="space-y-3">
+      <input type="hidden" name="invoice_id" id="modal-invoice-id">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
+        <input type="number" name="amount" id="modal-amount" required step="0.01" min="1"
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
+        <input type="date" name="payment_date" required value="{{ now_date }}"
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Mode</label>
+        <select name="payment_mode"
+                class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <option value="">Select mode</option>
+          <option>NEFT</option><option>RTGS</option><option>Cheque</option><option>Cash</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Reference / UTR</label>
+        <input type="text" name="reference_number"
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+               placeholder="Optional">
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closePaymentModal()"
+                class="flex-1 border border-gray-300 text-gray-700 font-semibold py-3 rounded-xl">Cancel</button>
+        <button type="submit"
+                class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  ['transactions','invoices','payments'].forEach(t => {
+    document.getElementById('pane-' + t).classList.add('hidden');
+    document.getElementById('tab-' + t).classList.remove('text-indigo-700','border-b-2','border-indigo-600');
+    document.getElementById('tab-' + t).classList.add('text-gray-500');
+  });
+  document.getElementById('pane-' + name).classList.remove('hidden');
+  document.getElementById('tab-' + name).classList.remove('text-gray-500');
+  document.getElementById('tab-' + name).classList.add('text-indigo-700','border-b-2','border-indigo-600');
+}
+function openPaymentModal(invoiceId, invoiceNum, totalAmount) {
+  document.getElementById('modal-invoice-id').value = invoiceId;
+  document.getElementById('modal-invoice-label').textContent = invoiceNum + ' · Total ₹' + totalAmount.toLocaleString('en-IN');
+  document.getElementById('modal-amount').value = totalAmount;
+  document.getElementById('payment-modal').classList.remove('hidden');
+}
+function closePaymentModal() {
+  document.getElementById('payment-modal').classList.add('hidden');
+}
+document.addEventListener('DOMContentLoaded', () => showTab('transactions'));
+</script>
+{% endblock %}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>{% block title %}PumpVision Credit{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Ensure minimum tap targets */
+    button, a.btn, input[type=submit], select, .tap-target {
+      min-height: 48px;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  {% if current_user.is_authenticated %}
+  <nav class="bg-indigo-700 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow">
+    <span class="font-bold text-lg tracking-wide">
+      ⛽ PumpVision Credit
+    </span>
+    <div class="flex items-center gap-3">
+      <span class="text-indigo-200 text-sm capitalize">{{ current_user.role }}</span>
+      <a href="{{ url_for('auth.logout') }}" class="text-sm bg-indigo-900 hover:bg-indigo-800 px-3 py-2 rounded">Logout</a>
+    </div>
+  </nav>
+
+  {% if current_user.role == 'owner' %}
+  <div class="bg-indigo-600 text-indigo-100 text-sm overflow-x-auto">
+    <div class="flex whitespace-nowrap px-2">
+      <a href="{{ url_for('owner.dashboard') }}" class="px-4 py-3 hover:bg-indigo-500 block">Dashboard</a>
+      <a href="{{ url_for('owner.customers') }}" class="px-4 py-3 hover:bg-indigo-500 block">Customers</a>
+      <a href="{{ url_for('owner.invoices') }}" class="px-4 py-3 hover:bg-indigo-500 block">Invoices</a>
+      <a href="{{ url_for('owner.prices') }}" class="px-4 py-3 hover:bg-indigo-500 block">Prices</a>
+      <a href="{{ url_for('owner.settings') }}" class="px-4 py-3 hover:bg-indigo-500 block">Settings</a>
+      <a href="{{ url_for('attendant.log_transaction') }}" class="px-4 py-3 hover:bg-indigo-500 block">Log Txn</a>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <main class="max-w-2xl mx-auto px-4 py-4">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2 mb-4">
+        {% for category, message in messages %}
+          {% if category == 'error' %}
+            <div class="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded text-sm">{{ message }}</div>
+          {% elif category == 'warning' %}
+            <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded text-sm">{{ message }}</div>
+          {% else %}
+            <div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded text-sm">{{ message }}</div>
+          {% endif %}
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+</body>
+</html>

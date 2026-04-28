@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Reconcile {{ op_date.strftime('%d %b %Y') }} — PumpVision{% endblock %}
+
+{% block content %}
+
+<!-- Date navigation -->
+<div class="flex items-center justify-between mb-4">
+  <a href="{{ url_for('recon.day', date_str=prev_date.strftime('%Y-%m-%d')) }}"
+     class="text-indigo-600 text-2xl font-light px-2">‹</a>
+  <input type="date" value="{{ op_date.strftime('%Y-%m-%d') }}"
+         onchange="window.location='/recon/'+this.value"
+         class="text-base font-bold text-gray-800 text-center border-0 bg-transparent cursor-pointer focus:outline-none">
+  <a href="{{ url_for('recon.day', date_str=next_date.strftime('%Y-%m-%d')) }}"
+     class="text-indigo-600 text-2xl font-light px-2">›</a>
+</div>
+
+<!-- Checklist -->
+<div class="space-y-3 mb-5">
+
+  <!-- Step 1: Totalizer -->
+  <div class="bg-white rounded-xl shadow p-4 flex items-center gap-4">
+    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+      {{ 'bg-green-100 text-green-700' if status.totalizer.ready else 'bg-gray-100 text-gray-400' }}">
+      1
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-gray-800 text-sm">Totalizer</p>
+      {% if status.totalizer.ready %}
+        <p class="text-xs text-green-600">Ready — nozzles {{ status.totalizer.closing_nozzles | join(', ') }}</p>
+      {% elif not status.totalizer.closing_available %}
+        <p class="text-xs text-gray-400">Day closing unavailable — shift still in progress</p>
+      {% elif status.totalizer.closing_available and not status.totalizer.closing_nozzles %}
+        <p class="text-xs text-indigo-600">Ready to fetch day closing</p>
+      {% else %}
+        <p class="text-xs text-gray-400">No data for this date</p>
+      {% endif %}
+    </div>
+    {% if status.totalizer.ready %}
+    <span class="flex-shrink-0 text-green-500 text-xl">✓</span>
+    {% elif status.totalizer.closing_available %}
+    <form method="POST" action="{{ url_for('recon.run_scraper', date_str=op_date.strftime('%Y-%m-%d')) }}">
+      <button type="submit"
+              class="flex-shrink-0 bg-indigo-600 text-white text-xs font-semibold px-3 py-2 rounded-lg whitespace-nowrap">
+        Get Totalizer
+      </button>
+    </form>
+    {% else %}
+    <button disabled
+            class="flex-shrink-0 bg-gray-200 text-gray-400 text-xs font-semibold px-3 py-2 rounded-lg whitespace-nowrap cursor-not-allowed">
+      Get Totalizer
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- Step 2: Paytm -->
+  <div class="bg-white rounded-xl shadow p-4 flex items-center gap-4">
+    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+      {{ 'bg-green-100 text-green-700' if status.paytm.ready else 'bg-gray-100 text-gray-400' }}">
+      2
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-gray-800 text-sm">Paytm</p>
+      {% if status.paytm.ready %}
+        <p class="text-xs text-green-600">Ready</p>
+      {% else %}
+        <p class="text-xs text-gray-400">No transactions for this date</p>
+      {% endif %}
+    </div>
+    {% if not status.paytm.ready %}
+    <a href="{{ url_for('paytm.upload') }}"
+       class="flex-shrink-0 bg-indigo-600 text-white text-xs font-semibold px-3 py-2 rounded-lg whitespace-nowrap">
+      Get Paytm
+    </a>
+    {% else %}
+    <span class="flex-shrink-0 text-green-500 text-xl">✓</span>
+    {% endif %}
+  </div>
+
+  <!-- Step 3: Credit -->
+  <div class="bg-white rounded-xl shadow p-4 flex items-center gap-4">
+    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-green-100 text-green-700">
+      3
+    </div>
+    <div class="flex-1">
+      <p class="font-semibold text-gray-800 text-sm">Credit</p>
+      <p class="text-xs text-green-600">Always ready — live ledger</p>
+    </div>
+    <span class="flex-shrink-0 text-green-500 text-xl">✓</span>
+  </div>
+
+</div>
+
+{% if not status.totalizer.ready or not status.paytm.ready %}
+<p class="text-center text-xs text-gray-400 mt-2 mb-4">Complete Steps 1 and 2 to see the calculation</p>
+{% endif %}
+
+<!-- Results -->
+{% if result %}
+<div class="mt-6 space-y-4">
+
+  <!-- Per-product totalizer breakdown -->
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
+      <p class="font-semibold text-gray-700 text-sm">Totalizer Sales</p>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-xs text-gray-400 border-b border-gray-100">
+          <th class="px-4 py-2 text-left">Product</th>
+          <th class="px-4 py-2 text-right">Open</th>
+          <th class="px-4 py-2 text-right">Close</th>
+          <th class="px-4 py-2 text-right">Pump Test</th>
+          <th class="px-4 py-2 text-right">Net L</th>
+          <th class="px-4 py-2 text-right">RSP</th>
+          <th class="px-4 py-2 text-right">Value</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row in result.nozzle_rows %}
+        <tr class="{{ 'bg-gray-50' if loop.index is odd }}">
+          <td class="px-4 py-3 font-medium text-gray-800">{{ row.label }}</td>
+          <td class="px-4 py-3 text-right text-gray-500 text-xs">
+            {% if row.totalizer_open is not none %}{{ "{:,.2f}".format(row.totalizer_open) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right text-gray-500 text-xs">
+            {% if row.totalizer_close is not none %}{{ "{:,.2f}".format(row.totalizer_close) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right {{ 'text-amber-600 font-medium' if row.pump_test_litres > 0 else 'text-gray-300' }}">
+            {% if row.pump_test_litres > 0 %}−{{ "{:,.2f}".format(row.pump_test_litres) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right text-gray-700 font-medium">
+            {% if row.litres is not none %}{{ "{:,.2f}".format(row.litres) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right text-gray-500">
+            {% if row.rsp %}₹{{ "{:.2f}".format(row.rsp) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right font-semibold text-gray-800">
+            ₹{{ "{:,.0f}".format(row.sales_value) }}
+          </td>
+        </tr>
+        {% endfor %}
+        <tr class="bg-indigo-50">
+          <td colspan="6" class="px-4 py-3 font-bold text-indigo-800">Total Sales</td>
+          <td class="px-4 py-3 text-right font-bold text-indigo-800">
+            ₹{{ "{:,.0f}".format(result.total_sales_value) }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Cash derivation -->
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
+      <p class="font-semibold text-gray-700 text-sm">Payment Breakdown</p>
+    </div>
+    <div class="divide-y divide-gray-50 text-sm">
+      <div class="px-4 py-3 flex justify-between">
+        <span class="text-gray-600">Total Sales</span>
+        <span class="font-semibold text-gray-800">₹{{ "{:,.0f}".format(result.total_sales_value) }}</span>
+      </div>
+      <div class="px-4 py-3 flex justify-between">
+        <div>
+          <span class="text-gray-600">− Paytm</span>
+          <span class="text-xs text-gray-400 ml-2">
+            UPI ₹{{ "{:,.0f}".format(result.paytm_upi) }} + Card ₹{{ "{:,.0f}".format(result.paytm_card) }}
+          </span>
+        </div>
+        <span class="font-semibold text-gray-800">₹{{ "{:,.0f}".format(result.paytm_total) }}</span>
+      </div>
+      <div class="px-4 py-3 flex justify-between">
+        <span class="text-gray-600">− Credit</span>
+        <span class="font-semibold text-gray-800">₹{{ "{:,.0f}".format(result.credit_total) }}</span>
+      </div>
+      <div class="px-4 py-3 flex justify-between bg-green-50">
+        <span class="font-bold text-green-800 text-base">Derived Cash</span>
+        <span class="font-bold text-green-800 text-xl">₹{{ "{:,.0f}".format(result.derived_cash) }}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endif %}
+
+{% endblock %}

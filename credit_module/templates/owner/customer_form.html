@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{% if customer %}Edit{% else %}New{% endif %} Customer — PumpVision Credit{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold text-gray-800 mb-4">
+  {% if customer %}Edit Customer{% else %}New Customer{% endif %}
+</h1>
+
+<form method="POST" class="space-y-4">
+
+  <div class="bg-white rounded-xl shadow p-4 space-y-4">
+    <h2 class="font-semibold text-gray-700">Company Details</h2>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+      <input type="text" name="company_name" required
+             value="{{ customer.company_name if customer else '' }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="e.g. Sharma Transport Co.">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+      <input type="text" name="gst_number"
+             value="{{ customer.gst_number if customer and customer.gst_number else '' }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="Optional">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Fleet Manager Name *</label>
+      <input type="text" name="fleet_manager_name" required
+             value="{{ customer.fleet_manager_name if customer else '' }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="Contact person name">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number *</label>
+      <input type="text" name="whatsapp_number" required
+             value="{{ customer.whatsapp_number if customer else '91' }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="917415XXXXXX">
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4 space-y-4">
+    <h2 class="font-semibold text-gray-700">Credit Terms</h2>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Credit Limit (₹) *</label>
+      <input type="number" name="credit_limit" required min="0" step="1000"
+             value="{{ customer.credit_limit if customer else '' }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="e.g. 50000">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Payment Terms (days) *</label>
+      <select name="payment_terms_days"
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="15" {% if customer and customer.payment_terms_days == 15 %}selected{% endif %}>15 days</option>
+        <option value="30" {% if not customer or customer.payment_terms_days == 30 %}selected{% endif %}>30 days</option>
+        <option value="45" {% if customer and customer.payment_terms_days == 45 %}selected{% endif %}>45 days</option>
+        <option value="60" {% if customer and customer.payment_terms_days == 60 %}selected{% endif %}>60 days</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4 space-y-4">
+    <h2 class="font-semibold text-gray-700">Authorized Vehicles</h2>
+    <p class="text-xs text-gray-500">One vehicle number per line. Do not include UNREGISTERED or CONTAINER — those are always available.</p>
+    <textarea name="vehicle_numbers" rows="4"
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="MP04AB1234&#10;MP07CD5678">{% if customer %}{% for v in customer.vehicles if v.is_active %}{{ v.vehicle_number }}
+{% endfor %}{% endif %}</textarea>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4 space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+      <textarea name="notes" rows="3"
+                class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                placeholder="Special instructions, authorised products, etc.">{{ customer.notes if customer and customer.notes else '' }}</textarea>
+    </div>
+
+    {% if customer %}
+    <div class="flex items-center gap-3">
+      <input type="checkbox" name="is_active" id="is_active"
+             class="w-5 h-5 accent-indigo-600"
+             {% if customer.is_active %}checked{% endif %}>
+      <label for="is_active" class="text-sm font-medium text-gray-700">Account Active</label>
+    </div>
+    {% else %}
+    <input type="hidden" name="is_active" value="on">
+    {% endif %}
+  </div>
+
+  <button type="submit"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl text-base">
+    {% if customer %}Save Changes{% else %}Create Customer{% endif %}
+  </button>
+
+  <a href="{{ url_for('owner.customers') }}"
+     class="block w-full text-center text-gray-500 py-3 text-sm">Cancel</a>
+</form>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Log Transaction — PumpVision{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold text-gray-800 mb-4">Log Credit Transaction</h1>
+
+<form method="POST" action="{{ url_for('attendant.log_transaction') }}" class="space-y-4" id="txn-form">
+
+  <div class="bg-white rounded-xl shadow p-4 space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+      <select name="customer_id" id="customer-select" required
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">— Select customer —</option>
+        {% for c in customers %}
+        <option value="{{ c.customer_id }}">{{ c.company_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Vehicle *</label>
+      <select name="vehicle_number" id="vehicle-select" required
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">— Select customer first —</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Product *</label>
+      <div class="grid grid-cols-4 gap-2" id="product-buttons">
+        {% for prod, label in [('HS','HSD'), ('MS','Petrol'), ('X2','XP95'), ('XG','XGreen')] %}
+        <label class="cursor-pointer">
+          <input type="radio" name="product" value="{{ prod }}" class="sr-only peer" required>
+          <div class="text-center py-3 border-2 border-gray-200 rounded-xl text-sm font-semibold text-gray-600
+                      peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700">
+            {{ label }}
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4 space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Rate per Litre (₹)
+        <span class="text-xs text-gray-400 font-normal">— auto from current RSP</span>
+      </label>
+      <input type="text" id="rate-display" readonly value="— select a product —"
+             class="w-full border border-gray-200 rounded-lg px-4 py-3 text-base bg-gray-50 text-gray-500 cursor-not-allowed">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Litres *</label>
+      <input type="number" name="litres" required step="0.01" min="0.01" inputmode="decimal"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="e.g. 50.00">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₹) *
+        <span class="text-xs text-gray-400 font-normal">— from meter reading</span>
+      </label>
+      <input type="number" name="amount" required step="0.01" min="1" inputmode="decimal"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="e.g. 4699.50">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Attendant Name *</label>
+      <input type="text" name="attendant_name" required
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="Your name">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+      <input type="text" name="notes"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             placeholder="Optional">
+    </div>
+  </div>
+
+  <button type="submit"
+          class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg">
+    Submit Transaction
+  </button>
+</form>
+
+<script>
+const PRICE_MAP = {{ price_map | tojson }};
+
+document.querySelectorAll('input[name="product"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    const rate = PRICE_MAP[this.value];
+    const display = document.getElementById('rate-display');
+    display.value = rate !== undefined ? '₹' + rate.toFixed(2) + ' / litre' : '—';
+  });
+});
+
+const customerSelect = document.getElementById('customer-select');
+const vehicleSelect  = document.getElementById('vehicle-select');
+
+const FIXED_VEHICLES = [
+  { number: 'UNREGISTERED', description: 'Pre-delivery / No registration' },
+  { number: 'CONTAINER',    description: 'Fuel container' },
+];
+
+customerSelect.addEventListener('change', function() {
+  const customerId = this.value;
+  vehicleSelect.innerHTML = '<option value="">Loading...</option>';
+
+  if (!customerId) {
+    vehicleSelect.innerHTML = '<option value="">— Select customer first —</option>';
+    return;
+  }
+
+  fetch(`/attendant/vehicles/${customerId}`)
+    .then(r => r.json())
+    .then(vehicles => {
+      vehicleSelect.innerHTML = '<option value="">— Select vehicle —</option>';
+      FIXED_VEHICLES.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.number;
+        opt.textContent = v.number + (v.description ? ' — ' + v.description : '');
+        vehicleSelect.appendChild(opt);
+      });
+      vehicles.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.number;
+        opt.textContent = v.number + (v.description ? ' — ' + v.description : '');
+        vehicleSelect.appendChild(opt);
+      });
+    })
+    .catch(() => {
+      vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Meters {{ op_date.strftime('%d %b') }} — PumpVision{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-1">
+  <a href="{{ url_for('meters.index') }}" class="text-indigo-600 text-sm">← All Readings</a>
+  <div class="flex items-center gap-3 text-sm">
+    <a href="{{ url_for('meters.day', date_str=prev_date.strftime('%Y-%m-%d'), view=view) }}"
+       class="text-indigo-600">‹</a>
+    <span class="text-gray-500">{{ op_date.strftime('%d %b %Y') }}</span>
+    <a href="{{ url_for('meters.day', date_str=next_date.strftime('%Y-%m-%d'), view=view) }}"
+       class="text-indigo-600">›</a>
+  </div>
+</div>
+<h1 class="text-xl font-bold text-gray-800 mb-4">Meter Comparison</h1>
+
+{# Toggle #}
+<div class="flex bg-gray-100 rounded-lg p-1 mb-5">
+  <a href="?view=totalizer"
+     class="flex-1 text-center py-2 text-sm font-medium rounded-md transition
+            {{ 'bg-white shadow text-gray-800' if view == 'totalizer' else 'text-gray-500' }}">
+    Totalizer
+  </a>
+  <a href="?view=litres"
+     class="flex-1 text-center py-2 text-sm font-medium rounded-md transition
+            {{ 'bg-white shadow text-gray-800' if view == 'litres' else 'text-gray-500' }}">
+    Litres Sold
+  </a>
+</div>
+
+{% if view == 'totalizer' %}
+{# ── Totalizer view — nozzle level ── #}
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <div class="grid grid-cols-5 bg-gray-50 border-b text-xs font-semibold text-gray-500 px-3 py-2">
+    <div>Nozzle</div>
+    <div class="text-right">Day Open</div>
+    <div class="text-right">Day Close</div>
+    <div class="text-right">IRAS Open</div>
+    <div class="text-right">IRAS Close</div>
+  </div>
+  {% for row in totalizer_rows %}
+  <div class="grid grid-cols-5 px-3 py-3 border-b last:border-0 text-sm items-center">
+    <div class="font-medium text-gray-700 text-xs">{{ row.label }}</div>
+
+    <div class="text-right font-mono text-xs
+                {{ 'text-gray-800' if row.emp_opening is not none else 'text-gray-300' }}">
+      {{ '{:,.2f}'.format(row.emp_opening) if row.emp_opening is not none else '—' }}
+    </div>
+
+    <div class="text-right font-mono text-xs">
+      {% if row.emp_closing is not none %}
+      <div class="text-gray-800">{{ '{:,.2f}'.format(row.emp_closing) }}</div>
+      {% if row.emp_recorded %}
+      <div class="text-gray-400" style="font-size:0.65rem">{{ row.emp_recorded.strftime('%H:%M') }}</div>
+      {% endif %}
+      {% else %}
+      <span class="text-gray-300">—</span>
+      {% endif %}
+    </div>
+
+    <div class="text-right font-mono text-xs
+                {{ 'text-gray-800' if row.iras_opening is not none else 'text-gray-300' }}">
+      {% if row.has_iras %}
+        {{ '{:,.2f}'.format(row.iras_opening) if row.iras_opening is not none else '—' }}
+      {% else %}
+        <span class="text-gray-300 italic">N/A</span>
+      {% endif %}
+    </div>
+
+    <div class="text-right font-mono text-xs
+                {{ 'text-gray-800' if row.iras_closing is not none else 'text-gray-300' }}">
+      {% if row.has_iras %}
+        {{ '{:,.2f}'.format(row.iras_closing) if row.iras_closing is not none else '—' }}
+      {% else %}
+        <span class="text-gray-300 italic">N/A</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+{# ── Litres sold view — product level ── #}
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <div class="grid grid-cols-4 bg-gray-50 border-b text-xs font-semibold text-gray-500 px-3 py-2">
+    <div>Product</div>
+    <div class="text-right">Employee</div>
+    <div class="text-right">IRAS</div>
+    <div class="text-right">Diff</div>
+  </div>
+  {% for row in litres_rows %}
+  <div class="grid grid-cols-4 px-3 py-3 border-b last:border-0 text-sm items-center">
+    <div class="font-semibold text-gray-700">{{ row.product }}</div>
+
+    <div class="text-right font-mono text-sm
+                {{ 'text-gray-800' if row.emp_litres is not none else 'text-gray-300' }}">
+      {{ '{:,.2f}'.format(row.emp_litres) if row.emp_litres is not none else '—' }}
+    </div>
+
+    <div class="text-right font-mono text-sm
+                {{ 'text-gray-800' if row.iras_litres is not none else 'text-gray-300' }}">
+      {% if row.product == 'CNG' %}
+        <span class="text-gray-300 italic text-xs">N/A</span>
+      {% else %}
+        {{ '{:,.2f}'.format(row.iras_litres) if row.iras_litres is not none else '—' }}
+      {% endif %}
+    </div>
+
+    <div class="text-right font-mono text-sm font-semibold">
+      {% if row.diff is not none %}
+        {% if row.diff > 2 %}
+          <span class="text-red-600">+{{ '{:,.2f}'.format(row.diff) }}</span>
+        {% elif row.diff < -2 %}
+          <span class="text-amber-600">{{ '{:,.2f}'.format(row.diff) }}</span>
+        {% else %}
+          <span class="text-green-600">{{ '{:,.2f}'.format(row.diff) }}</span>
+        {% endif %}
+      {% else %}
+        <span class="text-gray-300">—</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="text-xs text-gray-400 mt-2 px-1">
+  Diff = Employee − IRAS. Red (+) means employee reads higher; amber (−) means lower. ±2L tolerance shown in green.
+</p>
+{% endif %}
+
+{% endblock %}

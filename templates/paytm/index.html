@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Paytm — PumpVision{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Paytm Collections</h1>
+  <a href="{{ url_for('paytm.upload') }}"
+     class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+    Upload CSV
+  </a>
+</div>
+
+{% if days %}
+  <div class="space-y-3">
+    {% for op_date, cats in days %}
+    {% set upi = cats.UPI %}
+    {% set card = cats.CARD %}
+    {% set total = (upi.total or 0) + (card.total or 0) %}
+    <a href="{{ url_for('paytm.day', date_str=op_date.strftime('%Y-%m-%d')) }}"
+       class="block bg-white rounded-xl shadow p-4 hover:shadow-md transition">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-semibold text-gray-800">{{ op_date.strftime('%d %b %Y') }}</span>
+        <span class="text-lg font-bold text-indigo-700">₹{{ "{:,.0f}".format(total) }}</span>
+      </div>
+      <div class="flex gap-4 text-sm text-gray-600">
+        <span>
+          <span class="font-medium text-green-700">UPI</span>
+          ₹{{ "{:,.0f}".format(upi.total or 0) }}
+          <span class="text-gray-400">({{ upi.count or 0 }})</span>
+        </span>
+        <span>
+          <span class="font-medium text-blue-700">Card</span>
+          ₹{{ "{:,.0f}".format(card.total or 0) }}
+          <span class="text-gray-400">({{ card.count or 0 }})</span>
+        </span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="bg-white rounded-xl shadow p-8 text-center text-gray-400">
+    <p class="text-lg font-semibold mb-2">No data yet</p>
+    <p class="text-sm mb-4">Upload a Paytm Transaction Report CSV to get started.</p>
+    <a href="{{ url_for('paytm.upload') }}"
+       class="inline-block bg-indigo-600 text-white text-sm px-5 py-2 rounded-lg">
+      Upload CSV
+    </a>
+  </div>
+{% endif %}
+{% endblock %}

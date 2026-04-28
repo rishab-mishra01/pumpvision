@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ product }} Meter — PumpVision{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-2 mb-1">
+  <a href="{{ url_for('attendant.shift_close') }}" class="text-indigo-600 text-sm">← Back</a>
+  <h1 class="text-xl font-bold text-gray-800">{{ product }} Totalizer</h1>
+</div>
+<p class="text-sm text-gray-500 mb-5">Day close — {{ op_date.strftime('%d %b %Y') }}</p>
+
+<form method="POST" class="space-y-4">
+  {% for label in labels %}
+  {% set prev = prev_readings.get(label) %}
+  {% set curr = current_readings.get(label) %}
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-sm font-semibold text-gray-700 mb-1">{{ label }}</p>
+    {% if prev %}
+    <p class="text-xs text-gray-400 mb-2">
+      Last recorded: <span class="font-mono">{{ '{:,.2f}'.format(prev.totalizer_value) }}</span> L
+      &nbsp;·&nbsp; {{ prev.operational_date.strftime('%d %b') }}
+    </p>
+    {% else %}
+    <p class="text-xs text-gray-400 mb-2">No previous reading on record</p>
+    {% endif %}
+    <input type="number"
+           name="totalizer_{{ label|replace(' ', '_') }}"
+           step="0.01"
+           min="0.01"
+           inputmode="decimal"
+           value="{{ '{:.2f}'.format(curr.totalizer_value) if curr else '' }}"
+           placeholder="Enter totalizer reading"
+           required
+           class="w-full border border-gray-300 rounded-lg px-3 py-3 text-lg font-mono
+                  focus:outline-none focus:ring-2 focus:ring-indigo-500">
+  </div>
+  {% endfor %}
+
+  <button type="submit"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800
+                 text-white font-bold py-4 rounded-xl text-base">
+    Save {{ product }} Readings
+  </button>
+</form>
+{% endblock %}

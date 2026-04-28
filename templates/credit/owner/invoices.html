@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Invoices — PumpVision{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold text-gray-800 mb-4">Invoices</h1>
+
+<div class="bg-white rounded-xl shadow p-4 mb-6">
+  <h2 class="font-semibold text-gray-700 mb-3">Generate New Invoice</h2>
+  <form method="POST" action="{{ url_for('credit.generate_invoice') }}" class="space-y-3">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+      <select name="customer_id" required
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">Select customer</option>
+        {% for c in customers %}
+        <option value="{{ c.customer_id }}">{{ c.company_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">From *</label>
+        <input type="date" name="period_from" required
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">To *</label>
+        <input type="date" name="period_to" required
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+      </div>
+    </div>
+    <button type="submit"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl">
+      Generate Invoice
+    </button>
+  </form>
+</div>
+
+{% if invoices %}
+<div class="space-y-2">
+  {% for inv in invoices %}
+  <div class="bg-white rounded-xl shadow p-3">
+    <div class="flex justify-between items-start mb-2">
+      <div>
+        <p class="text-sm font-semibold text-gray-800">{{ inv.invoice_number }}</p>
+        <p class="text-xs text-gray-500">{{ inv.customer.company_name }}</p>
+        <p class="text-xs text-gray-400">{{ inv.period_from.strftime('%d %b') }} – {{ inv.period_to.strftime('%d %b %Y') }}</p>
+        <p class="text-xs text-gray-400">Due: {{ inv.due_date.strftime('%d %b %Y') if inv.due_date else '—' }}</p>
+      </div>
+      <div class="text-right">
+        <p class="font-bold text-gray-800">₹{{ "{:,.2f}".format(inv.total_amount) }}</p>
+        {% if inv.is_paid %}
+          <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Paid</span>
+        {% else %}
+          <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Unpaid</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('credit.invoice_pdf', invoice_id=inv.invoice_id) }}"
+         class="flex-1 text-center text-xs bg-indigo-50 text-indigo-700 py-2 rounded-lg">Download PDF</a>
+      <a href="{{ url_for('credit.ledger', customer_id=inv.customer_id) }}"
+         class="flex-1 text-center text-xs bg-gray-100 text-gray-600 py-2 rounded-lg">Ledger</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-xl shadow p-8 text-center text-gray-400">No invoices generated yet.</div>
+{% endif %}
+{% endblock %}

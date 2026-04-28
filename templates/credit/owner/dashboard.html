@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Credit Dashboard — PumpVision{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold text-gray-800 mb-4">Credit Dashboard</h1>
+
+<div class="grid grid-cols-2 gap-3 mb-6">
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 uppercase tracking-wide">Total Outstanding</p>
+    <p class="text-2xl font-bold text-red-600 mt-1">₹{{ "{:,.0f}".format(total_outstanding) }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 uppercase tracking-wide">This Month Credit</p>
+    <p class="text-2xl font-bold text-indigo-600 mt-1">₹{{ "{:,.0f}".format(this_month_total) }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 uppercase tracking-wide">Active Customers</p>
+    <p class="text-2xl font-bold text-gray-800 mt-1">{{ customers|length }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 uppercase tracking-wide">Overdue Accounts</p>
+    <p class="text-2xl font-bold text-orange-600 mt-1">{{ overdue_customers|length }}</p>
+  </div>
+</div>
+
+{% if alert_customers %}
+<div class="bg-red-50 border border-red-300 rounded-xl p-4 mb-6">
+  <h2 class="text-base font-bold text-red-700 mb-3">Credit Alerts (above {{ threshold|int }}% utilization)</h2>
+  <div class="space-y-2">
+    {% for c in alert_customers %}
+    <div class="bg-white rounded-lg p-3 flex items-center justify-between">
+      <div>
+        <p class="font-semibold text-gray-800 text-sm">{{ c.company_name }}</p>
+        <p class="text-xs text-gray-500">₹{{ "{:,.0f}".format(c.outstanding_balance) }} / ₹{{ "{:,.0f}".format(c.credit_limit) }}</p>
+      </div>
+      <div class="text-right">
+        <span class="text-red-600 font-bold text-lg">{{ "{:.0f}".format(c.utilization_pct) }}%</span>
+        <a href="{{ url_for('credit.ledger', customer_id=c.customer_id) }}" class="block text-xs text-indigo-600 mt-1">View →</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if overdue_customers %}
+<div class="bg-orange-50 border border-orange-300 rounded-xl p-4 mb-6">
+  <h2 class="text-base font-bold text-orange-700 mb-3">Overdue Accounts</h2>
+  <div class="space-y-2">
+    {% for c in overdue_customers %}
+    <div class="bg-white rounded-lg p-3 flex items-center justify-between">
+      <p class="font-semibold text-gray-800 text-sm">{{ c.company_name }}</p>
+      <a href="{{ url_for('credit.ledger', customer_id=c.customer_id) }}" class="text-xs text-indigo-600">View →</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="flex items-center justify-between mb-3">
+  <h2 class="text-base font-semibold text-gray-700">All Active Customers</h2>
+  <a href="{{ url_for('credit.new_customer') }}"
+     class="bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">+ Add</a>
+</div>
+
+{% if customers %}
+<div class="space-y-2">
+  {% for c in customers %}
+  {% set pct = c.utilization_pct %}
+  <a href="{{ url_for('credit.ledger', customer_id=c.customer_id) }}"
+     class="block bg-white rounded-xl shadow p-4">
+    <div class="flex justify-between items-start mb-2">
+      <div>
+        <p class="font-semibold text-gray-800">{{ c.company_name }}</p>
+        <p class="text-xs text-gray-500">{{ c.fleet_manager_name }}</p>
+      </div>
+      <div class="text-right">
+        <p class="font-bold text-gray-800">₹{{ "{:,.0f}".format(c.outstanding_balance) }}</p>
+        <p class="text-xs text-gray-400">of ₹{{ "{:,.0f}".format(c.credit_limit) }}</p>
+      </div>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2">
+      <div class="h-2 rounded-full {% if pct >= threshold %}bg-red-500{% elif pct >= 60 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+           style="width: {{ [pct, 100]|min }}%"></div>
+    </div>
+    <p class="text-xs text-gray-400 mt-1">{{ "{:.0f}".format(pct) }}% utilized</p>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-xl shadow p-6 text-center text-gray-500">
+  No customers yet. <a href="{{ url_for('credit.new_customer') }}" class="text-indigo-600">Add one →</a>
+</div>
+{% endif %}
+{% endblock %}
