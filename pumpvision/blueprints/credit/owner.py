@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 
+from pumpvision.constants import PUMP_TEST_NOZZLES
 from pumpvision.decorators import owner_required
 
 credit_bp = Blueprint("credit", __name__)
@@ -474,16 +475,6 @@ def prices():
         )
 
     return render_template("credit/owner/prices.html", current_prices=current_prices)
-
-
-PUMP_TEST_NOZZLES = {
-    7:  "HSD 1 (Nozzle 7)",
-    16: "HSD 2 (Nozzle 16)",
-    18: "MS 1 (Nozzle 18)",
-    15: "MS 2 (Nozzle 15)",
-    17: "XP (Nozzle 17)",
-    11: "XG (Nozzle 11)",
-}
 
 
 @credit_bp.route("/settings", methods=["GET", "POST"])

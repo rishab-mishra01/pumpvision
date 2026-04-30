@@ -4,15 +4,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask
-from flask_login import LoginManager
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-login_manager = LoginManager()
-
 
 def create_app():
-    app = Flask(__name__, template_folder="templates", static_folder="static")
+    app = Flask(
+        __name__,
+        template_folder="templates",
+        instance_path=str(Path(__file__).parent.parent / "instance"),
+    )
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
@@ -20,17 +21,15 @@ def create_app():
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Render/Railway use postgres://, SQLAlchemy needs postgresql://
     db_url = app.config["SQLALCHEMY_DATABASE_URI"]
     if db_url.startswith("postgres://"):
         app.config["SQLALCHEMY_DATABASE_URI"] = db_url.replace("postgres://", "postgresql://", 1)
 
-    from .models import db
-    db.init_app(app)
+    from .extensions import db, login_manager, migrate
 
+    db.init_app(app)
     login_manager.init_app(app)
-    login_manager.login_view = "auth.login"
-    login_manager.login_message = "Please log in to access this page."
+    migrate.init_app(app, db)
 
     from .user import load_user_by_id
 
@@ -41,10 +40,11 @@ def create_app():
     from .blueprints.auth.routes import auth_bp
     from .blueprints.dashboard.routes import dashboard_bp
     from .blueprints.credit.owner import credit_bp
-    from .blueprints.credit.attendant import attendant_bp
+    from .blueprints.attendant.routes import attendant_bp
     from .blueprints.paytm.routes import paytm_bp
     from .blueprints.recon.routes import recon_bp
     from .blueprints.meters.routes import meters_bp
+    from .blueprints.owner.routes import owner_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -53,6 +53,7 @@ def create_app():
     app.register_blueprint(paytm_bp, url_prefix="/paytm")
     app.register_blueprint(recon_bp, url_prefix="/recon")
     app.register_blueprint(meters_bp, url_prefix="/meters")
+    app.register_blueprint(owner_bp, url_prefix="/owner")
 
     @app.context_processor
     def inject_notification_count():

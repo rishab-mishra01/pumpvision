@@ -4,30 +4,11 @@ from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required
 from sqlalchemy import func
 
+from pumpvision.constants import ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS
 from pumpvision.decorators import owner_required
 from pumpvision.models import db, ManualTotalizerReading, NozzleTotalizer, AppNotification, AppSetting
 
 meters_bp = Blueprint("meters", __name__)
-
-NOZZLE_LABEL_MAP = {
-    "HSD 1": {"nozzle_no": 7,    "product": "HSD"},
-    "HSD 2": {"nozzle_no": 16,   "product": "HSD"},
-    "MS 1":  {"nozzle_no": 18,   "product": "MS"},
-    "MS 2":  {"nozzle_no": 15,   "product": "MS"},
-    "XP":    {"nozzle_no": 17,   "product": "XP"},
-    "XG":    {"nozzle_no": 11,   "product": "XG"},
-    "CNG":   {"nozzle_no": None, "product": "CNG"},
-}
-
-PRODUCT_LABELS = {
-    "HSD": ["HSD 1", "HSD 2"],
-    "MS":  ["MS 1",  "MS 2"],
-    "XP":  ["XP"],
-    "XG":  ["XG"],
-    "CNG": ["CNG"],
-}
-
-ALL_PRODUCTS = ["HSD", "MS", "XP", "XG", "CNG"]
 
 
 @meters_bp.route("/")
@@ -59,7 +40,6 @@ def day(date_str):
     next_date = op_date + timedelta(days=1)
     view = request.args.get("view", "totalizer")
 
-    # Employee: closing = this op_date's entry; opening = previous op_date's entry
     emp_closing = {
         r.nozzle_label: r
         for r in ManualTotalizerReading.query.filter_by(operational_date=op_date).all()
@@ -69,7 +49,6 @@ def day(date_str):
         for r in ManualTotalizerReading.query.filter_by(operational_date=prev_date).all()
     }
 
-    # IRAS: opening = NozzleTotalizer at op_date 06:00; closing = NozzleTotalizer at next_date 06:00
     iras_opening = {
         r.nozzle_no: r
         for r in NozzleTotalizer.query.filter_by(operational_date=op_date).all()
@@ -79,7 +58,6 @@ def day(date_str):
         for r in NozzleTotalizer.query.filter_by(operational_date=next_date).all()
     }
 
-    # Totalizer comparison — nozzle level
     totalizer_rows = []
     for label, info in NOZZLE_LABEL_MAP.items():
         n = info["nozzle_no"]
@@ -98,7 +76,6 @@ def day(date_str):
             "has_iras":     n is not None,
         })
 
-    # Litres sold comparison — product level
     litres_rows = []
     for product in ALL_PRODUCTS:
         labels = PRODUCT_LABELS[product]
@@ -125,13 +102,12 @@ def day(date_str):
         ) else None
 
         litres_rows.append({
-            "product":    product,
-            "emp_litres": emp_litres,
+            "product":     product,
+            "emp_litres":  emp_litres,
             "iras_litres": iras_litres,
-            "diff":       diff,
+            "diff":        diff,
         })
 
-    # Mark shift-close notifications for this date as read
     AppNotification.query.filter_by(
         reference_date=op_date, notification_type="shift_close"
     ).update({"is_read": True})

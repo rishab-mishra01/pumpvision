@@ -3,32 +3,10 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from pumpvision.constants import ALL_LABELS, ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS
 from pumpvision.decorators import attendant_required
 
 attendant_bp = Blueprint("attendant", __name__)
-
-# ─── Nozzle label constants ───────────────────────────────────────────────────
-
-NOZZLE_LABEL_MAP = {
-    "HSD 1": {"nozzle_no": 7,    "product": "HSD"},
-    "HSD 2": {"nozzle_no": 16,   "product": "HSD"},
-    "MS 1":  {"nozzle_no": 18,   "product": "MS"},
-    "MS 2":  {"nozzle_no": 15,   "product": "MS"},
-    "XP":    {"nozzle_no": 17,   "product": "XP"},
-    "XG":    {"nozzle_no": 11,   "product": "XG"},
-    "CNG":   {"nozzle_no": None, "product": "CNG"},
-}
-
-PRODUCT_LABELS = {
-    "HSD": ["HSD 1", "HSD 2"],
-    "MS":  ["MS 1",  "MS 2"],
-    "XP":  ["XP"],
-    "XG":  ["XG"],
-    "CNG": ["CNG"],
-}
-
-ALL_PRODUCTS = ["HSD", "MS", "XP", "XG", "CNG"]
-ALL_LABELS   = list(NOZZLE_LABEL_MAP.keys())  # 7 labels total
 
 
 def _shift_op_date() -> date:
