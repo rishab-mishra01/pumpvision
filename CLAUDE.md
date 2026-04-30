@@ -809,9 +809,27 @@ all hallucinated in earlier rounds and explicitly removed.
 
 ## Files in This Project
 
-### App
-- `pumpvision/` (or current main app structure) — Flask app, blueprints, models, templates
-- `wsgi.py` — WSGI entry point
+### App package (`pumpvision/`)
+- `pumpvision/__init__.py` — app factory (`create_app()`), blueprint registration, DB/login init
+- `pumpvision/extensions.py` — `db`, `login_manager`, `migrate` — single source of truth for Flask extensions
+- `pumpvision/models.py` — all SQLAlchemy models (imports `db` from `extensions.py`)
+- `pumpvision/constants.py` — shared outlet constants: `NOZZLE_LABEL_MAP`, `PRODUCT_LABELS`, `PUMP_TEST_NOZZLES`
+- `pumpvision/decorators.py` — `owner_required`, `attendant_required`
+- `pumpvision/user.py` — in-memory `User` class (Flask-Login `UserMixin`); **not DB-backed** — see item 18 in "What to Work On Next"
+- `pumpvision/services/prices.py` — `get_rsp(product, op_date)` shared price lookup (IrasPrice → LocalPrice fallback)
+- `pumpvision/blueprints/auth/routes.py` — login, logout, root redirect
+- `pumpvision/blueprints/dashboard/routes.py` — owner dashboard stub
+- `pumpvision/blueprints/attendant/routes.py` — attendant screens: home, shift-close, credit log
+- `pumpvision/blueprints/owner/routes.py` — owner blueprint placeholder (redirects to dashboard)
+- `pumpvision/blueprints/credit/owner.py` — credit module owner routes (customers, ledger, invoices, PDF, settings)
+- `pumpvision/blueprints/paytm/routes.py` — Paytm CSV upload + day views
+- `pumpvision/blueprints/recon/routes.py` — reconciliation engine + scraper trigger
+- `pumpvision/blueprints/meters/routes.py` — manual totalizer reading views
+- `pumpvision/templates/` — all Jinja2 templates (mirrors blueprint structure)
+
+### Project root
+- `wsgi.py` — WSGI entry point (`from pumpvision import create_app; app = create_app()`)
+- `migrations/` — Flask-Migrate / Alembic migration files; baseline revision stamped Apr 2026
 - `requirements.txt`, `Procfile`, `.env`, `.env.example`
 - `start.bat` — Windows quick-launcher
 
@@ -870,10 +888,11 @@ only 25.00 L. May reflect customer preference or overflow-only usage.
 8. ~~CAPTCHA PoC via Claude Vision~~ ✓ Done
 9. ~~Lock visual design system + 17 screen mockups~~ ✓ Done
 10. ~~Set up Git + GitHub~~ ✓ Done
-11. **Foundation refactor — app factory, blueprint structure, auth scaffolding, models** ← CURRENT PRIORITY
+11. ~~Foundation refactor — app factory, blueprint structure, extensions, Flask-Migrate~~ ✓ Done
 12. **Implement attendant branch — 9 screens as Jinja templates wired to real data** ← NEXT
 13. Activity tab and Profile tab for attendant
 14. Deploy app to Render or Railway, test on phone over real cloud URL
 15. Implement owner branch — Tanks, Credit Module, Reconciliation, Executive Dashboard
 16. Integrate autonomous CAPTCHA into main scraper, deploy scraper to cloud cron
 17. Phase 2 work: smart anomaly warnings, manual pump test entry, daybook, expenses
+18. **Convert User from in-memory to DB-backed model before adding a second attendant** — current `.env`-based auth (one `ATTENDANT_USERNAME`/`ATTENDANT_PASSWORD` pair) does not scale beyond 1–2 users and cannot support per-user roles, display names, or password resets. Deferred deliberately; do this before onboarding a second real attendant account.
