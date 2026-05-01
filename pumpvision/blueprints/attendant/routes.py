@@ -1,3 +1,4 @@
+import os
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -14,7 +15,18 @@ def _shift_op_date() -> date:
     return date.today() - timedelta(days=1)
 
 
-# ─── Attendant home ──────────────────────────────────────────────────────────
+def _greeting() -> str:
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    elif 12 <= hour < 17:
+        return "Good afternoon"
+    elif 17 <= hour < 21:
+        return "Good evening"
+    return "Good night"
+
+
+# ─── Attendant home ───────────────────────────────────────────────────────────
 
 @attendant_bp.route("/")
 @login_required
@@ -25,7 +37,38 @@ def home():
     locked = ManualTotalizerReading.query.filter_by(
         operational_date=op_date, is_locked=True
     ).first() is not None
-    return render_template("attendant/home.html", op_date=op_date, shift_locked=locked)
+
+    display_name = os.environ.get(
+        "ATTENDANT_DISPLAY_NAME",
+        current_user.id.capitalize()
+    )
+
+    return render_template(
+        "attendant/home.html",
+        op_date=op_date,
+        shift_locked=locked,
+        greeting=_greeting(),
+        display_name=display_name,
+        shift_start="06:15 AM",
+    )
+
+
+# ─── Activity stub ────────────────────────────────────────────────────────────
+
+@attendant_bp.route("/activity/")
+@login_required
+@attendant_required
+def activity():
+    return render_template("attendant/activity_stub.html")
+
+
+# ─── Profile stub ─────────────────────────────────────────────────────────────
+
+@attendant_bp.route("/profile/")
+@login_required
+@attendant_required
+def profile():
+    return render_template("attendant/profile_stub.html")
 
 
 # ─── Shift closing ────────────────────────────────────────────────────────────
@@ -98,7 +141,6 @@ def shift_close_entry(product):
     op_date = _shift_op_date()
     labels  = PRODUCT_LABELS[product]
 
-    # Check if already locked
     if ManualTotalizerReading.query.filter_by(
         operational_date=op_date, nozzle_label=labels[0], is_locked=True
     ).first():

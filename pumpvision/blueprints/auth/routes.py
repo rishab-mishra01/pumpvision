@@ -6,24 +6,30 @@ from flask_login import current_user, login_required, login_user, logout_user
 auth_bp = Blueprint("auth", __name__)
 
 
+def _role_home():
+    if current_user.role == "attendant":
+        return redirect(url_for("attendant.home"))
+    return redirect(url_for("dashboard.index"))
+
+
 @auth_bp.route("/", methods=["GET"])
 def index():
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return _role_home()
     return redirect(url_for("auth.login"))
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return _role_home()
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        owner_username    = os.environ.get("OWNER_USERNAME",    "owner")
-        owner_password    = os.environ.get("OWNER_PASSWORD",    "owner123")
+        owner_username     = os.environ.get("OWNER_USERNAME",     "owner")
+        owner_password     = os.environ.get("OWNER_PASSWORD",     "owner123")
         attendant_username = os.environ.get("ATTENDANT_USERNAME", "attendant")
         attendant_password = os.environ.get("ATTENDANT_PASSWORD", "attendant123")
 
