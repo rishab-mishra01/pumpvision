@@ -2,75 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>{% block title %}PumpVision{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Pumpvision{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    button, a.btn, input[type=submit], select, .tap-target { min-height: 48px; }
+    :root {
+      --color-bg: #000000;
+      --color-surface: rgba(28, 28, 30, 0.85);
+      --color-border: rgba(255, 255, 255, 0.1);
+      --color-hs: #3b82f6;
+      --color-ms: #10b981;
+      --color-x2: #a855f7;
+      --color-xg: #f97316;
+      --color-warn: #FAC775;
+      --color-crit: #F09595;
+      --color-ok: #97C459;
+    }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body { background-color: #000; color: #fff; font-family: 'Inter', sans-serif; }
+    .font-manrope { font-family: 'Manrope', sans-serif; }
+    .font-inter  { font-family: 'Inter', sans-serif; }
+    .card-surface {
+      background: rgba(28, 28, 30, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    ::placeholder { color: rgba(255,255,255,0.3); }
+    input, button, a { -webkit-tap-highlight-color: transparent; }
   </style>
+  {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="min-h-screen">
 
-  {% if current_user.is_authenticated %}
-  <nav class="bg-indigo-700 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow">
-    <a href="{{ url_for('dashboard.index') }}" class="font-bold text-lg tracking-wide">PumpVision</a>
-    <div class="flex items-center gap-3">
-      <span class="text-indigo-200 text-sm capitalize">{{ current_user.role }}</span>
-      <a href="{{ url_for('auth.logout') }}" class="text-sm bg-indigo-900 hover:bg-indigo-800 px-3 py-2 rounded">Logout</a>
-    </div>
-  </nav>
+  {#
+    New dark screens (login, attendant home, etc.) override {% block page %} entirely,
+    so none of the legacy nav below is rendered for them.
+    Old owner templates only override {% block content %}, so they inherit the indigo nav.
+  #}
+  {% block page %}
 
-  {% if current_user.role == 'owner' %}
-  <div class="bg-indigo-600 text-indigo-100 text-sm overflow-x-auto">
-    <div class="flex whitespace-nowrap px-2">
-      <a href="{{ url_for('dashboard.index') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Dashboard</a>
-      <a href="{{ url_for('recon.index') }}"        class="px-4 py-3 hover:bg-indigo-500 block">Reconcile</a>
-      <a href="{{ url_for('credit.dashboard') }}"   class="px-4 py-3 hover:bg-indigo-500 block">Credit</a>
-      <a href="{{ url_for('paytm.index') }}"        class="px-4 py-3 hover:bg-indigo-500 block">Paytm</a>
-      <a href="{{ url_for('meters.index') }}"       class="px-4 py-3 hover:bg-indigo-500 block relative">
-        Meters
-        {% if unread_notification_count > 0 %}
-        <span class="absolute top-1.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4
-                     flex items-center justify-center text-xs font-bold leading-none">
-          {{ unread_notification_count if unread_notification_count < 10 else '9+' }}
-        </span>
-        {% endif %}
-      </a>
-      <a href="{{ url_for('credit.prices') }}"      class="px-4 py-3 hover:bg-indigo-500 block">Prices</a>
-      <a href="{{ url_for('credit.settings') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Settings</a>
-      <a href="{{ url_for('attendant.log_transaction') }}" class="px-4 py-3 hover:bg-indigo-500 block">Log Txn</a>
-    </div>
-  </div>
-  {% elif current_user.role == 'attendant' %}
-  <div class="bg-indigo-600 text-indigo-100 text-sm overflow-x-auto">
-    <div class="flex whitespace-nowrap px-2">
-      <a href="{{ url_for('attendant.home') }}"           class="px-4 py-3 hover:bg-indigo-500 block">Home</a>
-      <a href="{{ url_for('attendant.log_transaction') }}" class="px-4 py-3 hover:bg-indigo-500 block">Log Credit</a>
-      <a href="{{ url_for('attendant.shift_close') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Shift Closing</a>
-    </div>
-  </div>
-  {% endif %}
-  {% endif %}
+    {% if current_user.is_authenticated %}
+    <nav class="bg-indigo-700 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow">
+      <a href="{{ url_for('dashboard.index') }}" class="font-bold text-lg tracking-wide">PumpVision</a>
+      <div class="flex items-center gap-3">
+        <span class="text-indigo-200 text-sm capitalize">{{ current_user.role }}</span>
+        <a href="{{ url_for('auth.logout') }}" class="text-sm bg-indigo-900 hover:bg-indigo-800 px-3 py-2 rounded">Logout</a>
+      </div>
+    </nav>
 
-  <main class="max-w-2xl mx-auto px-4 py-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="space-y-2 mb-4">
-        {% for category, message in messages %}
-          {% if category == 'error' %}
-            <div class="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded text-sm">{{ message }}</div>
-          {% elif category == 'warning' %}
-            <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded text-sm">{{ message }}</div>
-          {% else %}
-            <div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded text-sm">{{ message }}</div>
+    {% if current_user.role == 'owner' %}
+    <div class="bg-indigo-600 text-indigo-100 text-sm overflow-x-auto">
+      <div class="flex whitespace-nowrap px-2">
+        <a href="{{ url_for('dashboard.index') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Dashboard</a>
+        <a href="{{ url_for('recon.index') }}"        class="px-4 py-3 hover:bg-indigo-500 block">Reconcile</a>
+        <a href="{{ url_for('credit.dashboard') }}"   class="px-4 py-3 hover:bg-indigo-500 block">Credit</a>
+        <a href="{{ url_for('paytm.index') }}"        class="px-4 py-3 hover:bg-indigo-500 block">Paytm</a>
+        <a href="{{ url_for('meters.index') }}"       class="px-4 py-3 hover:bg-indigo-500 block relative">
+          Meters
+          {% if unread_notification_count > 0 %}
+          <span class="absolute top-1.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4
+                       flex items-center justify-center text-xs font-bold leading-none">
+            {{ unread_notification_count if unread_notification_count < 10 else '9+' }}
+          </span>
           {% endif %}
-        {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+        </a>
+        <a href="{{ url_for('credit.prices') }}"      class="px-4 py-3 hover:bg-indigo-500 block">Prices</a>
+        <a href="{{ url_for('credit.settings') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Settings</a>
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
 
-    {% block content %}{% endblock %}
-  </main>
+    <main class="max-w-2xl mx-auto px-4 py-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="space-y-2 mb-4">
+          {% for category, message in messages %}
+            {% if category == 'error' %}
+              <div class="bg-red-900/60 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm">{{ message }}</div>
+            {% elif category == 'warning' %}
+              <div class="bg-yellow-900/60 border border-yellow-700/50 text-yellow-300 px-4 py-3 rounded-xl text-sm">{{ message }}</div>
+            {% else %}
+              <div class="bg-green-900/60 border border-green-700/50 text-green-300 px-4 py-3 rounded-xl text-sm">{{ message }}</div>
+            {% endif %}
+          {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+  {% endblock %}
 
 </body>
 </html>
