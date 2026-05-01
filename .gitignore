@@ -32,6 +32,9 @@ instance/
 IRAS Tables April/
 Density records/
 Screenshots/
+screenshots/
+!docs/
+!docs/**
 
 # OS junk
 .DS_Store
@@ -52,4 +55,4 @@ logs/
 *.tmp
 *.bak
 build/
-dist/
+dist/.claude/settings.local.json
