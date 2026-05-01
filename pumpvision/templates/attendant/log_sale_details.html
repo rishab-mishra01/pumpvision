@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Log Sale — Pumpvision{% endblock %}
+
+{% block page %}
+<!-- Scroll container with room for sticky button + bottom nav -->
+<div style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:148px;">
+
+  <!-- Top bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 12px;">
+    <a href="{{ url_for('attendant.select_customer') }}"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:#9ca3af;text-decoration:none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 5l-7 7 7 7"/>
+      </svg>
+    </a>
+    <span style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.05rem;
+                 letter-spacing:-0.01em;color:#fff;">PUMPVISION</span>
+    <a href="{{ url_for('attendant.profile') }}"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:#9ca3af;text-decoration:none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+    </a>
+  </div>
+
+  <!-- Heading -->
+  <div style="padding:4px 20px 20px;">
+    <p style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
+              letter-spacing:0.07em;color:#f97316;margin:0 0 6px;text-transform:uppercase;">
+      New Transaction
+    </p>
+    <h2 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.75rem;
+               letter-spacing:-0.01em;color:#fff;margin:0;">Log sale details</h2>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div style="padding:0 20px 12px;">
+      {% for category, message in messages %}
+        <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);
+                    color:#fca5a5;border-radius:12px;padding:12px 16px;margin-bottom:8px;
+                    font-family:'Inter',sans-serif;font-size:13px;">{{ message }}</div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" id="sale-form">
+
+    <!-- Customer card -->
+    <div style="margin:0 20px 24px;padding:16px;
+                background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
+                border-radius:16px;display:flex;align-items:center;gap:14px;">
+      <div style="width:40px;height:40px;border-radius:10px;
+                  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+                  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6b7280;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <rect x="9" y="13" width="6" height="8"/>
+        </svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;color:#fff;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          {{ customer.company_name }}
+        </div>
+        <div style="font-family:'Inter',sans-serif;font-size:12px;color:#6b7280;margin-top:2px;">
+          ID: {{ account_id }}
+        </div>
+      </div>
+      <span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);
+                   color:#10b981;border-radius:20px;padding:4px 12px;
+                   font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
+                   white-space:nowrap;flex-shrink:0;">Active</span>
+    </div>
+
+    <!-- Vehicle section -->
+    <div style="padding:0 20px 24px;">
+      <p style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                letter-spacing:0.08em;color:#6b7280;text-transform:uppercase;margin:0 0 12px;">
+        Vehicle Registration Number
+      </p>
+
+      <!-- Quick-select chips -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button type="button" onclick="setVehicleChip('UNREGISTERED')"
+                style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+                       padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.15);
+                       background:rgba(28,28,30,0.9);color:#9ca3af;cursor:pointer;">
+          Unregistered
+        </button>
+        <button type="button" onclick="setVehicleChip('CONTAINER')"
+                style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+                       padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.15);
+                       background:rgba(28,28,30,0.9);color:#9ca3af;cursor:pointer;">
+          Container
+        </button>
+      </div>
+
+      <!-- Vehicle dropdown -->
+      <div style="display:flex;align-items:center;gap:10px;
+                  background:rgba(28,28,30,0.9);border:1px solid rgba(255,255,255,0.1);
+                  border-radius:14px;padding:0 16px;height:52px;position:relative;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+             style="flex-shrink:0;">
+          <rect x="1" y="3" width="15" height="13" rx="2"/>
+          <path d="m16 8 5 5v5h-5V8z"/>
+          <circle cx="5.5" cy="18.5" r="2.5"/>
+          <circle cx="18.5" cy="18.5" r="2.5"/>
+        </svg>
+        <select id="vehicle-select" name="vehicle_number" onchange="updateConfirmButton()"
+                style="flex:1;background:none;border:none;outline:none;
+                       font-family:'Inter',sans-serif;font-size:14px;color:#fff;
+                       appearance:none;-webkit-appearance:none;cursor:pointer;">
+          <option value="" style="background:#1c1c1e;color:#fff;">Select vehicle</option>
+          <option value="UNREGISTERED" style="background:#1c1c1e;color:#fff;">UNREGISTERED</option>
+          <option value="CONTAINER" style="background:#1c1c1e;color:#fff;">CONTAINER</option>
+          {% for v in vehicles %}
+          <option value="{{ v }}" style="background:#1c1c1e;color:#fff;">{{ v }}</option>
+          {% endfor %}
+        </select>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             style="flex-shrink:0;pointer-events:none;">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Product grid -->
+    <div style="padding:0 20px 24px;">
+      <p style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                letter-spacing:0.08em;color:#6b7280;text-transform:uppercase;margin:0 0 12px;">
+        Select Product
+      </p>
+      <input type="hidden" name="product" id="product-hidden">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+
+        <!-- HS -->
+        <button type="button" id="card-HS" onclick="selectProduct('HS')"
+                data-color="#3b82f6"
+                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
+                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
+                       transition:border 0.15s,background 0.15s;">
+          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
+                      color:#3b82f6;letter-spacing:-0.01em;margin-bottom:4px;">HS</div>
+          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
+            High Speed Diesel
+          </div>
+        </button>
+
+        <!-- MS -->
+        <button type="button" id="card-MS" onclick="selectProduct('MS')"
+                data-color="#10b981"
+                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
+                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
+                       transition:border 0.15s,background 0.15s;">
+          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
+                      color:#10b981;letter-spacing:-0.01em;margin-bottom:4px;">MS</div>
+          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
+            Motor Spirit
+          </div>
+        </button>
+
+        <!-- X2 -->
+        <button type="button" id="card-X2" onclick="selectProduct('X2')"
+                data-color="#a855f7"
+                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
+                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
+                       transition:border 0.15s,background 0.15s;">
+          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
+                      color:#a855f7;letter-spacing:-0.01em;margin-bottom:4px;">X2</div>
+          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
+            Xtra Premium 95
+          </div>
+        </button>
+
+        <!-- XG -->
+        <button type="button" id="card-XG" onclick="selectProduct('XG')"
+                data-color="#f97316"
+                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
+                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
+                       transition:border 0.15s,background 0.15s;">
+          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
+                      color:#f97316;letter-spacing:-0.01em;margin-bottom:4px;">XG</div>
+          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
+            Xtra Green
+          </div>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- Dispensed quantity -->
+    <div style="padding:0 20px 12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <p style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                  letter-spacing:0.08em;color:#6b7280;text-transform:uppercase;margin:0;">
+          Dispensed Quantity
+        </p>
+        <!-- Toggle -->
+        <div style="display:flex;background:rgba(28,28,30,0.9);
+                    border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:3px;gap:2px;">
+          <button type="button" id="btn-amount" onclick="setMode('amount')"
+                  style="font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
+                         padding:5px 12px;border-radius:16px;border:none;cursor:pointer;
+                         background:rgba(255,255,255,0.12);color:#fff;">Amount (₹)</button>
+          <button type="button" id="btn-litres" onclick="setMode('litres')"
+                  style="font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
+                         padding:5px 12px;border-radius:16px;border:none;cursor:pointer;
+                         background:none;color:#6b7280;">Litres (L)</button>
+        </div>
+      </div>
+
+      <input type="hidden" name="input_mode" id="input-mode-hidden" value="amount">
+
+      <!-- Quantity input area -->
+      <div style="background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
+                  border-radius:16px;padding:20px 20px 14px;position:relative;">
+        <span id="currency-symbol"
+              style="font-family:'Inter',sans-serif;font-size:13px;color:#6b7280;
+                     position:absolute;top:16px;left:18px;">₹</span>
+        <input type="number" name="quantity" id="quantity-input"
+               step="0.01" min="0.01" inputmode="decimal"
+               oninput="updateRateDisplay(); updateConfirmButton()"
+               placeholder="0.00"
+               style="display:block;width:100%;background:none;border:none;outline:none;
+                      font-family:'Manrope',sans-serif;font-weight:700;font-size:2.8rem;
+                      color:#fff;text-align:center;letter-spacing:-0.02em;padding:8px 0 4px;">
+        <p id="rate-subtext"
+           style="font-family:'Inter',sans-serif;font-size:12px;color:#6b7280;
+                  text-align:center;margin:8px 0 0;">
+          Select a product to see rate
+        </p>
+      </div>
+    </div>
+
+  </form>
+</div>
+
+<!-- Sticky confirm button (above bottom nav) -->
+<div style="position:fixed;bottom:72px;left:0;right:0;
+            padding:12px 20px;background:rgba(0,0,0,0.95);
+            border-top:1px solid rgba(255,255,255,0.06);z-index:40;">
+  <button type="submit" form="sale-form" id="confirm-btn"
+          disabled
+          style="display:flex;align-items:center;justify-content:center;gap:8px;
+                 width:100%;height:52px;border-radius:14px;border:none;cursor:pointer;
+                 background:#3b82f6;color:#fff;opacity:0.4;
+                 font-family:'Manrope',sans-serif;font-weight:700;font-size:16px;
+                 transition:opacity 0.2s;">
+    Confirm &amp; Log Sale &rarr;
+  </button>
+</div>
+
+<!-- Bottom nav -->
+<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
+            background:rgba(14,14,16,0.97);
+            border-top:1px solid rgba(255,255,255,0.08);
+            display:flex;align-items:center;z-index:50;">
+
+  <a href="{{ url_for('attendant.home') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#4b5563;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+  </a>
+
+  <a href="{{ url_for('attendant.activity') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#3b82f6;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="12" width="4" height="8" rx="1"/>
+      <rect x="10" y="6" width="4" height="14" rx="1"/>
+      <rect x="17" y="9" width="4" height="11" rx="1"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+  </a>
+
+  <a href="{{ url_for('attendant.profile') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#4b5563;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">PROFILE</span>
+  </a>
+
+</nav>
+
+<script>
+const PRICE_MAP = {{ price_map | tojson }};
+
+let selectedProduct = null;
+let inputMode = 'amount';
+
+const PRODUCT_BG = {
+  HS: 'rgba(59,130,246,0.12)',
+  MS: 'rgba(16,185,129,0.12)',
+  X2: 'rgba(168,85,247,0.12)',
+  XG: 'rgba(249,115,22,0.12)',
+};
+const PRODUCT_BORDER = {
+  HS: '2px solid #3b82f6',
+  MS: '2px solid #10b981',
+  X2: '2px solid #a855f7',
+  XG: '2px solid #f97316',
+};
+
+function setVehicleChip(value) {
+  document.getElementById('vehicle-select').value = value;
+  updateConfirmButton();
+}
+
+function selectProduct(prod) {
+  selectedProduct = prod;
+  document.getElementById('product-hidden').value = prod;
+
+  ['HS','MS','X2','XG'].forEach(p => {
+    const card = document.getElementById('card-' + p);
+    if (p === prod) {
+      card.style.border = PRODUCT_BORDER[p];
+      card.style.background = PRODUCT_BG[p];
+    } else {
+      card.style.border = '1px solid rgba(255,255,255,0.08)';
+      card.style.background = 'rgba(28,28,30,0.85)';
+    }
+  });
+
+  updateRateDisplay();
+  updateConfirmButton();
+}
+
+function setMode(mode) {
+  inputMode = mode;
+  document.getElementById('input-mode-hidden').value = mode;
+
+  const btnAmount = document.getElementById('btn-amount');
+  const btnLitres = document.getElementById('btn-litres');
+
+  if (mode === 'amount') {
+    btnAmount.style.background = 'rgba(255,255,255,0.12)';
+    btnAmount.style.color = '#fff';
+    btnLitres.style.background = 'none';
+    btnLitres.style.color = '#6b7280';
+    document.getElementById('currency-symbol').textContent = '₹';
+  } else {
+    btnLitres.style.background = 'rgba(255,255,255,0.12)';
+    btnLitres.style.color = '#fff';
+    btnAmount.style.background = 'none';
+    btnAmount.style.color = '#6b7280';
+    document.getElementById('currency-symbol').textContent = 'L';
+  }
+
+  updateRateDisplay();
+}
+
+function updateRateDisplay() {
+  const subtext = document.getElementById('rate-subtext');
+  if (!selectedProduct) {
+    subtext.textContent = 'Select a product to see rate';
+    return;
+  }
+
+  const rate = PRICE_MAP[selectedProduct];
+  if (rate === null || rate === undefined) {
+    subtext.textContent = 'No rate available for ' + selectedProduct + '. Contact owner.';
+    subtext.style.color = '#f09595';
+    return;
+  }
+  subtext.style.color = '#6b7280';
+
+  const qty = parseFloat(document.getElementById('quantity-input').value) || 0;
+  let total = 0;
+  if (inputMode === 'amount') {
+    total = qty;
+  } else {
+    total = qty * rate;
+  }
+
+  subtext.textContent = 'Current Rate: ₹' + rate.toFixed(2) + '/L · Total: ₹' + total.toFixed(2);
+}
+
+function updateConfirmButton() {
+  const btn = document.getElementById('confirm-btn');
+  const vehicle = document.getElementById('vehicle-select').value;
+  const qty = parseFloat(document.getElementById('quantity-input').value) || 0;
+  const rate = selectedProduct ? PRICE_MAP[selectedProduct] : null;
+
+  const valid = vehicle && selectedProduct && qty > 0 && rate !== null && rate !== undefined;
+  btn.disabled = !valid;
+  btn.style.opacity = valid ? '1' : '0.4';
+  btn.style.cursor = valid ? 'pointer' : 'not-allowed';
+}
+</script>
+{% endblock %}
