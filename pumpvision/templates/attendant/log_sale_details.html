@@ -355,6 +355,28 @@ function selectProduct(prod) {
 }
 
 function setMode(mode) {
+  if (mode === inputMode) return;
+
+  const rate = selectedProduct ? PRICE_MAP[selectedProduct] : null;
+  const input = document.getElementById('quantity-input');
+  const currentVal = parseFloat(input.value) || 0;
+
+  if (currentVal > 0 && (!rate || rate <= 0)) {
+    const subtext = document.getElementById('rate-subtext');
+    subtext.textContent = 'Select a product before switching units.';
+    subtext.style.color = '#FAC775';
+    setTimeout(() => updateRateDisplay(), 2000);
+    return;
+  }
+
+  // Convert the displayed value into the new unit
+  if (currentVal > 0 && rate && rate > 0) {
+    const converted = mode === 'amount'
+      ? Math.round(currentVal * rate * 100) / 100   // L → ₹
+      : Math.round(currentVal / rate * 100) / 100;  // ₹ → L
+    input.value = converted.toFixed(2);
+  }
+
   inputMode = mode;
   document.getElementById('input-mode-hidden').value = mode;
 
@@ -376,6 +398,7 @@ function setMode(mode) {
   }
 
   updateRateDisplay();
+  updateConfirmButton();
 }
 
 function updateRateDisplay() {
