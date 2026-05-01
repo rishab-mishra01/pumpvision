@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Activity — Pumpvision{% endblock %}
+
+{% block page %}
+<div class="flex flex-col" style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:72px;">
+
+  <!-- Top bar -->
+  <div class="flex items-center justify-between px-5 pt-5 pb-3">
+    <div class="flex items-center gap-2">
+      <span style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:-0.01em;color:#fff;">
+        PUMPVISION
+      </span>
+      <div class="flex flex-col" style="line-height:1.25;">
+        <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0.04em;">SHREE PETROLEUM</span>
+        <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0.04em;">RO 206858</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coming soon -->
+  <div class="flex flex-col items-center justify-center flex-1 px-8 text-center">
+    <div style="color:#4b5563;margin-bottom:20px;">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="12" width="4" height="8" rx="1"/>
+        <rect x="10" y="6" width="4" height="14" rx="1"/>
+        <rect x="17" y="9" width="4" height="11" rx="1"/>
+      </svg>
+    </div>
+    <h2 style="font-family:'Manrope',sans-serif;font-weight:600;font-size:1.3rem;color:#fff;margin-bottom:8px;">
+      Activity
+    </h2>
+    <p style="font-family:'Inter',sans-serif;font-size:14px;color:#6b7280;line-height:1.6;">
+      Transaction history and shift activity will appear here. Coming in a future update.
+    </p>
+  </div>
+
+</div>
+
+<!-- Bottom nav -->
+<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
+            background:rgba(14,14,16,0.97);
+            border-top:1px solid rgba(255,255,255,0.08);
+            display:flex;align-items:center;z-index:50;">
+
+  <a href="{{ url_for('attendant.home') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#4b5563;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+  </a>
+
+  <!-- Activity (active) -->
+  <a href="{{ url_for('attendant.activity') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#3b82f6;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="12" width="4" height="8" rx="1"/>
+      <rect x="10" y="6" width="4" height="14" rx="1"/>
+      <rect x="17" y="9" width="4" height="11" rx="1"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+  </a>
+
+  <a href="{{ url_for('attendant.profile') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#4b5563;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">PROFILE</span>
+  </a>
+
+</nav>
+{% endblock %}
