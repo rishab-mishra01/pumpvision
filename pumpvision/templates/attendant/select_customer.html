@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Select Customer — Pumpvision{% endblock %}
+
+{% block page %}
+<div style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:72px;display:flex;flex-direction:column;">
+
+  <!-- Top bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 12px;">
+    <a href="{{ url_for('attendant.home') }}"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:#9ca3af;text-decoration:none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 5l-7 7 7 7"/>
+      </svg>
+    </a>
+
+    <span style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.05rem;
+                 letter-spacing:-0.01em;color:#fff;">PUMPVISION</span>
+
+    <a href="{{ url_for('attendant.profile') }}"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:#9ca3af;text-decoration:none;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+    </a>
+  </div>
+
+  <!-- Heading -->
+  <div style="padding:8px 20px 20px;">
+    <h2 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.75rem;
+               letter-spacing:-0.01em;color:#fff;margin:0 0 6px;">Select customer</h2>
+    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#6b7280;margin:0;">
+      Choose an account to record the transaction.
+    </p>
+  </div>
+
+  <!-- Search -->
+  <div style="padding:0 20px 16px;">
+    <div style="display:flex;align-items:center;gap:10px;
+                background:rgba(28,28,30,0.9);border:1px solid rgba(255,255,255,0.08);
+                border-radius:14px;padding:0 16px;height:48px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+        <circle cx="11" cy="11" r="8"/>
+        <path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="Search customer name, ID, or vehicle"
+             oninput="renderCustomers()"
+             style="flex:1;background:none;border:none;outline:none;
+                    font-family:'Inter',sans-serif;font-size:14px;color:#fff;">
+    </div>
+  </div>
+
+  <!-- Filter chips -->
+  <div style="padding:0 20px 20px;display:flex;gap:8px;">
+    <button id="chip-recent" onclick="setFilter('recent')"
+            style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+                   padding:7px 16px;border-radius:20px;border:none;cursor:pointer;
+                   background:#3b82f6;color:#fff;">Recent</button>
+    <button id="chip-frequent" onclick="setFilter('frequent')"
+            style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+                   padding:7px 16px;border-radius:20px;border:none;cursor:pointer;
+                   background:rgba(28,28,30,0.9);color:#9ca3af;
+                   border:1px solid rgba(255,255,255,0.08);">Frequent</button>
+    <button id="chip-all" onclick="setFilter('all')"
+            style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+                   padding:7px 16px;border-radius:20px;border:none;cursor:pointer;
+                   background:rgba(28,28,30,0.9);color:#9ca3af;
+                   border:1px solid rgba(255,255,255,0.08);">All Accounts</button>
+  </div>
+
+  <!-- Section header -->
+  <div style="padding:0 20px 12px;display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                 letter-spacing:0.08em;color:#6b7280;">CREDIT CUSTOMERS</span>
+    <span id="customer-count"
+          style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+                 letter-spacing:0.06em;color:#6b7280;"></span>
+  </div>
+
+  <!-- Customer list -->
+  <div id="customer-list" style="padding:0 20px;flex:1;overflow-y:auto;"></div>
+
+</div>
+
+<!-- Bottom nav -->
+<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
+            background:rgba(14,14,16,0.97);
+            border-top:1px solid rgba(255,255,255,0.08);
+            display:flex;align-items:center;z-index:50;">
+
+  <a href="{{ url_for('attendant.home') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#4b5563;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+  </a>
+
+  <!-- Activity (active — this screen is part of the credit/activity flow) -->
+  <a href="{{ url_for('attendant.activity') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#3b82f6;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="12" width="4" height="8" rx="1"/>
+      <rect x="10" y="6" width="4" height="14" rx="1"/>
+      <rect x="17" y="9" width="4" height="11" rx="1"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+  </a>
+
+  <a href="{{ url_for('attendant.profile') }}"
+     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-decoration:none;color:#4b5563;min-height:72px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">PROFILE</span>
+  </a>
+
+</nav>
+
+<script>
+const CUSTOMERS = {{ customers | tojson }};
+let currentFilter = 'recent';
+
+function setFilter(filter) {
+  currentFilter = filter;
+  ['recent','frequent','all'].forEach(f => {
+    const btn = document.getElementById('chip-' + f);
+    if (f === filter) {
+      btn.style.background = '#3b82f6';
+      btn.style.color = '#fff';
+      btn.style.border = 'none';
+    } else {
+      btn.style.background = 'rgba(28,28,30,0.9)';
+      btn.style.color = '#9ca3af';
+      btn.style.border = '1px solid rgba(255,255,255,0.08)';
+    }
+  });
+  renderCustomers();
+}
+
+function renderCustomers() {
+  const q = (document.getElementById('search-input').value || '').toLowerCase();
+
+  let filtered = CUSTOMERS.filter(c => {
+    if (!q) return true;
+    return (
+      c.company_name.toLowerCase().includes(q) ||
+      c.account_id.toLowerCase().includes(q) ||
+      c.vehicles.some(v => v.toLowerCase().includes(q))
+    );
+  });
+
+  if (currentFilter === 'recent') {
+    filtered.sort((a, b) => b.last_txn_date.localeCompare(a.last_txn_date));
+  } else if (currentFilter === 'frequent') {
+    filtered.sort((a, b) => b.txn_count - a.txn_count);
+  } else {
+    filtered.sort((a, b) => a.company_name.localeCompare(b.company_name));
+  }
+
+  const countEl = document.getElementById('customer-count');
+  countEl.textContent = filtered.length + ' FOUND';
+
+  const chevronSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="9 18 15 12 9 6"/></svg>`;
+  const lockSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+
+  const html = filtered.map(c => {
+    const href = c.is_active ? '/attendant/credit/log/' + c.id : '#';
+    const opacity = c.is_active ? '1' : '0.5';
+    const cursor = c.is_active ? 'pointer' : 'default';
+    const subColor = c.is_active ? '#6b7280' : '#ef4444';
+    const subText = c.account_id + ' · ' + (c.is_active ? 'Credit Active' : 'Credit Blocked');
+    const icon = c.is_active ? chevronSvg : lockSvg;
+    const nameColor = c.is_active ? '#fff' : '#9ca3af';
+
+    return `<a href="${href}"
+       style="display:flex;align-items:center;gap:12px;padding:14px 16px;
+              background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
+              border-radius:16px;text-decoration:none;margin-bottom:8px;
+              opacity:${opacity};cursor:${cursor};">
+      <div style="width:44px;height:44px;border-radius:50%;background:${c.color};
+                  display:flex;align-items:center;justify-content:center;
+                  font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;
+                  color:#000;flex-shrink:0;">${c.initials}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Manrope',sans-serif;font-weight:600;font-size:15px;
+                    color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${c.company_name}
+        </div>
+        <div style="font-family:'Inter',sans-serif;font-size:12px;color:${subColor};margin-top:2px;">
+          ${subText}
+        </div>
+      </div>
+      <div style="flex-shrink:0;">${icon}</div>
+    </a>`;
+  }).join('');
+
+  document.getElementById('customer-list').innerHTML = html || `
+    <div style="text-align:center;padding:40px 0;color:#6b7280;
+                font-family:'Inter',sans-serif;font-size:14px;">
+      No customers found.
+    </div>`;
+}
+
+renderCustomers();
+</script>
+{% endblock %}
