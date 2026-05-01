@@ -36,7 +36,12 @@
       "Bash(xargs -I{} taskkill /PID {} /F)",
       "Bash(start \"\" cmd /k \"cd /d \\\\\"c:\\\\Users\\\\Rishab 2\\\\Desktop\\\\Pumpvision Backup 22_04\\\\Pumpvision\\\\\" && python -X utf8 wsgi.py\")",
       "Bash(flask --app wsgi run --host 0.0.0.0 --port 5000 --debug)",
-      "Bash(del \"c:\\\\Users\\\\Rishab 2\\\\Desktop\\\\Pumpvision Backup 22_04\\\\Pumpvision\\\\pumpvision\\\\templates\\\\recon\\\\batch_scraper.html\")"
+      "Bash(del \"c:\\\\Users\\\\Rishab 2\\\\Desktop\\\\Pumpvision Backup 22_04\\\\Pumpvision\\\\pumpvision\\\\templates\\\\recon\\\\batch_scraper.html\")",
+      "Bash(git checkout *)",
+      "Bash(mkdir pumpvision *)",
+      "Bash(git mv *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
