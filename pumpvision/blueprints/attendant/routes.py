@@ -12,10 +12,42 @@ attendant_bp = Blueprint("attendant", __name__)
 _AVATAR_COLORS = ['#AFA9EC', '#5DCAA5', '#EF9F27', '#85B7EB', '#ED93B1', '#3ECFCF']
 _PRODUCT_COLORS = {'HS': '#3b82f6', 'MS': '#10b981', 'X2': '#a855f7', 'XG': '#f97316'}
 
+# Shift close flow — attendant-facing nozzle names → DB storage details
+_SHIFT_NOZZLE = {
+    "HS1": {"db_label": "HSD 1", "nozzle_no": 7,  "du": 9,  "db_product": "HSD", "color": "#3b82f6"},
+    "HS2": {"db_label": "HSD 2", "nozzle_no": 16, "du": 15, "db_product": "HSD", "color": "#3b82f6"},
+    "MS1": {"db_label": "MS 1",  "nozzle_no": 18, "du": 14, "db_product": "MS",  "color": "#10b981"},
+    "MS2": {"db_label": "MS 2",  "nozzle_no": 15, "du": 15, "db_product": "MS",  "color": "#10b981"},
+    "X2":  {"db_label": "XP",    "nozzle_no": 17, "du": 14, "db_product": "XP",  "color": "#a855f7"},
+    "XG":  {"db_label": "XG",    "nozzle_no": 11, "du": 9,  "db_product": "XG",  "color": "#f97316"},
+}
+_SHIFT_PRODUCT = {
+    "HS": {"nozzles": ["HS1", "HS2"], "color": "#3b82f6", "label": "High Speed Diesel", "banner": "HS - Diesel"},
+    "MS": {"nozzles": ["MS1", "MS2"], "color": "#10b981", "label": "Motor Spirit",       "banner": "MS - Petrol"},
+    "X2": {"nozzles": ["X2"],         "color": "#a855f7", "label": "Xtra Premium 95",   "banner": "X2 - Premium"},
+    "XG": {"nozzles": ["XG"],         "color": "#f97316", "label": "Xtra Green",        "banner": "XG - Bio"},
+}
+_NOZZLE_ORDER = ["HS1", "HS2", "MS1", "MS2", "X2", "XG"]
+
 
 def _initials(name: str) -> str:
     words = name.split()
     return ''.join(w[0].upper() for w in words[:2])
+
+
+def _opening_reading(nozzle_no: int, op_date: date):
+    """Opening totalizer for a nozzle: try NozzleTotalizer, fall back to last ManualTotalizerReading."""
+    from pumpvision.models import NozzleTotalizer, ManualTotalizerReading
+    prev = op_date - timedelta(days=1)
+    row = NozzleTotalizer.query.filter_by(nozzle_no=nozzle_no, operational_date=prev).first()
+    if row:
+        return row.totalizer_end
+    row = (ManualTotalizerReading.query
+           .filter(ManualTotalizerReading.nozzle_no == nozzle_no,
+                   ManualTotalizerReading.operational_date < op_date)
+           .order_by(ManualTotalizerReading.operational_date.desc())
+           .first())
+    return row.totalizer_value if row else None
 
 
 def _shift_op_date() -> date:
@@ -41,10 +73,17 @@ def _greeting() -> str:
 @attendant_required
 def home():
     from pumpvision.models import ManualTotalizerReading
-    op_date = _shift_op_date()
-    locked = ManualTotalizerReading.query.filter_by(
-        operational_date=op_date, is_locked=True
-    ).first() is not None
+    from pumpvision.services.operational import get_operational_date
+
+    current_op_date  = get_operational_date()
+    previous_op_date = current_op_date - timedelta(days=1)
+
+    locked_prev = ManualTotalizerReading.query.filter(
+        ManualTotalizerReading.operational_date == previous_op_date,
+        ManualTotalizerReading.is_locked == True,
+        ManualTotalizerReading.nozzle_no != None,
+    ).count()
+    prev_shift_closed = locked_prev >= 6
 
     display_name = os.environ.get(
         "ATTENDANT_DISPLAY_NAME",
@@ -53,11 +92,11 @@ def home():
 
     return render_template(
         "attendant/home.html",
-        op_date=op_date,
-        shift_locked=locked,
         greeting=_greeting(),
         display_name=display_name,
-        shift_start="06:15 AM",
+        prev_shift_closed=prev_shift_closed,
+        prev_date_str=previous_op_date.strftime("%d %b"),
+        curr_date_str=current_op_date.strftime("%d %b"),
     )
 
 
@@ -482,3 +521,233 @@ def transaction_confirmed(transaction_id):
         product_colors=_PRODUCT_COLORS,
         formatted_dt=formatted_dt,
     )
+
+
+# ─── Shift close (new flow) ───────────────────────────────────────────────────
+
+@attendant_bp.route("/shift/select-product", strict_slashes=False)
+@login_required
+@attendant_required
+def shift_select_product():
+    from pumpvision.models import ManualTotalizerReading
+    from pumpvision.services.operational import get_operational_date
+
+    op_date = get_operational_date()
+
+    all_submitted = (
+        ManualTotalizerReading.query
+        .filter_by(operational_date=op_date, is_locked=True)
+        .count() == 6
+    )
+    if all_submitted:
+        flash("Today's shift is already submitted.", "info")
+        return redirect(url_for("attendant.home"))
+
+    product_done = {}
+    for prod, info in _SHIFT_PRODUCT.items():
+        product_done[prod] = all(
+            ManualTotalizerReading.query.filter_by(
+                operational_date=op_date,
+                nozzle_label=_SHIFT_NOZZLE[n]["db_label"],
+            ).first() is not None
+            for n in info["nozzles"]
+        )
+    return render_template(
+        "attendant/shift_select_product.html",
+        op_date=op_date,
+        product_done=product_done,
+        all_submitted=False,
+        shift_product=_SHIFT_PRODUCT,
+    )
+
+
+@attendant_bp.route("/shift/du/<product>")
+@login_required
+@attendant_required
+def shift_du_selection(product):
+    from pumpvision.models import ManualTotalizerReading
+    from pumpvision.services.operational import get_operational_date
+
+    product = product.upper()
+    if product not in ("HS", "MS"):
+        return redirect(url_for("attendant.shift_select_product"))
+
+    op_date = get_operational_date()
+    info = _SHIFT_PRODUCT[product]
+    nozzles = []
+    for nozzle_name in info["nozzles"]:
+        det = _SHIFT_NOZZLE[nozzle_name]
+        opening = _opening_reading(det["nozzle_no"], op_date)
+        existing = ManualTotalizerReading.query.filter_by(
+            operational_date=op_date, nozzle_label=det["db_label"]
+        ).first()
+        nozzles.append({
+            "name": nozzle_name,
+            "du": det["du"],
+            "opening": opening,
+            "closing": existing.totalizer_value if existing else None,
+            "is_locked": existing.is_locked if existing else False,
+        })
+    return render_template(
+        "attendant/shift_du_selection.html",
+        product=product,
+        product_info=info,
+        nozzles=nozzles,
+        op_date=op_date,
+    )
+
+
+@attendant_bp.route("/shift/numpad/<nozzle>", methods=["GET", "POST"])
+@login_required
+@attendant_required
+def shift_numpad(nozzle):
+    from pumpvision.models import ManualTotalizerReading, db
+    from pumpvision.services.operational import get_operational_date
+
+    nozzle = nozzle.upper()
+    if nozzle not in _SHIFT_NOZZLE:
+        return redirect(url_for("attendant.shift_select_product"))
+
+    det = _SHIFT_NOZZLE[nozzle]
+    op_date = get_operational_date()
+    opening = _opening_reading(det["nozzle_no"], op_date)
+    existing = ManualTotalizerReading.query.filter_by(
+        operational_date=op_date, nozzle_label=det["db_label"]
+    ).first()
+
+    if existing and existing.is_locked:
+        flash("This reading is already submitted and locked.", "error")
+        return redirect(url_for("attendant.shift_summary"))
+
+    # Back URL depends on which product this nozzle belongs to
+    if nozzle in ("HS1", "HS2"):
+        back_url = url_for("attendant.shift_du_selection", product="HS")
+    elif nozzle in ("MS1", "MS2"):
+        back_url = url_for("attendant.shift_du_selection", product="MS")
+    else:
+        back_url = url_for("attendant.shift_select_product")
+
+    if request.method == "POST":
+        raw = request.form.get("closing_reading", "").strip()
+        try:
+            value = float(raw)
+        except (ValueError, TypeError):
+            flash("Please enter a valid number.", "error")
+            return redirect(url_for("attendant.shift_numpad", nozzle=nozzle))
+
+        if opening is not None and value < opening:
+            flash(f"Closing reading ({value:,.2f}) must be ≥ opening ({opening:,.2f}).", "error")
+            return redirect(url_for("attendant.shift_numpad", nozzle=nozzle))
+
+        now = datetime.now()
+        if existing:
+            existing.totalizer_value = value
+            existing.recorded_at = now
+        else:
+            db.session.add(ManualTotalizerReading(
+                operational_date=op_date,
+                nozzle_label=det["db_label"],
+                nozzle_no=det["nozzle_no"],
+                product=det["db_product"],
+                totalizer_value=value,
+                recorded_at=now,
+                is_locked=False,
+            ))
+        db.session.commit()
+        return redirect(back_url)
+
+    return render_template(
+        "attendant/shift_numpad.html",
+        nozzle=nozzle,
+        det=det,
+        opening=opening,
+        existing_value=existing.totalizer_value if existing else None,
+        back_url=back_url,
+    )
+
+
+@attendant_bp.route("/shift/summary")
+@login_required
+@attendant_required
+def shift_summary():
+    from pumpvision.models import ManualTotalizerReading
+    from pumpvision.services.operational import get_operational_date
+
+    op_date = get_operational_date()
+    nozzle_rows = []
+    for nozzle_name in _NOZZLE_ORDER:
+        det = _SHIFT_NOZZLE[nozzle_name]
+        opening = _opening_reading(det["nozzle_no"], op_date)
+        existing = ManualTotalizerReading.query.filter_by(
+            operational_date=op_date, nozzle_label=det["db_label"]
+        ).first()
+        closing = existing.totalizer_value if existing else None
+        delta = (closing - opening) if (closing is not None and opening is not None) else None
+        nozzle_rows.append({
+            "name": nozzle_name,
+            "color": det["color"],
+            "opening": opening,
+            "closing": closing,
+            "delta": delta,
+            "is_locked": existing.is_locked if existing else False,
+        })
+
+    def _delta(name):
+        for r in nozzle_rows:
+            if r["name"] == name:
+                return r["delta"] or 0.0
+        return 0.0
+
+    xg_d = _delta("XG")
+    xg_net = 0.0 if xg_d <= 7 else max(0.0, xg_d - 5)
+    product_totals = {
+        "HS": max(0.0, _delta("HS1") + _delta("HS2") - 10),
+        "MS": max(0.0, _delta("MS1") + _delta("MS2") - 10),
+        "X2": max(0.0, _delta("X2") - 5),
+        "XG": xg_net,
+    }
+
+    all_entered = all(r["closing"] is not None for r in nozzle_rows)
+    any_drafts  = any(r["closing"] is not None for r in nozzle_rows)
+    warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5]
+    display_name = os.environ.get("ATTENDANT_DISPLAY_NAME", current_user.id.capitalize())
+
+    return render_template(
+        "attendant/shift_summary.html",
+        nozzle_rows=nozzle_rows,
+        product_totals=product_totals,
+        op_date=op_date,
+        all_entered=all_entered,
+        any_drafts=any_drafts,
+        warnings=warnings,
+        display_name=display_name,
+    )
+
+
+@attendant_bp.route("/shift/submit", methods=["POST"])
+@login_required
+@attendant_required
+def shift_submit():
+    from pumpvision.models import ManualTotalizerReading, AppNotification, db
+    from pumpvision.services.operational import get_operational_date
+
+    op_date = get_operational_date()
+    # Verify all 6 nozzles have a draft
+    for nozzle_name in _NOZZLE_ORDER:
+        det = _SHIFT_NOZZLE[nozzle_name]
+        if not ManualTotalizerReading.query.filter_by(
+            operational_date=op_date, nozzle_label=det["db_label"]
+        ).first():
+            flash("All 6 nozzle readings must be entered before submitting.", "error")
+            return redirect(url_for("attendant.shift_summary"))
+
+    now = datetime.now()
+    ManualTotalizerReading.query.filter_by(operational_date=op_date).update({"is_locked": True})
+    db.session.add(AppNotification(
+        message=f"Shift closed for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}.",
+        notification_type="shift_close",
+        reference_date=op_date,
+    ))
+    db.session.commit()
+    flash("Shift closed. All readings submitted.", "success")
+    return redirect(url_for("attendant.home"))
