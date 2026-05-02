@@ -298,9 +298,9 @@ Both branches share:
 - Shared service functions in `pumpvision/services/` (e.g., price lookup, balance computation)
 
 Build order:
-1. Foundation: app factory, blueprint structure, auth, models
-2. Attendant branch (current focus)
-3. Owner branch (later, reads data the attendant has been generating)
+1. Foundation: app factory, blueprint structure, auth, models ✓ Done
+2. Attendant branch ✓ Done — all 9 screens wired to real data
+3. Owner branch (next — reads data the attendant has been generating)
 
 This means schema stays whole from day one — no migration ever needed when owner views are added.
 
@@ -471,7 +471,10 @@ Bottom nav for all attendant screens: **Home · Activity · Profile** (3 tabs).
 **Key elements:**
 - Top bar: "PUMPVISION" wordmark + "SHREE PETROLEUM RO 206858" identity, bell icon
 - Greeting: "Good morning, [first_name]"
-- Sub-line: "Shift active · started [HH:MM AM/PM]"
+- Shift status nudge card (replaces the "Shift active" sub-line):
+  - State A (amber) — previous shift not closed: "DD Mon shift not closed · Tap Close Shift to enter your closing readings."
+  - State B (green) — previous shift closed: "DD Mon shift closed ✓ · Today's shift is in progress."
+  - Logic: checks `previous_op_date` (= `get_operational_date() - 1 day`) for ≥6 locked `ManualTotalizerReading` rows
 - Two large action cards:
   - "Log Credit Sale" — fuel pump icon, sub "Record a fuel sale on credit"
   - "Close Shift" — clipboard with checkmark icon, sub "Enter closing nozzle readings"
@@ -532,12 +535,12 @@ either show Activity as active or build a contextual back button instead).
 - "Select product" heading + sub-line
 - 2x2 grid of product cards: HS, MS, X2 ("Xtra Premium 95"), XG ("Xtra Green")
   with correct colors and subtle gradient background per product
-- Stitch's output includes a "DONE" badge on a completed product — for MVP do not
-  wire the smart logic; the visual treatment can stay but every card defaults to "Active".
+- "DONE" badge shown on each product card when all its nozzles have a `ManualTotalizerReading`
+  row for the current shift op date. Wired to real data — not a placeholder.
 
 #### `07_shift_close_du_selection.png`
 **File:** `docs/screens/07_shift_close_du_selection.png` (compound — shows MS variant + HS variant)
-**Route:** `GET /attendant/shift/select-du/<product>`
+**Route:** `GET /attendant/shift/du/<product>`
 **Scroll:** Yes — cards scroll, "Confirm Readings" button sticky at bottom.
 **Active nav:** Shift
 **Behavior:** This screen is shown only for HS and MS (which have 2 nozzles each). For X2 and XG
@@ -553,7 +556,7 @@ either show Activity as active or build a contextual back button instead).
 
 #### `08_shift_close_numpad.png`
 **File:** `docs/screens/08_shift_close_numpad.png`
-**Route:** `GET/POST /attendant/shift/enter-reading/<nozzle_id>`
+**Route:** `GET/POST /attendant/shift/numpad/<nozzle>`
 **Scroll:** No — numpad must always be in viewport.
 **Active nav:** Shift
 **Key elements:**
@@ -785,7 +788,7 @@ all hallucinated in earlier rounds and explicitly removed.
 - Data ingestion from IRAS via automated Playwright scraper (in progress)
 - Daily dashboard, shift reconciliation, price tracking
 - Credit customer module (built, undergoing UI redesign)
-- **Attendant branch app** (current focus — 9 screens)
+- **Attendant branch app** ✓ Done — all 9 screens wired to real data
 
 ### Phase 2 — Trust Engine
 - Nozzle variance and totalizer gap detection
@@ -817,9 +820,10 @@ all hallucinated in earlier rounds and explicitly removed.
 - `pumpvision/decorators.py` — `owner_required`, `attendant_required`
 - `pumpvision/user.py` — in-memory `User` class (Flask-Login `UserMixin`); **not DB-backed** — see item 18 in "What to Work On Next"
 - `pumpvision/services/prices.py` — `get_rsp(product, op_date)` shared price lookup (IrasPrice → LocalPrice fallback)
+- `pumpvision/services/operational.py` — `get_operational_date()`: returns the current operational period (yesterday before 06:00, today after 06:00). Used only in `home()` for the nudge card. **Do not use in shift close routes** — those use `_shift_op_date()` = `date.today() - 1` (always yesterday, the shift being closed). Conflating these two caused a critical bug where readings landed under the wrong date.
 - `pumpvision/blueprints/auth/routes.py` — login, logout, root redirect
 - `pumpvision/blueprints/dashboard/routes.py` — owner dashboard stub
-- `pumpvision/blueprints/attendant/routes.py` — attendant screens: home, shift-close, credit log
+- `pumpvision/blueprints/attendant/routes.py` — all 9 attendant screens: home (nudge), credit sale flow (select customer → log sale → confirmed), shift close flow (select product → DU selection → numpad → summary/submit). Activity and Profile are stubs.
 - `pumpvision/blueprints/owner/routes.py` — owner blueprint placeholder (redirects to dashboard)
 - `pumpvision/blueprints/credit/owner.py` — credit module owner routes (customers, ledger, invoices, PDF, settings)
 - `pumpvision/blueprints/paytm/routes.py` — Paytm CSV upload + day views
@@ -889,8 +893,8 @@ only 25.00 L. May reflect customer preference or overflow-only usage.
 9. ~~Lock visual design system + 17 screen mockups~~ ✓ Done
 10. ~~Set up Git + GitHub~~ ✓ Done
 11. ~~Foundation refactor — app factory, blueprint structure, extensions, Flask-Migrate~~ ✓ Done
-12. **Implement attendant branch — 9 screens as Jinja templates wired to real data** ← NEXT
-13. Activity tab and Profile tab for attendant
+12. ~~Implement attendant branch — 9 screens as Jinja templates wired to real data~~ ✓ Done
+13. **Activity tab and Profile tab for attendant** ← NEXT
 14. Deploy app to Render or Railway, test on phone over real cloud URL
 15. Implement owner branch — Tanks, Credit Module, Reconciliation, Executive Dashboard
 16. Integrate autonomous CAPTCHA into main scraper, deploy scraper to cloud cron
