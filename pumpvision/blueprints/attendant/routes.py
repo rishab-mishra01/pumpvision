@@ -83,15 +83,7 @@ def home():
         ManualTotalizerReading.is_locked == True,
         ManualTotalizerReading.nozzle_no != None,
     ).count()
-    locked_curr = ManualTotalizerReading.query.filter(
-        ManualTotalizerReading.operational_date == current_op_date,
-        ManualTotalizerReading.is_locked == True,
-        ManualTotalizerReading.nozzle_no != None,
-    ).count()
-    # Show State B (all good) if either the previous day's shift OR the
-    # current day's shift is fully submitted — avoids the paradox of showing
-    # "yesterday not closed" when today was just successfully submitted.
-    prev_shift_closed = locked_prev >= 6 or locked_curr >= 6
+    prev_shift_closed = locked_prev >= 6
 
     display_name = os.environ.get(
         "ATTENDANT_DISPLAY_NAME",
