@@ -530,9 +530,8 @@ def transaction_confirmed(transaction_id):
 @attendant_required
 def shift_select_product():
     from pumpvision.models import ManualTotalizerReading
-    from pumpvision.services.operational import get_operational_date
 
-    op_date = get_operational_date()
+    op_date = _shift_op_date()
 
     all_submitted = (
         ManualTotalizerReading.query
@@ -566,13 +565,12 @@ def shift_select_product():
 @attendant_required
 def shift_du_selection(product):
     from pumpvision.models import ManualTotalizerReading
-    from pumpvision.services.operational import get_operational_date
 
     product = product.upper()
     if product not in ("HS", "MS"):
         return redirect(url_for("attendant.shift_select_product"))
 
-    op_date = get_operational_date()
+    op_date = _shift_op_date()
     info = _SHIFT_PRODUCT[product]
     nozzles = []
     for nozzle_name in info["nozzles"]:
@@ -602,14 +600,13 @@ def shift_du_selection(product):
 @attendant_required
 def shift_numpad(nozzle):
     from pumpvision.models import ManualTotalizerReading, db
-    from pumpvision.services.operational import get_operational_date
 
     nozzle = nozzle.upper()
     if nozzle not in _SHIFT_NOZZLE:
         return redirect(url_for("attendant.shift_select_product"))
 
     det = _SHIFT_NOZZLE[nozzle]
-    op_date = get_operational_date()
+    op_date = _shift_op_date()
     opening = _opening_reading(det["nozzle_no"], op_date)
     existing = ManualTotalizerReading.query.filter_by(
         operational_date=op_date, nozzle_label=det["db_label"]
@@ -671,9 +668,8 @@ def shift_numpad(nozzle):
 @attendant_required
 def shift_summary():
     from pumpvision.models import ManualTotalizerReading
-    from pumpvision.services.operational import get_operational_date
 
-    op_date = get_operational_date()
+    op_date = _shift_op_date()
     nozzle_rows = []
     for nozzle_name in _NOZZLE_ORDER:
         det = _SHIFT_NOZZLE[nozzle_name]
@@ -729,9 +725,8 @@ def shift_summary():
 @attendant_required
 def shift_submit():
     from pumpvision.models import ManualTotalizerReading, AppNotification, db
-    from pumpvision.services.operational import get_operational_date
 
-    op_date = get_operational_date()
+    op_date = _shift_op_date()
     # Verify all 6 nozzles have a draft
     for nozzle_name in _NOZZLE_ORDER:
         det = _SHIFT_NOZZLE[nozzle_name]
