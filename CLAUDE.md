@@ -308,7 +308,8 @@ This means schema stays whole from day one — no migration ever needed when own
 - Mobile-first web app, NOT a desktop UI, NOT a native app
 - Runs in the phone browser
 - Local running is for development only
-- Production target: Render or Railway with PostgreSQL
+- Production target: Railway (paid tier) with PostgreSQL
+- PWA (Progressive Web App) support to be added at deployment: manifest.json, app icons, theme-color meta tag — enables full-screen home screen install on Android/iOS without Play Store
 - Folder structure, config, and dependencies must be deployable from day one
 
 ### Local Network Accessible During Dev
@@ -880,6 +881,33 @@ only 25.00 L. May reflect customer preference or overflow-only usage.
 
 ---
 
+---
+
+## Parallel Workstreams
+
+The project now runs three simultaneous workstreams. None blocks the others.
+
+| Stream | What | Who drives it |
+|--------|------|---------------|
+| **Deployment** | Railway setup, PWA, PostgreSQL migration, real customer data entry | Claude Code + Rishab (1-2 sessions) |
+| **Owner branch** | Tanks, Credit Module UI, Executive Dashboard, Recon UI — implemented against existing CLAUDE.md screen specs | Claude Code autonomously on `owner-branch` |
+| **Design rework** | Ground-up creative direction, Figma design system, new visual identity — to replace Stitch scaffolding with a real, portfolio-worthy design | Rishab-led in a dedicated design conversation |
+
+**CLAUDE.md is the shared memory across all streams.** Every stream reads from it.
+Every significant decision gets written back to it before the next session.
+
+**Git branches keep streams isolated:**
+- `main` — always deployable, always stable
+- `deployment` — Railway config, PWA, migration scripts
+- `owner-branch` — owner screens implementation
+- Design work does not touch code until Figma specs are ready to hand off
+
+**Design rework note:** The current design system (Stitch-based, dark fintech) is scaffolding.
+A ground-up UI redesign is planned as a parallel workstream with a distinct creative identity.
+When the new design system is locked in Figma, CLAUDE.md will be updated with new design tokens
+and Claude Code will implement the visual layer. The data layer (routes, models, logic) is
+unaffected by the design rework — it stays intact.
+
 ## What to Work On Next
 
 1. ~~Verify the ISS scraper~~ ✓ Done
@@ -894,8 +922,13 @@ only 25.00 L. May reflect customer preference or overflow-only usage.
 10. ~~Set up Git + GitHub~~ ✓ Done
 11. ~~Foundation refactor — app factory, blueprint structure, extensions, Flask-Migrate~~ ✓ Done
 12. ~~Implement attendant branch — 9 screens as Jinja templates wired to real data~~ ✓ Done
-13. **Activity tab and Profile tab for attendant** ← NEXT
-14. Deploy app to Render or Railway, test on phone over real cloud URL
+13. ~~Activity tab and Profile tab for attendant~~ — deferred; deprioritised in favour of deployment
+14. **Deploy app to Railway (paid tier) + PWA support** ← CURRENT PRIORITY
+    - Platform: Railway (chosen over Render — no cold start, no 90-day DB expiry, usage-based ~$10-15/month)
+    - Database: PostgreSQL on Railway (SQLite only for local dev)
+    - Customer data migration: Option C — migrate `customers` + `authorized_vehicles` tables only from SQLite; skip test transactions, invoices, Paytm data (all test noise). Enter opening balances via app after migration.
+    - PWA: add manifest.json + icon set + theme-color meta during deployment so attendant/owner can install to home screen full-screen
+    - After deploy: enter 26 real credit customers from accountant list, brief attendant on the two flows
 15. Implement owner branch — Tanks, Credit Module, Reconciliation, Executive Dashboard
 16. Integrate autonomous CAPTCHA into main scraper, deploy scraper to cloud cron
 17. Phase 2 work: smart anomaly warnings, manual pump test entry, daybook, expenses
