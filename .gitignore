@@ -56,3 +56,6 @@ logs/
 *.bak
 build/
 dist/.claude/settings.local.json
+
+# Customer export — contains real data, never commit
+scripts/customer_export.json
