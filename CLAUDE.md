@@ -836,7 +836,12 @@ all hallucinated in earlier rounds and explicitly removed.
 - `wsgi.py` — WSGI entry point (`from pumpvision import create_app; app = create_app()`)
 - `migrations/` — Flask-Migrate / Alembic migration files; baseline revision stamped Apr 2026
 - `requirements.txt`, `Procfile`, `.env`, `.env.example`
+- `railway.json` — Railway build/start config (gunicorn, health check at `/login`)
 - `start.bat` — Windows quick-launcher
+
+### Static assets
+- `pumpvision/static/manifest.json` — PWA manifest (standalone display, black theme, portrait)
+- `pumpvision/static/icons/icon-192.png` + `icon-512.png` — PWA home screen icons (fuel pump, electric blue on black)
 
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode scraper
@@ -883,30 +888,45 @@ only 25.00 L. May reflect customer preference or overflow-only usage.
 
 ---
 
+## Deployment (Live — May 2026)
+
+The app is deployed and live on Railway.
+
+| Item | Value |
+|------|-------|
+| Platform | Railway (paid tier, usage-based ~$10–15/month) |
+| Live URL | `web-production-a1322.up.railway.app` |
+| Database | PostgreSQL on Railway (SQLite only for local dev) |
+| Auto-deploy | Every push to `main` triggers a redeploy |
+| PWA | Installed on phone — manifest.json + icons at `pumpvision/static/` |
+| Owner login | `admin` / `shreeadmin2026` |
+| Attendant login | `operations` / `shreeoperations2026` |
+
+**Customer data:** 29 customers + 66 vehicles migrated from local SQLite into production PostgreSQL (May 2026).
+
+**Why Railway over Render:** no cold starts, no 90-day DB expiry, usage-based pricing.
+
 ## Parallel Workstreams
 
-The project now runs three simultaneous workstreams. None blocks the others.
-
-| Stream | What | Who drives it |
-|--------|------|---------------|
-| **Deployment** | Railway setup, PWA, PostgreSQL migration, real customer data entry | Claude Code + Rishab (1-2 sessions) |
-| **Owner branch** | Tanks, Credit Module UI, Executive Dashboard, Recon UI — implemented against existing CLAUDE.md screen specs | Claude Code autonomously on `owner-branch` |
-| **Design rework** | Ground-up creative direction, Figma design system, new visual identity — to replace Stitch scaffolding with a real, portfolio-worthy design | Rishab-led in a dedicated design conversation |
+| Stream | Status |
+|--------|--------|
+| **Deployment** | ✓ Complete — Railway live, PWA installed, data migrated |
+| **Owner branch** | Next — Tanks, Credit Module UI, Executive Dashboard, Recon UI |
+| **Design rework** | Deferred — ground-up Figma redesign, blocked on Rishab-led creative direction |
 
 **CLAUDE.md is the shared memory across all streams.** Every stream reads from it.
 Every significant decision gets written back to it before the next session.
 
-**Git branches keep streams isolated:**
-- `main` — always deployable, always stable
-- `deployment` — Railway config, PWA, migration scripts
-- `owner-branch` — owner screens implementation
+**Git branch strategy:**
+- `main` — always deployable, always stable; every push auto-deploys to Railway
+- `deployment` — merged to main May 2026; delete this branch
+- `owner-branch` — owner screens implementation (next stream)
 - Design work does not touch code until Figma specs are ready to hand off
 
-**Design rework note:** The current design system (Stitch-based, dark fintech) is scaffolding.
-A ground-up UI redesign is planned as a parallel workstream with a distinct creative identity.
-When the new design system is locked in Figma, CLAUDE.md will be updated with new design tokens
-and Claude Code will implement the visual layer. The data layer (routes, models, logic) is
-unaffected by the design rework — it stays intact.
+**Design rework note:** The current design system (dark fintech) is scaffolding.
+A ground-up UI redesign is planned. When the new design system is locked in Figma,
+CLAUDE.md will be updated with new design tokens and Claude Code will implement the
+visual layer. The data layer (routes, models, logic) is unaffected.
 
 ## What to Work On Next
 
@@ -922,13 +942,8 @@ unaffected by the design rework — it stays intact.
 10. ~~Set up Git + GitHub~~ ✓ Done
 11. ~~Foundation refactor — app factory, blueprint structure, extensions, Flask-Migrate~~ ✓ Done
 12. ~~Implement attendant branch — 9 screens as Jinja templates wired to real data~~ ✓ Done
-13. ~~Activity tab and Profile tab for attendant~~ — deferred; deprioritised in favour of deployment
-14. **Deploy app to Railway (paid tier) + PWA support** ← CURRENT PRIORITY
-    - Platform: Railway (chosen over Render — no cold start, no 90-day DB expiry, usage-based ~$10-15/month)
-    - Database: PostgreSQL on Railway (SQLite only for local dev)
-    - Customer data migration: Option C — migrate `customers` + `authorized_vehicles` tables only from SQLite; skip test transactions, invoices, Paytm data (all test noise). Enter opening balances via app after migration.
-    - PWA: add manifest.json + icon set + theme-color meta during deployment so attendant/owner can install to home screen full-screen
-    - After deploy: enter 26 real credit customers from accountant list, brief attendant on the two flows
+13. **Activity tab and Profile tab for attendant** ← NEXT
+14. ~~Deploy app to Railway (paid tier) + PWA support~~ ✓ Done — live at `web-production-a1322.up.railway.app`, PostgreSQL, PWA installed, 29 customers migrated
 15. Implement owner branch — Tanks, Credit Module, Reconciliation, Executive Dashboard
 16. Integrate autonomous CAPTCHA into main scraper, deploy scraper to cloud cron
 17. Phase 2 work: smart anomaly warnings, manual pump test entry, daybook, expenses
