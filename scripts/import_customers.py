@@ -43,6 +43,7 @@ for c in customers:
         skipped_customers += 1
         continue
 
+    c["is_active"] = bool(c["is_active"])
     cur.execute("""
         INSERT INTO customers
             (customer_id, company_name, gst_number, fleet_manager_name,
@@ -61,6 +62,7 @@ for v in vehicles:
         skipped_vehicles += 1
         continue
 
+    v["is_active"] = bool(v["is_active"])
     cur.execute("""
         INSERT INTO authorized_vehicles
             (vehicle_id, customer_id, vehicle_number, vehicle_description, is_active)
