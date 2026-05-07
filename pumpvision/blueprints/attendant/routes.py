@@ -85,10 +85,7 @@ def home():
     ).count()
     prev_shift_closed = locked_prev >= 6
 
-    display_name = os.environ.get(
-        "ATTENDANT_DISPLAY_NAME",
-        current_user.id.capitalize()
-    )
+    display_name = current_user.first_name or current_user.username
 
     return render_template(
         "attendant/home.html",

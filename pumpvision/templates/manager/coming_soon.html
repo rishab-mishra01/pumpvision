@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ feature }} — Pumpvision{% endblock %}
+
+{% block page %}
+<div class="flex flex-col" style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:80px;">
+
+  <!-- Top bar -->
+  <div class="flex items-center px-5 pt-5 pb-3 gap-3">
+    <a href="{{ url_for('manager.home') }}"
+       style="color:#6b7280;padding:4px 8px 4px 0;text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
+    </a>
+    <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1rem;
+                 letter-spacing:-0.01em;color:#fff;">
+      {{ feature }}
+    </span>
+  </div>
+
+  <!-- Coming soon card -->
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+              padding:40px 24px;text-align:center;">
+    <div style="width:64px;height:64px;border-radius:20px;
+                background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);
+                display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+           stroke="#4b5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </div>
+    <h2 style="font-family:'Manrope',sans-serif;font-weight:600;font-size:1.25rem;
+               color:#fff;margin:0 0 8px;">
+      Coming in Sprint 1
+    </h2>
+    <p style="font-family:'Inter',sans-serif;font-size:14px;color:#6b7280;
+              margin:0;line-height:1.6;max-width:280px;">
+      {{ feature }} will be available in the next update.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

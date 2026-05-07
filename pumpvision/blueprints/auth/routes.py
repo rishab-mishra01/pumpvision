@@ -1,5 +1,3 @@
-import os
-
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
@@ -9,6 +7,8 @@ auth_bp = Blueprint("auth", __name__)
 def _role_home():
     if current_user.role == "attendant":
         return redirect(url_for("attendant.home"))
+    if current_user.role == "manager":
+        return redirect(url_for("manager.home"))
     return redirect(url_for("dashboard.index"))
 
 
@@ -28,19 +28,12 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        owner_username     = os.environ.get("OWNER_USERNAME",     "owner")
-        owner_password     = os.environ.get("OWNER_PASSWORD",     "owner123")
-        attendant_username = os.environ.get("ATTENDANT_USERNAME", "attendant")
-        attendant_password = os.environ.get("ATTENDANT_PASSWORD", "attendant123")
+        from pumpvision.models import User
+        user = User.query.filter_by(username=username).first()
 
-        from pumpvision.user import User
-
-        if username == owner_username and password == owner_password:
-            login_user(User(owner_username, "owner"))
-            return redirect(url_for("dashboard.index"))
-        elif username == attendant_username and password == attendant_password:
-            login_user(User(attendant_username, "attendant"))
-            return redirect(url_for("attendant.home"))
+        if user and user.is_active and user.check_password(password):
+            login_user(user)
+            return _role_home()
         else:
             flash("Invalid username or password.", "error")
 

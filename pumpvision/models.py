@@ -1,6 +1,28 @@
 from datetime import datetime
 
+from flask_login import UserMixin
+from werkzeug.security import check_password_hash
+
 from .extensions import db
+
+
+# ─────────────────────────────────────────────
+# AUTH
+# ─────────────────────────────────────────────
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # 'owner' / 'manager' / 'attendant'
+    first_name = db.Column(db.String(80))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 
 # ─────────────────────────────────────────────
@@ -96,6 +118,10 @@ class PaymentReceived(db.Model):
     reference_number = db.Column(db.String(50))
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Sprint 0: payment verification workflow
+    status = db.Column(db.String(30), default='confirmed')  # confirmed / pending_verification / flagged
+    verified_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    verified_at = db.Column(db.DateTime, nullable=True)
 
 
 class LocalPrice(db.Model):
@@ -211,3 +237,69 @@ class PaytmTransaction(db.Model):
     payment_category = db.Column(db.String(10))  # "UPI" or "CARD" (derived)
     pos_id = db.Column(db.String(30))
     imported_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# LUBE MODULE
+# ─────────────────────────────────────────────
+
+class LubeProduct(db.Model):
+    __tablename__ = 'lube_products'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    pack_size = db.Column(db.String(20), nullable=False)
+    unit = db.Column(db.String(20), default='unit')
+    sale_rate = db.Column(db.Float, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+
+    transactions = db.relationship('LubeTransaction', backref='product', lazy=True)
+
+
+class LubeTransaction(db.Model):
+    __tablename__ = 'lube_transactions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('lube_products.id'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    unit_price = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    payment_mode = db.Column(db.String(10), nullable=False)  # 'cash' or 'credit'
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.customer_id'), nullable=True)
+    op_date = db.Column(db.Date, nullable=False)
+    transaction_time = db.Column(db.DateTime, nullable=False)
+    logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# EXPENSES
+# ─────────────────────────────────────────────
+
+class Expense(db.Model):
+    __tablename__ = 'expenses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    amount = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # Staff/Maintenance/Utilities/Supplies/Misc
+    description = db.Column(db.String(200))
+    op_date = db.Column(db.Date, nullable=False)
+    logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# FLEET CARD
+# ─────────────────────────────────────────────
+
+class FleetCardTransaction(db.Model):
+    __tablename__ = 'fleet_card_transactions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    card_identifier = db.Column(db.String(100), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    op_date = db.Column(db.Date, nullable=False)
+    transaction_time = db.Column(db.DateTime)
+    logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    notes = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

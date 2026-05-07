@@ -19,3 +19,12 @@ def attendant_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated
+
+
+def manager_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != "manager":
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
