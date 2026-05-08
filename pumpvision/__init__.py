@@ -69,6 +69,8 @@ def create_app():
         return {"unread_notification_count": 0}
 
     with app.app_context():
+        from flask_migrate import upgrade
+        upgrade()
         db.create_all()
         _seed_data()
 
