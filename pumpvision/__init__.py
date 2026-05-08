@@ -81,7 +81,8 @@ def _seed_data():
     from werkzeug.security import generate_password_hash
     from .models import db, User, LocalPrice, AppSetting, LubeProduct
 
-    # ── Users — seed each account only if its username doesn't exist yet ───
+    # ── Users — insert if missing; fix password if it was seeded from empty env var ──
+    from werkzeug.security import check_password_hash
     _ensure_user = [
         (os.getenv("OWNER_USERNAME",     "admin"),      os.getenv("OWNER_PASSWORD",     ""), "owner",     "Rishab"),
         (os.getenv("ATTENDANT_USERNAME", "operations"), os.getenv("ATTENDANT_PASSWORD", ""), "attendant", "Attendant"),
@@ -89,13 +90,18 @@ def _seed_data():
     ]
     changed = False
     for username, password, role, first_name in _ensure_user:
-        if not User.query.filter_by(username=username).first():
+        existing = User.query.filter_by(username=username).first()
+        if not existing:
             db.session.add(User(
                 username=username,
                 password_hash=generate_password_hash(password),
                 role=role,
                 first_name=first_name,
             ))
+            changed = True
+        elif password and check_password_hash(existing.password_hash, ""):
+            # Was seeded before env var was set — update to the real password now
+            existing.password_hash = generate_password_hash(password)
             changed = True
     if changed:
         db.session.commit()
