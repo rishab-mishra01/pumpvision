@@ -81,30 +81,23 @@ def _seed_data():
     from werkzeug.security import generate_password_hash
     from .models import db, User, LocalPrice, AppSetting, LubeProduct
 
-    # ── Users ──────────────────────────────────────────────────────────────
-    if User.query.count() == 0:
-        users_to_seed = [
-            User(
-                username=os.getenv("OWNER_USERNAME", "admin"),
-                password_hash=generate_password_hash(os.getenv("OWNER_PASSWORD", "")),
-                role="owner",
-                first_name="Rishab",
-            ),
-            User(
-                username=os.getenv("ATTENDANT_USERNAME", "operations"),
-                password_hash=generate_password_hash(os.getenv("ATTENDANT_PASSWORD", "")),
-                role="attendant",
-                first_name="Attendant",
-            ),
-            User(
-                username=os.getenv("MANAGER_USERNAME", "manager"),
-                password_hash=generate_password_hash(os.getenv("MANAGER_PASSWORD", "")),
-                role="manager",
-                first_name="Manager",
-            ),
-        ]
-        for u in users_to_seed:
-            db.session.add(u)
+    # ── Users — seed each account only if its username doesn't exist yet ───
+    _ensure_user = [
+        (os.getenv("OWNER_USERNAME",     "admin"),      os.getenv("OWNER_PASSWORD",     ""), "owner",     "Rishab"),
+        (os.getenv("ATTENDANT_USERNAME", "operations"), os.getenv("ATTENDANT_PASSWORD", ""), "attendant", "Attendant"),
+        (os.getenv("MANAGER_USERNAME",   "manager"),    os.getenv("MANAGER_PASSWORD",   ""), "manager",   "Manager"),
+    ]
+    changed = False
+    for username, password, role, first_name in _ensure_user:
+        if not User.query.filter_by(username=username).first():
+            db.session.add(User(
+                username=username,
+                password_hash=generate_password_hash(password),
+                role=role,
+                first_name=first_name,
+            ))
+            changed = True
+    if changed:
         db.session.commit()
 
     # ── Existing price + settings seeds ────────────────────────────────────
