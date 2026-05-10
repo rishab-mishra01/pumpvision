@@ -210,8 +210,14 @@ identifiers. DB stores nozzle numbers. X2 and XG have only one nozzle each, so n
 - **Transaction report** — individual UPI and card transactions per operational day
 - **Settlement report** — actual amounts settled into bank account
 
+**Current (Sprint 1):** `scrapers/paytm_exporter.py` — Playwright scraper that downloads the
+previous operational day's transaction CSV (06:00 yesterday → 05:59 today) from
+`dashboard.paytm.com`. Runs headless with stealth mode. Integrated into `daily_scrape.py`
+as Job 0. Session persisted via `scrapers/paytm_state.json` (JSON cookie store).
+
 **Future (Sprint 2):** Automated ingestion via email watcher — Paytm exports CSVs to email,
-cloud server watches inbox, detects Paytm emails, ingests automatically. Eliminates manual upload.
+cloud server watches inbox, detects Paytm emails, ingests automatically. Eliminates manual
+scraping.
 
 ---
 
@@ -538,6 +544,10 @@ ATTENDANT_USERNAME=operations
 ATTENDANT_PASSWORD=shreeoperations2026
 MANAGER_USERNAME=<see .env>
 MANAGER_PASSWORD=<see .env>
+PAYTM_EMAIL=<email registered with Paytm Business>
+PAYTM_PASSWORD=<see .env>
+PAYTM_STATE_PATH=scrapers/paytm_state.json  (optional, default as shown)
+PAYTM_HEADLESS=false  (omit or set true for headless; false for headed/debug)
 ```
 
 ---
@@ -776,8 +786,10 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode (XG exemption implemented)
 - `scrapers/iras_price_exporter.py` — Price (PRM) scraper
+- `scrapers/paytm_exporter.py` — Paytm transaction CSV downloader (headless, stealth mode)
+- `scrapers/paytm_state.json` — persisted Paytm session cookies (gitignored)
 - `scrapers/captcha_test.py` — Claude Vision CAPTCHA PoC
-- `scrapers/daily_scrape.py` — orchestration
+- `scrapers/daily_scrape.py` — orchestration (Job 0: Paytm, Job 1: Price, Job 2: ST, Job 3: ISS)
 
 ### Documentation
 - `CLAUDE.md` — this file
@@ -800,8 +812,9 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 |--------|--------|
 | **Deployment** | ✓ Complete — Railway live, PWA, PostgreSQL, 29 customers migrated |
 | **Attendant branch** | ✓ Complete — 9 screens, all wired to real data |
-| **Sprint 0: three-user foundation** | Next CC task — convert User to DB, add manager |
-| **Sprint 1: manager flows** | After Sprint 0 |
+| **Sprint 0: three-user foundation** | ✓ Complete — DB-backed users, manager role, lube/expense/fleet schemas |
+| **Sprint 1: manager flows** | ← CURRENT — stubs wired, need full implementation |
+| **Paytm scraper** | ✓ Complete — headless, stealth mode, integrated into daily_scrape.py |
 | **Sprint 2: ATG scraper + Paytm automation** | After Sprint 1 |
 | **Sprint 3: owner UI + design system** | After Sprint 2 (or in parallel) |
 | **Design rework (Pumpvision Narrative)** | In progress in separate design conversation |
@@ -824,18 +837,11 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 12. ~~Attendant branch (9 screens)~~ ✓
 13. ~~Activity + Profile tabs for attendant~~ — deprioritised
 14. ~~Deploy to Railway + PWA~~ ✓ — live at `web-production-a1322.up.railway.app`
-15. **Sprint 0: three-user foundation** ← CURRENT PRIORITY
-    - Convert `user.py` from in-memory to DB-backed `users` table
-    - Add `manager` role to auth system
-    - Create `manager` blueprint with shift-contextual home (checklist)
-    - Create all new schema tables: `lube_products`, `lube_transactions`,
-      `expenses`, `fleet_card_transactions`
-    - Update `payments_received` with `status`, `verified_by`, `verified_at` columns
-    - Seed `lube_products` with 44 SKUs from the catalogue above
-    - Flask-Migrate migration for all schema changes
-    - Update `owner_required` and `attendant_required` decorators;
-      add `manager_required`
-16. **Sprint 1: manager operational flows** — after Sprint 0
+15. ~~Sprint 0: three-user foundation~~ ✓ — DB-backed users, manager role, all new tables, 44 lube SKUs seeded
+16. ~~Paytm scraper~~ ✓ — `scrapers/paytm_exporter.py`, headless + stealth, integrated into `daily_scrape.py`
+    - Session cookie reuse, auto-login fallback, set-based new-link detection
+    - `PAYTM_HEADLESS=false` for debug; headless works reliably with stealth mode
+17. **Sprint 1: manager operational flows** ← CURRENT PRIORITY
     - Manager home (shift-contextual checklist)
     - Log lube sale (cash or credit)
     - Log expense
@@ -844,14 +850,14 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
     - Owner: bank transfer verification workflow
     - Owner: intelligence/action center for accountability nudges
     - Generate invoice (moves from owner to manager; owner gets alert)
-17. **Sprint 2: ATG scraper + automated Paytm ingestion** — after Sprint 1
+18. **Sprint 2: ATG scraper + automated Paytm ingestion** — after Sprint 1
     - ATG stock scraper (tank levels, enables Tanks screen)
     - Delivery receipt scraper (TT Receipt, SAP Invoice, density chain)
-    - Email watcher for automated Paytm CSV ingestion
-18. **Sprint 3: owner UI + new design system** — after Sprint 2 (or in parallel)
+    - Email watcher for automated Paytm CSV ingestion (replaces scraper)
+19. **Sprint 3: owner UI + new design system** — after Sprint 2 (or in parallel)
     - Build all owner screens (Tanks, Credit Module, Executive Dashboard, Recon)
     - Apply Pumpvision Narrative design system across all roles
-19. **Convert User to DB-backed model** — included in Sprint 0 (item 15 above).
+20. ~~Convert User to DB-backed model~~ ✓ — completed in Sprint 0.
     Current `.env`-based auth does not scale beyond 1–2 users.
 20. Integrate autonomous CAPTCHA into main scraper + deploy to cloud cron
 21. Phase 2: smart anomaly warnings, manual pump test entry

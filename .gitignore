@@ -60,3 +60,10 @@ dist/
 
 # Customer export — contains real data, never commit
 scripts/customer_export.json
+
+# Paytm scraper — session cookies and browser profile (sensitive / large)
+scrapers/paytm_state.json
+scrapers/paytm_profile/
+
+# Downloaded operational data
+data/

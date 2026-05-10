@@ -98,6 +98,7 @@ def _load_scraper(name: str):
 
 _iss = _load_scraper("iras_iss_exporter")
 _prm = _load_scraper("iras_price_exporter")
+_ptm = _load_scraper("paytm_exporter")
 
 # Both scraper modules wrap sys.stdout at import time, leaving two wrappers on
 # the same fd and causing the original buffer to be closed. Reset stdout by
@@ -106,6 +107,9 @@ sys.stdout = open(_stdout_fd, "w", encoding="utf-8", errors="replace", closefd=T
 
 _iss.OUTPUT_FOLDER          = str(ISS_DIR)
 _iss.SHIFT_TOTALIZER_FOLDER = str(ST_DIR)
+
+PAYTM_EMAIL    = os.environ.get("PAYTM_EMAIL", "")
+PAYTM_PASSWORD = os.environ.get("PAYTM_PASSWORD", "")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -264,6 +268,30 @@ async def _autonomous_login(page) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# JOB 0 — PAYTM PAYMENT REPORT
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _job_paytm():
+    """
+    Download yesterday's Paytm payment transaction CSV.
+
+    Runs in its own browser context (independent of the IRAS session).
+    Skipped silently when PAYTM_EMAIL / PAYTM_PASSWORD are not configured.
+    """
+    print(f"\n{'='*55}")
+    print(f"  JOB 0 — Paytm Payment Report")
+    print(f"{'='*55}")
+
+    if not PAYTM_EMAIL or not PAYTM_PASSWORD:
+        print("  [SKIP] PAYTM_EMAIL or PAYTM_PASSWORD not set in .env")
+        return
+
+    success = await _ptm.run()
+    if not success:
+        print("  [WARN] Paytm download failed — continuing with IRAS jobs")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — SHIFT TOTALIZER
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -418,6 +446,9 @@ async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
     print(f"  ST output    : {st_dir}")
     print(f"  Price output : {price_dir}")
     print("=" * 55)
+
+    # ── Job 0: Paytm — runs its own browser context before the IRAS session ──
+    await _job_paytm()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
