@@ -820,7 +820,7 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 | **Sprint 0: three-user foundation** | ✓ Complete — DB-backed users, manager role, lube/expense/fleet schemas |
 | **Sprint 1: manager flows** | ← CURRENT — stubs wired, need full implementation |
 | **Paytm scraper** | ✓ Complete — headless, stealth mode, integrated into daily_scrape.py |
-| **SDMS PAD scraper** | Branch `sdms-pad-scraper` — needs user test before merge to main |
+| **SDMS PAD scraper** | Branch `sdms-pad-scraper` — tested ✓, ready to merge to main |
 | **Sprint 2: ATG scraper + Paytm automation** | After Sprint 1 |
 | **Sprint 3: owner UI + design system** | After Sprint 2 (or in parallel) |
 | **Design rework (Pumpvision Narrative)** | In progress in separate design conversation |
@@ -851,7 +851,13 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
     - Logs into SDMS portal (Retail role, Claude Vision CAPTCHA), navigates to PAD Statement
     - Extracts full table to CSV + fleet card posting summary JSON
     - Integrated into `daily_scrape.py` as Job 4; skips if credentials not set
-    - **Needs user test run before merging to main**
+    - All `page.goto()` calls use `timeout=0` — SDMS portal is very slow (60s+ to load)
+    - SPA render: after initial load waits for `networkidle` + nav element visible before clicking
+    - Date inputs (`id="fromdate"` / `id="todate"`) set via JS injection + dispatchEvent to
+      bypass datepicker widget interception; portal defaults to today if skipped (wrong data)
+    - Session persisted to `sdms_state.json`; auto-login fallback if session expires
+    - Verified working: 09-05-2026 — 11 rows, Rs. 14,500.93 fleet card total (3 txns)
+    - ✓ Test run complete — ready to merge to main
 17. **Sprint 1: manager operational flows** ← CURRENT PRIORITY
     - Manager home (shift-contextual checklist)
     - Log lube sale (cash or credit)
