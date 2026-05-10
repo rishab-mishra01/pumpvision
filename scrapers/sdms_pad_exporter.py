@@ -151,7 +151,7 @@ async def do_login(page, context) -> bool:
     Returns True on success, False on failure.
     """
     print("[login] Navigating to SDMS login page...")
-    await page.goto(SDMS_LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+    await page.goto(SDMS_LOGIN_URL, wait_until="domcontentloaded", timeout=0)
     await page.wait_for_timeout(2_000)
 
     for attempt in range(1, MAX_CAPTCHA_ATTEMPTS + 1):
@@ -169,7 +169,7 @@ async def do_login(page, context) -> bool:
                 await refresh.click()
                 await page.wait_for_timeout(1_000)
             else:
-                await page.goto(SDMS_LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+                await page.goto(SDMS_LOGIN_URL, wait_until="domcontentloaded", timeout=0)
                 await page.wait_for_timeout(1_500)
 
         # ── Fill username ─────────────────────────────────────────────────
@@ -305,6 +305,9 @@ async def do_login(page, context) -> bool:
             return True
 
         print(f"  [login] Failed — CAPTCHA was: {captcha_text!r} — still at: {page.url}")
+        screenshot_path = OUTPUT_DIR / f"debug_login_fail_{attempt}.png"
+        await page.screenshot(path=str(screenshot_path))
+        print(f"  [login] Screenshot saved: {screenshot_path.name}")
 
     print("SDMS login failed — check credentials or CAPTCHA solve")
     return False
@@ -319,34 +322,49 @@ async def navigate_to_pad_statement(page, context):
     Expand the left nav → click Account → click PAD Statement (Eledger).
     The link opens in a new browser tab; returns the new page object.
     """
-    print("[nav] Expanding left sidebar...")
+    print("[nav] Waiting for SPA to render navigation...")
 
-    # Hover over the left nav to expand it (it's collapsed by default)
-    nav_selectors = [
+    # Wait up to 60s for ANY nav/sidebar element to appear — SPA may be slow
+    nav_appeared = False
+    for sel in [
         "[class*='sidebar']", "[class*='side-nav']", "[class*='left-nav']",
-        "[class*='sidenav']", "[class*='nav-menu']", "nav", ".navbar",
-    ]
-    hovered = False
-    for sel in nav_selectors:
+        "[class*='sidenav']", "[class*='nav-menu']", "nav", "aside",
+        "a:has-text('Account')", "li:has-text('Account')", "span:has-text('Account')",
+    ]:
+        try:
+            loc = page.locator(sel).first
+            await loc.wait_for(state="visible", timeout=60_000)
+            nav_appeared = True
+            print(f"  [nav] Content visible via: {sel}")
+            break
+        except Exception:
+            continue
+
+    if not nav_appeared:
+        print("  [nav] WARN: no nav element found after 60s — proceeding anyway")
+
+    await page.wait_for_timeout(1_000)
+
+    # Hover over sidebar to expand if collapsed
+    for sel in [
+        "[class*='sidebar']", "[class*='side-nav']", "[class*='left-nav']",
+        "[class*='sidenav']", "[class*='nav-menu']", "nav", "aside",
+    ]:
         try:
             loc = page.locator(sel).first
             if await loc.count() > 0 and await loc.is_visible(timeout=2_000):
                 await loc.hover()
-                hovered = True
                 print(f"  [nav] Hovered: {sel}")
                 break
         except Exception:
             continue
-    if not hovered:
-        print("  [nav] WARN: could not find nav to hover — trying direct click")
 
     await page.wait_for_timeout(1_000)
 
     # Click "Account" heading to expand submenu
     account_selectors = [
-        "text=Account", ":has-text('Account')",
         "a:has-text('Account')", "span:has-text('Account')",
-        "li:has-text('Account')",
+        "li:has-text('Account')", "text=Account",
     ]
     account_clicked = False
     for sel in account_selectors:
@@ -418,35 +436,46 @@ async def navigate_to_pad_statement(page, context):
 async def set_date_and_view(page, dd_mm_yyyy: str):
     """
     Clear and fill From Date and To Date with dd_mm_yyyy, then click View.
+    Uses JS injection first (reliable for datepicker-controlled inputs), with
+    direct fill as fallback.
     """
     print(f"[date] Setting date range: {dd_mm_yyyy} → {dd_mm_yyyy}")
 
-    for label, selectors in [
-        ("From Date", [
-            "input[name*='from']", "input[id*='from']", "input[id*='From']",
-            "input[name*='From']", "input[placeholder*='From']",
-            "input[placeholder*='from']", "input[placeholder*='DD-MM-YYYY']",
-        ]),
-        ("To Date", [
-            "input[name*='to']", "input[id*='to']", "input[id*='To']",
-            "input[name*='To']", "input[placeholder*='To']",
-            "input[placeholder*='to']",
-        ]),
-    ]:
+    for field_id, label in [("fromdate", "From Date"), ("todate", "To Date")]:
         filled = False
-        for sel in selectors:
-            try:
-                loc = page.locator(sel).first
-                if await loc.count() > 0 and await loc.is_visible(timeout=2_000):
-                    await loc.triple_click()
-                    await loc.fill(dd_mm_yyyy)
-                    # Confirm with Tab so JS date-change handlers fire
-                    await loc.press("Tab")
-                    print(f"  [date] {label} filled: {dd_mm_yyyy}")
-                    filled = True
-                    break
-            except Exception:
-                continue
+
+        # Primary: set via JS to bypass datepicker event interception
+        try:
+            result = await page.evaluate(f"""() => {{
+                const el = document.getElementById('{field_id}');
+                if (!el) return false;
+                el.value = '{dd_mm_yyyy}';
+                el.dispatchEvent(new Event('change', {{bubbles: true}}));
+                el.dispatchEvent(new Event('input',  {{bubbles: true}}));
+                return true;
+            }}""")
+            if result:
+                print(f"  [date] {label} set via JS: {dd_mm_yyyy}")
+                filled = True
+        except Exception as e:
+            print(f"  [date] JS set failed for {label}: {e}")
+
+        # Fallback: direct locator fill
+        if not filled:
+            for sel in [f"input#{field_id}", f"input[id='{field_id}']",
+                        "input[placeholder*='Select Date']"]:
+                try:
+                    loc = page.locator(sel).first
+                    if await loc.count() > 0:
+                        await loc.triple_click()
+                        await loc.fill(dd_mm_yyyy)
+                        await loc.press("Tab")
+                        print(f"  [date] {label} filled via locator: {dd_mm_yyyy}")
+                        filled = True
+                        break
+                except Exception:
+                    continue
+
         if not filled:
             print(f"  [date] WARN: {label} input not found — skipping")
 
@@ -724,7 +753,12 @@ async def run() -> bool:
 
             # ── Step 1: Check session / login ─────────────────────────────
             print("[step 1] Checking session...")
-            await page.goto(SDMS_BASE, wait_until="domcontentloaded", timeout=30_000)
+            await page.goto(SDMS_BASE, wait_until="domcontentloaded", timeout=0)
+            # SPA: wait for network to settle then for any real content to paint
+            try:
+                await page.wait_for_load_state("networkidle", timeout=60_000)
+            except PlaywrightTimeout:
+                pass  # networkidle may never fire on some portals — continue anyway
             await page.wait_for_timeout(2_000)
             print(f"  Landed at: {page.url}")
 
