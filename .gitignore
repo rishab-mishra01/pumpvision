@@ -65,5 +65,9 @@ scripts/customer_export.json
 scrapers/paytm_state.json
 scrapers/paytm_profile/
 
+# SDMS scraper — session cookies and browser profile (sensitive / large)
+scrapers/sdms_state.json
+scrapers/sdms_profile/
+
 # Downloaded operational data
 data/
