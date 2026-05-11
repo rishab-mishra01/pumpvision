@@ -129,9 +129,8 @@ promoted. The interface must be prescriptive — it tells him what to do, not th
 **Actions:** Log credit fuel sales, enter shift close totalizer readings.
 
 ### Auth Architecture Note
-Currently User is in-memory (env-var-based auth). This does NOT scale beyond 1–2 users.
-**Sprint 0 must convert User to a DB-backed model** before a second attendant or the manager
-account is created. See item 18 in What to Work On Next.
+User is DB-backed (converted in Sprint 0). Passwords seeded from `.env` vars at startup via
+upsert pattern. Safe to redeploy on non-empty DB.
 
 ---
 
@@ -495,10 +494,17 @@ One Flask app, one database, one deployment. Three roles via `users.role`.
 Build order:
 1. Foundation ✓ Done
 2. Attendant branch ✓ Done
-3. Sprint 0: three-user foundation (convert User to DB, add manager blueprint) ← NEXT
-4. Sprint 1: manager operational flows
+3. Sprint 0: three-user foundation ✓ Done
+4. Sprint 1: manager operational flows ← CURRENT
 5. Sprint 2: ATG scraper + automated Paytm ingestion
 6. Sprint 3: owner branch UI (new design system applied)
+
+Design system implementation (running in parallel with Sprint 1):
+- Phase 1 ✓ — design-system.css + macros/ui.html + base.html updated
+- Phase 2 ✓ — login screen with drum-roll animation
+- Phase 3 ✓ — all 9 attendant screens reskinned
+- Phase 4 — manager screens (build in new design from the start)
+- Phase 5 — owner screens (after Sprint 2)
 
 ### Cloud Deployment
 - Production: Railway (paid tier), PostgreSQL
@@ -557,50 +563,55 @@ SDMS_STATE_PATH=scrapers/sdms_state.json  (optional, default as shown)
 
 ## Design System
 
-### Current (Scaffolding — being replaced)
-The current templates use a dark glassmorphic fintech aesthetic (Manrope + Inter,
-black background, electric blue primary, product color coding). This is scaffolding built
-during the Stitch iteration phase. It is functional but not the final visual identity.
+### Pumpvision Design System v0.1 — Active (Phases 1–3 complete)
 
-### New Design System — Pumpvision Narrative (locked, being implemented)
-A ground-up redesign with a distinct identity. Built in Figma. See `docs/design_system/`.
+Full spec lives in `docs/design/Pumpvision_Design_System.html`.
+Implementation: `pumpvision/static/css/design-system.css` + `pumpvision/templates/macros/ui.html`.
 
 **Brand philosophy:** "Pulling something stuck in the past into modernity, without the clean break."
 The interface borrows the language of the totalizer, the receipt, and the shift register.
 Light, warm, precise. Made to be read in sunlight, used with one hand, trusted at the end of every shift.
 
-**Wordmark:** Option A — compressed display lowercase "pumpvision" with saffron status-LED square.
+**Wordmark:** Option C — Major Mono Display lowercase "pump**vision**" with saffron square LED left of text.
+```html
+<span class="app-mark">
+  <span class="app-mark-square"></span>
+  pump<span style="color:var(--saffron-600)">vision</span>
+</span>
+```
 
-**Color palette:**
-- Paper (warm neutral substrate): background, card fill
-- Ink (navy): structure, numbers, rules
-- Saffron (energy accent, used with restraint): primary CTA, precision digit, status markers
-- Product layer (secondary, fuel grades only):
-  - HS: Electric Blue
-  - MS: Emerald Green
-  - X2: Royal Purple
-  - XG: Sunset Orange
+**Color palette (CSS custom properties in design-system.css):**
+- `--paper-*` (50–500): warm substrate — backgrounds, card fills
+- `--ink-*` (500–900): navy — structure, numbers, rules
+- `--saffron-*` (100–700): energy accent — one primary CTA per screen, precision digits
+- `--ok-*` / `--warn-*` / `--error-*`: status states
+- Product layer (fuel grades only — NOT for primary UI):
+  - HS: `--hsd-600` forest green / `--hsd-100` tint
+  - MS: `--ms-600` brick red / `--ms-100` tint
+  - X2: `--x2-600` purple / `--x2-100` tint
+  - XG: `--xg-600` teal / `--xg-100` tint
 
-**Typography (three families, distinct registers):**
-- **Newsreader** — serif, voice and editorial copy. Weights: Light, Regular, Medium only. **Never italic.**
-- **IBM Plex Sans** — grotesk, UI labels, interface text, body copy
-- **JetBrains Mono** — monospaced, all operational numbers (totalizer readings, litres, rupee amounts). Tabular figures, contextual ligatures off.
-- **Major Mono Display** — single purpose: wordmark and totalizer display component only
+**Typography:**
+- **Newsreader** — serif headings / editorial. Weights 300, 400, 500. Never bold, never italic in UI.
+  (Exception: login "Welcome back" uses italic intentionally.)
+- **IBM Plex Sans** — all UI labels, body, nav. Weights 400, 500, 600.
+- **JetBrains Mono** — all operational numbers. Always `font-variant-numeric: tabular-nums`.
+- **Major Mono Display** — wordmark only. No other use.
 
-**The Totalizer Component:**
-Whenever a number carries operational weight (shift total, tank reading, cumulative dispense),
-it renders as a totalizer: each digit in its own dark navy cell, monospaced, mechanical.
-Sizes: XL (64px) · L (44px) · M (32px) · S (22px).
-Last cell may render in saffron (precision digit, or mid-update state).
+**Background rule:** Always `var(--paper-50)`. No dark backgrounds anywhere.
 
-**Motion:** Numbers roll into place mechanically.
-Duration 1800ms · cubic-bezier(0.16, 1, 0.3, 1).
-Stagger: digit_index × 90ms (right-to-left settle).
-Final snap: cubic-bezier(0.6, 0, 0.4, 1.4) — slight overshoot.
+**Saffron rule:** One `.btn-saffron` per screen maximum. Not decorative.
 
-**Implementation status:** Design system locked in Figma. Implementation deferred until
-Sprint 3 (owner UI). Attendant screens will also be updated in Sprint 3 in the same pass.
-Do not apply the new design system to any templates until explicitly instructed.
+**Totalizer cells:** Dark navy cells (`background: var(--ink-900)`) for numbers with operational weight.
+Sizes: `.cell-xl` (42×64px) · `.cell-l` (28×44px) · `.cell-m` (20×32px) · `.cell-s` (14×22px).
+Last cell may use `.cell--accent` (saffron) for precision digit.
+
+**Macros available** (`{% from 'macros/ui.html' import … %}`):
+`totalizer`, `product_chip`, `status_chip`, `field`, `select_field`, `textarea_field`,
+`totalizer_field`, `card`, `section_rule`, `receipt_row`, `back_btn`, `screen_topbar`
+
+**Login animation:** 10 drum cells scroll to spell PUMPVISION. `document.fonts.ready` gate required.
+Duration 680ms–2335ms left→right, `cubic-bezier(0.04,0.06,0,1)`. Hero exits → form fades up 80ms later.
 
 ### Forbidden — Do Not Invent
 - "Efficiency Score", accuracy %, quality metrics, reconciliation cycles as %
@@ -617,76 +628,69 @@ Do not apply the new design system to any templates until explicitly instructed.
 ## Screen Inventory
 
 All visual references live in `docs/screens/`. Read before implementing any template.
+All implemented screens use Pumpvision Design System v0.1 (paper background, ink/saffron palette).
 
 ### Auth
 
-#### `01_login.png`
+#### `01_login.png` ✓ Implemented
 **Route:** `GET/POST /login` · **Scroll:** No · **Bottom nav:** None
-Both roles use same login page; role determines redirect after auth.
-Elements: Pumpvision logo + wordmark, "INDIANOIL · SHREE PETROLEUM", Welcome back card,
-ID/Username, Password with eye toggle, "Sign In →" button, "Need access? Contact your owner."
+Drum-roll animation → form. Newsreader italic heading, saffron left-border card, saffron CTA.
 Forbidden: "Forgot Password", "Remember me", "Contact System Admin", version footer.
 
 ---
 
-### Attendant Branch (3-tab nav: Home · Activity · Profile)
+### Attendant Branch (3-tab nav: Home · Activity · Profile) ✓ All reskinned
 
-#### `02_attendant_home.png`
+#### `02_attendant_home.png` ✓
 **Route:** `GET /` (role=attendant) · **Scroll:** No
-Shift status nudge card between greeting and action cards:
-- State A (amber): "[DD Mon] shift not closed · Tap Close Shift to enter readings."
-- State B (green): "[DD Mon] shift closed ✓ · Today's shift is in progress."
-Two action cards: "Log Credit Sale" (fuel pump icon) · "Close Shift" (clipboard + checkmark)
+Shift status nudge: ok-100/ok-600 (closed) or warn-100/warn-600 (not closed).
+Two action cards: "Log Credit Sale" (saffron left border, primary) · "Close Shift" (plain).
 
-#### `03_select_customer.png`
+#### `03_select_customer.png` ✓
 **Route:** `GET /attendant/credit/select-customer` · **Scroll:** Yes
-Search bar, filter chips (Recent/Frequent/All Accounts), customer cards with colored avatars.
-Suspended customers: 50% opacity, red lock icon, "Credit Blocked".
+Search bar in paper-100, filter chips, customer rows with colored avatars.
+Suspended customers: 50% opacity, error-600 lock icon, "Credit Blocked".
 
-#### `04_log_sale_details.png`
+#### `04_log_sale_details.png` ✓
 **Route:** `GET/POST /attendant/credit/log/<customer_id>` · **Scroll:** Yes (sticky CTA)
-Customer card, vehicle dropdown (UNREGISTERED + CONTAINER always at top), 2x2 product grid,
-Amount/Litres toggle, current rate auto-filled from IrasPrice, "Confirm & Log Sale" sticky.
+Customer card (saffron left border). Vehicle dropdown. 2×2 product grid with product-color selected
+state (hsd/ms/x2/xg-100 fill, hsd/ms/x2/xg-600 border). Amount/Litres toggle. Sticky saffron CTA.
 
-#### `05_transaction_confirmed.png`
+#### `05_transaction_confirmed.png` ✓
 **Route:** Post-submit redirect · **Scroll:** No
-"Sale logged" + receipt card + "Hand over signed parchi to customer" reminder.
+ok-100 circle checkmark. ink-900 receipt header (JetBrains Mono total). Dotted-rule receipt rows.
+warn-100 parchi reminder. Saffron "Log new sale" + ghost "Go to home".
 NO WhatsApp block — paper parchi continues until cloud SMS is built.
 
-#### `06_shift_close_product_selection.png`
+#### `06_shift_close_product_selection.png` ✓
 **Route:** `GET /attendant/shift/select-product` · **Scroll:** No
-2x2 product grid. DONE badge on products with all nozzle readings submitted for current op date.
-HS/MS tap → DU Selection. X2/XG tap → Numpad directly (single nozzle, skip DU selection).
+2×2 product tiles, product-color icon squares, chip-ok DONE badge.
+HS/MS → DU selection. X2/XG → numpad directly.
 
-#### `07_shift_close_du_selection.png`
+#### `07_shift_close_du_selection.png` ✓
 **Route:** `GET /attendant/shift/du/<product>` (HS or MS only) · **Scroll:** Yes (sticky CTA)
-Two nozzle cards per product (HS1/HS2 or MS1/MS2 + DU number).
-Dashed border = empty, solid = has draft reading. "Confirm Readings" always electric blue.
+Nozzle cards with product-color left border and tinted banner.
+Dashed border = empty, solid = filled. Sticky saffron "Confirm Readings".
 
-#### `08_shift_close_numpad.png`
+#### `08_shift_close_numpad.png` ✓
 **Route:** `GET/POST /attendant/shift/numpad/<nozzle>` · **Scroll:** No
-Large input display + computed delta. Validation: delta < 0 → red warning + disabled button;
-delta = 0 → amber warning + enabled; delta > 0 → green delta. 3x4 numpad.
+ink-900 totalizer display panel (JetBrains Mono 2.75rem). Delta pill: ok-100/warn-100/error-100.
+Paper numpad buttons. Sticky saffron "Save & Confirm".
 
-#### `09_shift_close_summary.png`
+#### `09_shift_close_summary.png` ✓
 **Route:** `GET/POST /attendant/shift/summary` · **Scroll:** Yes (sticky CTAs)
-Six nozzle cards (HS1/HS2/MS1/MS2/X2/XG) with opening/closing/delta + Edit buttons.
-Shift totals 2x2 grid (net after 5L pump test per nozzle).
-Amber warning if any nozzle delta = 0 or < 5L.
-Sticky: "Submit shift" (electric blue) + "Save as draft" (ghost).
+Six nozzle cards with product left border. JetBrains Mono readings. ink-900 product totals card.
+warn-100 block if delta = 0 or < 5L. Sticky: saffron "Submit shift" + ghost "Save as draft".
 
 ---
 
-### Manager Branch (to be designed — screens TBD)
+### Manager Branch ← Sprint 1 CURRENT
 
-Bottom nav: TBD (3-4 tabs). Screens to design and build in Sprint 1.
-
-Manager home is a shift-contextual daily checklist. See Manager Workflows section above.
+Bottom nav: Home / Lubes / Expenses / Fleet / Payments (5 tabs).
+Build all manager screens in the new design system from the start — no dark scaffolding.
+Manager home is a shift-contextual daily checklist — prescriptive, not navigational.
 Manager screens needed: Home (checklist) · Log Lube Sale · Log Expense · Log Fleet Card ·
 Record Payment · Generate Invoice.
-
-Visual design for manager screens: use current dark scaffolding system for now.
-New design system applied in Sprint 3 across all roles simultaneously.
 
 ---
 
@@ -764,7 +768,7 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 - `models.py` — all SQLAlchemy models
 - `constants.py` — NOZZLE_LABEL_MAP, PRODUCT_LABELS, PUMP_TEST_NOZZLES
 - `decorators.py` — owner_required, attendant_required
-- `user.py` — **in-memory User (NOT DB-backed) — convert in Sprint 0**
+- `user.py` — DB-backed User model (converted in Sprint 0; in-memory User removed)
 - `services/prices.py` — get_rsp()
 - `services/operational.py` — get_operational_date()
 - `blueprints/auth/routes.py` — login, logout, redirect
@@ -783,8 +787,12 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 - `start.bat` — Windows launcher
 
 ### Static
+- `pumpvision/static/css/design-system.css` — full design token system, component styles, era system (v0.1)
 - `pumpvision/static/manifest.json` — PWA manifest
 - `pumpvision/static/icons/icon-192.png` + `icon-512.png` — PWA icons
+
+### Templates
+- `pumpvision/templates/macros/ui.html` — Jinja2 macro library (totalizer, product_chip, field, card, screen_topbar, etc.)
 
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode (XG exemption implemented)
@@ -820,7 +828,7 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 | **Sprint 0: three-user foundation** | ✓ Complete — DB-backed users, manager role, lube/expense/fleet schemas |
 | **Sprint 1: manager flows** | ← CURRENT — stubs wired, need full implementation |
 | **Paytm scraper** | ✓ Complete — headless, stealth mode, integrated into daily_scrape.py |
-| **SDMS PAD scraper** | Branch `sdms-pad-scraper` — tested ✓, ready to merge to main |
+| **SDMS PAD scraper** | ✓ Complete — merged to main 11 May 2026 |
 | **Sprint 2: ATG scraper + Paytm automation** | After Sprint 1 |
 | **Sprint 3: owner UI + design system** | After Sprint 2 (or in parallel) |
 | **Design rework (Pumpvision Narrative)** | In progress in separate design conversation |
@@ -857,7 +865,7 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
       bypass datepicker widget interception; portal defaults to today if skipped (wrong data)
     - Session persisted to `sdms_state.json`; auto-login fallback if session expires
     - Verified working: 09-05-2026 — 11 rows, Rs. 14,500.93 fleet card total (3 txns)
-    - ✓ Test run complete — ready to merge to main
+    - ✓ Complete — merged to main 11 May 2026
 17. **Sprint 1: manager operational flows** ← CURRENT PRIORITY
     - Manager home (shift-contextual checklist)
     - Log lube sale (cash or credit)
