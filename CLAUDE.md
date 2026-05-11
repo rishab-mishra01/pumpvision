@@ -548,6 +548,9 @@ PAYTM_EMAIL=<email registered with Paytm Business>
 PAYTM_PASSWORD=<see .env>
 PAYTM_STATE_PATH=scrapers/paytm_state.json  (optional, default as shown)
 PAYTM_HEADLESS=false  (omit or set true for headless; false for headed/debug)
+SDMS_USERNAME=<see .env>
+SDMS_PASSWORD=<see .env>
+SDMS_STATE_PATH=scrapers/sdms_state.json  (optional, default as shown)
 ```
 
 ---
@@ -788,8 +791,10 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 - `scrapers/iras_price_exporter.py` — Price (PRM) scraper
 - `scrapers/paytm_exporter.py` — Paytm transaction CSV downloader (headless, stealth mode)
 - `scrapers/paytm_state.json` — persisted Paytm session cookies (gitignored)
+- `scrapers/sdms_pad_exporter.py` — SDMS PAD Statement scraper; fleet card posting total + CSV (headless, stealth, Claude Vision CAPTCHA)
+- `scrapers/sdms_state.json` — persisted SDMS session cookies (gitignored)
 - `scrapers/captcha_test.py` — Claude Vision CAPTCHA PoC
-- `scrapers/daily_scrape.py` — orchestration (Job 0: Paytm, Job 1: Price, Job 2: ST, Job 3: ISS)
+- `scrapers/daily_scrape.py` — orchestration (Job 0: Paytm, Job 1: Price, Job 2: ST, Job 3: ISS, Job 4: SDMS PAD)
 
 ### Documentation
 - `CLAUDE.md` — this file
@@ -815,6 +820,7 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 | **Sprint 0: three-user foundation** | ✓ Complete — DB-backed users, manager role, lube/expense/fleet schemas |
 | **Sprint 1: manager flows** | ← CURRENT — stubs wired, need full implementation |
 | **Paytm scraper** | ✓ Complete — headless, stealth mode, integrated into daily_scrape.py |
+| **SDMS PAD scraper** | Branch `sdms-pad-scraper` — tested ✓, ready to merge to main |
 | **Sprint 2: ATG scraper + Paytm automation** | After Sprint 1 |
 | **Sprint 3: owner UI + design system** | After Sprint 2 (or in parallel) |
 | **Design rework (Pumpvision Narrative)** | In progress in separate design conversation |
@@ -841,6 +847,17 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 16. ~~Paytm scraper~~ ✓ — `scrapers/paytm_exporter.py`, headless + stealth, integrated into `daily_scrape.py`
     - Session cookie reuse, auto-login fallback, set-based new-link detection
     - `PAYTM_HEADLESS=false` for debug; headless works reliably with stealth mode
+16b. **SDMS PAD scraper** — `scrapers/sdms_pad_exporter.py`, branch `sdms-pad-scraper`
+    - Logs into SDMS portal (Retail role, Claude Vision CAPTCHA), navigates to PAD Statement
+    - Extracts full table to CSV + fleet card posting summary JSON
+    - Integrated into `daily_scrape.py` as Job 4; skips if credentials not set
+    - All `page.goto()` calls use `timeout=0` — SDMS portal is very slow (60s+ to load)
+    - SPA render: after initial load waits for `networkidle` + nav element visible before clicking
+    - Date inputs (`id="fromdate"` / `id="todate"`) set via JS injection + dispatchEvent to
+      bypass datepicker widget interception; portal defaults to today if skipped (wrong data)
+    - Session persisted to `sdms_state.json`; auto-login fallback if session expires
+    - Verified working: 09-05-2026 — 11 rows, Rs. 14,500.93 fleet card total (3 txns)
+    - ✓ Test run complete — ready to merge to main
 17. **Sprint 1: manager operational flows** ← CURRENT PRIORITY
     - Manager home (shift-contextual checklist)
     - Log lube sale (cash or credit)

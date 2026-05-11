@@ -7,6 +7,7 @@ Why one login covers everything:
   between tabs freely without ever being asked to log in again.
 
 Jobs run in this fixed order per day:
+  0. Paytm            — payment transaction CSV for yesterday (own browser context).
   1. Price (PRM)      — RSP for the exact op day(s) being reconciled.
                         Downloaded first so the price is always available before
                         ISS results are written to the DB.
@@ -15,6 +16,7 @@ Jobs run in this fixed order per day:
                         XG pre-check and OOO nozzle detection both depend on it.
   3. ISS boundary     — finds 6AM totalizer readings for all 6 nozzles using
                         the ST file already on disk, then writes to NozzleTotalizer DB.
+  4. SDMS PAD         — fleet card posting summary from SDMS portal (own browser context).
 
 Delivery jobs (RDB Invoice, SAP Invoice, TT Receipt, density records) are
 event-driven — they fire when a tanker arrives, not on a daily schedule.
@@ -96,9 +98,10 @@ def _load_scraper(name: str):
     spec.loader.exec_module(mod)
     return mod
 
-_iss = _load_scraper("iras_iss_exporter")
-_prm = _load_scraper("iras_price_exporter")
-_ptm = _load_scraper("paytm_exporter")
+_iss  = _load_scraper("iras_iss_exporter")
+_prm  = _load_scraper("iras_price_exporter")
+_ptm  = _load_scraper("paytm_exporter")
+_sdms = _load_scraper("sdms_pad_exporter")
 
 # Both scraper modules wrap sys.stdout at import time, leaving two wrappers on
 # the same fd and causing the original buffer to be closed. Reset stdout by
@@ -110,6 +113,8 @@ _iss.SHIFT_TOTALIZER_FOLDER = str(ST_DIR)
 
 PAYTM_EMAIL    = os.environ.get("PAYTM_EMAIL", "")
 PAYTM_PASSWORD = os.environ.get("PAYTM_PASSWORD", "")
+SDMS_USERNAME  = os.environ.get("SDMS_USERNAME", "")
+SDMS_PASSWORD  = os.environ.get("SDMS_PASSWORD", "")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,6 +294,31 @@ async def _job_paytm():
     success = await _ptm.run()
     if not success:
         print("  [WARN] Paytm download failed — continuing with IRAS jobs")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 4 — SDMS PAD STATEMENT
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _job_sdms():
+    """
+    Download yesterday's SDMS PAD Statement and compute fleet card posting total.
+
+    Runs in its own persistent browser context (independent of the IRAS session).
+    Skipped silently when SDMS_USERNAME / SDMS_PASSWORD are not configured.
+    Outputs: data/sdms/sdms_pad_YYYY-MM-DD.csv + _summary.json
+    """
+    print(f"\n{'='*55}")
+    print(f"  JOB 4 — SDMS PAD Statement")
+    print(f"{'='*55}")
+
+    if not SDMS_USERNAME or not SDMS_PASSWORD:
+        print("  [SKIP] SDMS_USERNAME or SDMS_PASSWORD not set in .env")
+        return
+
+    success = await _sdms.run()
+    if not success:
+        print("  [WARN] SDMS download failed — daily scrape continues")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -485,9 +515,12 @@ async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
         # ── Job 3: ISS boundary → DB ──────────────────────────────────────────
         await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
 
-        print("\n[DONE] All jobs complete.")
         await browser.close()
 
+    # ── Job 4: SDMS PAD — own browser context, runs after IRAS session ───────
+    await _job_sdms()
+
+    print("\n[DONE] All jobs complete.")
     return True
 
 
