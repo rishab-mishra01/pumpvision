@@ -2,25 +2,62 @@
 {% block title %}{{ product_info.banner }} — Shift Settlement{% endblock %}
 
 {% block page %}
-<div style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:144px;">
+<style>
+  body { background: var(--paper-50); }
+
+  /* Product CSS variable helpers passed via Jinja */
+  {% set cls_map = {'HS': 'hsd', 'MS': 'ms', 'X2': 'x2', 'XG': 'xg'} %}
+  {% set cls = cls_map.get(product_info.code, 'hsd') %}
+
+  .nozzle-card {
+    background: var(--paper-50);
+    border: 1px solid var(--paper-300);
+    border-left: 3px solid var(--{{ cls }}-600);
+    border-radius: var(--r-card);
+    padding: 18px 18px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .reading-tap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: var(--r-card);
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .reading-tap--empty {
+    border: 1px dashed var(--paper-400);
+    background: none;
+  }
+  .reading-tap--filled {
+    border: 1px solid var(--paper-300);
+    background: var(--paper-100);
+  }
+  .reading-tap:active { opacity: 0.7; }
+</style>
+
+<div style="min-height:100dvh;min-height:100vh;padding-bottom:136px;">
 
   <!-- Top bar -->
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:18px 20px 10px;">
     <a href="{{ url_for('attendant.shift_select_product') }}"
-       style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;
-              color:#9ca3af;text-decoration:none;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:var(--ink-600);text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19 12H5M12 5l-7 7 7 7"/>
       </svg>
     </a>
-    <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1rem;color:#fff;">
-      {{ product_info.banner }}
-    </span>
+    <span style="font-family:var(--font-sans);font-weight:600;font-size:15px;
+                 color:var(--ink-900);">{{ product_info.banner }}</span>
     <a href="{{ url_for('attendant.profile') }}"
-       style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;
-              color:#9ca3af;text-decoration:none;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:var(--ink-500);text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
@@ -30,13 +67,13 @@
 
   <!-- Product banner -->
   <div style="margin:0 20px 20px;padding:14px 16px;
-              background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
-              border-radius:14px;border-left:3px solid {{ product_info.color }};">
-    <p style="font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;
-              color:{{ product_info.color }};margin:0 0 4px;">{{ product_info.banner }}</p>
-    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#9ca3af;margin:0;">
-      Select dispensing unit and enter
-      <span style="color:{{ product_info.color }};">closing</span> reading.
+              background:var(--{{ cls }}-100);
+              border:1px solid var(--{{ cls }}-600);
+              border-radius:var(--r-card);">
+    <p style="font-family:var(--font-sans);font-weight:700;font-size:14px;
+              color:var(--{{ cls }}-600);margin:0 0 3px;">{{ product_info.banner }}</p>
+    <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-600);margin:0;">
+      Select dispensing unit and enter closing reading.
     </p>
   </div>
 
@@ -44,82 +81,62 @@
   <div style="display:flex;flex-direction:column;gap:12px;padding:0 20px;">
     {% for nozzle in nozzles %}
     {% set has_reading = nozzle.closing is not none %}
-    <div style="background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
-                border-radius:18px;border-left:3px solid {{ product_info.color }};
-                padding:18px 18px 16px;position:relative;overflow:hidden;">
-
-      <!-- Background fuel pump watermark -->
-      <div style="position:absolute;right:16px;top:16px;opacity:0.08;">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="{{ product_info.color }}"
-             stroke="none">
-          <path d="M3 22V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16H3z"/>
-          <path d="M3 22h11"/>
-        </svg>
-      </div>
+    <div class="nozzle-card">
 
       <!-- Nozzle name + DU -->
       <div style="margin-bottom:14px;">
-        <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.3rem;
-                    color:#fff;margin-bottom:2px;">{{ nozzle.name }}</div>
-        <div style="font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
-                    color:{{ product_info.color }};">DU {{ nozzle.du }}</div>
+        <div style="font-family:var(--font-sans);font-weight:700;font-size:1.1rem;
+                    color:var(--ink-900);margin-bottom:2px;">{{ nozzle.name }}</div>
+        <div style="font-family:var(--font-sans);font-size:11px;font-weight:600;
+                    color:var(--{{ cls }}-600);">DU {{ nozzle.du }}</div>
       </div>
 
       <!-- Opening reading -->
-      <div style="margin-bottom:14px;">
-        <p style="font-family:'Inter',sans-serif;font-size:9px;font-weight:700;
-                  letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;margin:0 0 4px;">
-          Opening Reading
-        </p>
+      <div style="margin-bottom:12px;">
+        <p class="eyebrow" style="margin-bottom:4px;">Opening Reading</p>
         {% if nozzle.opening is not none %}
-        <p style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.1rem;
-                  color:#fff;margin:0;">
-          {{ "{:,.2f}".format(nozzle.opening) }} <span style="font-size:0.8rem;color:#6b7280;">L</span>
+        <p style="font-family:var(--font-mono);font-weight:600;font-size:1rem;
+                  color:var(--ink-900);margin:0;font-variant-numeric:tabular-nums;">
+          {{ "{:,.2f}".format(nozzle.opening) }}
+          <span style="font-family:var(--font-sans);font-size:0.8rem;color:var(--ink-500);">L</span>
         </p>
         {% else %}
-        <p style="font-family:'Inter',sans-serif;font-size:13px;color:#f09595;margin:0;">
+        <p style="font-family:var(--font-sans);font-size:13px;color:var(--error-600);margin:0;">
           No opening reading. Contact owner.
         </p>
         {% endif %}
       </div>
 
-      <!-- Closing reading (tap to enter) -->
+      <!-- Closing reading tap target -->
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-          <p style="font-family:'Inter',sans-serif;font-size:9px;font-weight:700;
-                    letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;margin:0;">
-            Closing Reading
-          </p>
+          <p class="eyebrow" style="margin:0;">Closing Reading</p>
           {% if has_reading %}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+               stroke="var(--ok-600)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
           {% endif %}
         </div>
         <a href="{{ url_for('attendant.shift_numpad', nozzle=nozzle.name) }}"
-           style="display:flex;align-items:center;justify-content:space-between;
-                  padding:12px 14px;border-radius:12px;text-decoration:none;
-                  {% if has_reading %}
-                  border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);
-                  {% else %}
-                  border:1px dashed rgba(255,255,255,0.2);background:none;
-                  {% endif %}">
+           class="reading-tap {% if has_reading %}reading-tap--filled{% else %}reading-tap--empty{% endif %}">
           {% if has_reading %}
-          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1rem;color:#fff;">
-            {{ "{:,.2f}".format(nozzle.closing) }} <span style="font-size:0.75rem;color:#6b7280;">L</span>
+          <span style="font-family:var(--font-mono);font-weight:600;font-size:1rem;
+                       color:var(--ink-900);font-variant-numeric:tabular-nums;">
+            {{ "{:,.2f}".format(nozzle.closing) }}
+            <span style="font-family:var(--font-sans);font-size:0.75rem;color:var(--ink-500);">L</span>
           </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-               stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="var(--ink-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
           {% else %}
-          <span style="font-family:'Inter',sans-serif;font-size:13px;color:#4b5563;">
+          <span style="font-family:var(--font-sans);font-size:13px;color:var(--ink-500);">
             Tap to enter reading
           </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-               stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="var(--ink-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
@@ -132,58 +149,45 @@
 
 </div>
 
-<!-- Sticky "Confirm Readings" button -->
-<div style="position:fixed;bottom:72px;left:0;right:0;
-            padding:12px 20px;background:rgba(0,0,0,0.95);
-            border-top:1px solid rgba(255,255,255,0.06);z-index:40;">
-  {% set all_done = nozzles | selectattr('closing') | list | length == nozzles | length %}
+<!-- Sticky Confirm Readings -->
+<div style="position:fixed;bottom:68px;left:0;right:0;
+            padding:12px 20px;
+            background:rgba(250,246,237,0.97);
+            border-top:1px solid var(--paper-300);z-index:40;">
   <a href="{{ url_for('attendant.shift_select_product') }}"
-     style="display:flex;align-items:center;justify-content:center;
-            height:52px;border-radius:14px;background:#3b82f6;text-decoration:none;
-            color:#fff;font-family:'Manrope',sans-serif;font-weight:700;font-size:16px;">
+     class="btn btn-saffron btn-full">
     Confirm Readings
   </a>
 </div>
 
 <!-- Bottom nav -->
-<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
-            background:rgba(14,14,16,0.97);
-            border-top:1px solid rgba(255,255,255,0.08);
-            display:flex;align-items:center;z-index:50;">
-  <a href="{{ url_for('attendant.home') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+<nav class="bottom-nav">
+  <a href="{{ url_for('attendant.home') }}" class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+    Home
   </a>
-  <a href="{{ url_for('attendant.activity') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+  <a href="{{ url_for('attendant.activity') }}" class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="12" width="4" height="8" rx="1"/>
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+    Activity
   </a>
   <a href="{{ url_for('attendant.shift_select_product') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#3b82f6;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+     class="bottom-nav__item bottom-nav__item--active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
       <rect x="9" y="3" width="6" height="4" rx="1" ry="1"/>
       <path d="m9 12 2 2 4-4"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">SHIFT</span>
+    Shift
   </a>
 </nav>
 {% endblock %}

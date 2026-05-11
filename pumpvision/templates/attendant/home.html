@@ -2,25 +2,54 @@
 {% block title %}Home — Pumpvision{% endblock %}
 
 {% block page %}
-<div class="flex flex-col" style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:72px;">
+<style>
+  body { background: var(--paper-50); }
+  .action-card {
+    flex: 1;
+    min-height: 148px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border-radius: var(--r-card);
+    border: 1px solid var(--paper-300);
+    background: var(--paper-50);
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+    padding: 20px 16px;
+  }
+  .action-card:active { background: var(--paper-100); }
+  .action-card--primary {
+    border-left: 3px solid var(--saffron-500);
+  }
+</style>
+
+<div style="display:flex;flex-direction:column;min-height:100dvh;min-height:100vh;
+            padding-bottom:80px;">
 
   <!-- Top bar -->
-  <div class="flex items-center justify-between px-5 pt-5 pb-3">
-    <div class="flex items-center gap-2">
-      <span style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:-0.01em;color:#fff;">
-        PUMPVISION
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:18px 20px 12px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="app-mark">
+        <span class="app-mark-square"></span>
+        pump<span style="color:var(--saffron-600)">vision</span>
       </span>
-      <div class="flex flex-col" style="line-height:1.25;">
-        <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0.04em;">
-          SHREE PETROLEUM
+      <div style="display:flex;flex-direction:column;line-height:1.25;">
+        <span style="font-family:var(--font-sans);font-size:9px;font-weight:600;
+                     letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-500);">
+          Shree Petroleum
         </span>
-        <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0.04em;">
+        <span style="font-family:var(--font-sans);font-size:9px;font-weight:500;
+                     letter-spacing:0.04em;color:var(--paper-400);">
           RO 206858
         </span>
       </div>
     </div>
-    <button style="background:none;border:none;cursor:pointer;color:#6b7280;padding:8px;" aria-label="Notifications">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+    <button style="background:none;border:none;cursor:pointer;
+                   color:var(--ink-500);padding:8px;" aria-label="Notifications">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -33,17 +62,7 @@
   {% if messages %}
   <div style="padding:0 20px 12px;display:flex;flex-direction:column;gap:8px;">
     {% for category, message in messages %}
-    <div style="padding:10px 14px;border-radius:12px;
-                font-family:'Inter',sans-serif;font-size:13px;line-height:1.4;
-                {% if category == 'error' %}
-                background:rgba(240,149,149,0.1);border:1px solid rgba(240,149,149,0.25);color:#f09595;
-                {% elif category == 'warning' %}
-                background:rgba(250,199,117,0.1);border:1px solid rgba(250,199,117,0.25);color:#fac775;
-                {% elif category == 'info' %}
-                background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#93c5fd;
-                {% else %}
-                background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#6ee7b7;
-                {% endif %}">
+    <div class="flash {% if category == 'error' %}flash-error{% elif category == 'warning' %}flash-warning{% else %}flash-ok{% endif %}">
       {{ message }}
     </div>
     {% endfor %}
@@ -52,57 +71,56 @@
   {% endwith %}
 
   <!-- Greeting -->
-  <div class="px-5 pt-3 pb-4">
-    <h2 style="font-family:'Manrope',sans-serif;font-weight:600;font-size:1.75rem;letter-spacing:-0.01em;color:#fff;margin-bottom:0;">
+  <div style="padding:4px 20px 16px;">
+    <h2 style="font-family:var(--font-serif);font-weight:400;font-size:2rem;
+               letter-spacing:-0.01em;color:var(--ink-900);margin:0;">
       {{ greeting }}, {{ display_name }}
     </h2>
   </div>
 
-  <!-- Shift status nudge card -->
-  <div style="padding:0 20px 16px;">
+  <!-- Shift status nudge -->
+  <div style="padding:0 20px 20px;">
     {% if prev_shift_closed %}
-    <!-- State B: previous shift closed -->
+    <!-- State B: closed -->
     <div style="display:flex;align-items:flex-start;gap:10px;
-                padding:12px 14px;border-radius:16px;
-                background:rgba(151,196,89,0.06);
-                border:1px solid rgba(151,196,89,0.3);">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-           stroke="#97C459" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                padding:12px 14px;border-radius:var(--r-card);
+                background:var(--ok-100);border:1px solid var(--ok-600);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="var(--ok-600)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
            style="flex-shrink:0;margin-top:1px;">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
         <polyline points="22 4 12 14.01 9 11.01"/>
       </svg>
       <div>
-        <p style="font-family:'Manrope',sans-serif;font-weight:600;font-size:13px;
-                  color:#97C459;margin:0 0 3px;">
+        <p style="font-family:var(--font-sans);font-weight:600;font-size:13px;
+                  color:var(--ok-600);margin:0 0 3px;">
           {{ prev_date_str }} shift closed ✓
         </p>
-        <p style="font-family:'Inter',sans-serif;font-weight:400;font-size:11px;
-                  color:#988f8f;margin:0;line-height:1.5;">
+        <p style="font-family:var(--font-sans);font-weight:400;font-size:11px;
+                  color:var(--ink-600);margin:0;line-height:1.5;">
           Today's shift ({{ curr_date_str }}) is in progress. Close it tomorrow after 06:00.
         </p>
       </div>
     </div>
     {% else %}
-    <!-- State A: previous shift not closed -->
+    <!-- State A: not closed -->
     <div style="display:flex;align-items:flex-start;gap:10px;
-                padding:12px 14px;border-radius:16px;
-                background:rgba(249,115,22,0.06);
-                border:1px solid rgba(249,115,22,0.3);">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-           stroke="#FAC775" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                padding:12px 14px;border-radius:var(--r-card);
+                background:var(--warn-100);border:1px solid var(--warn-600);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="var(--warn-600)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
            style="flex-shrink:0;margin-top:1px;">
         <path d="m10.29 3.86-7 12A2 2 0 0 0 5 19h14a2 2 0 0 0 1.71-3.14l-7-12a2 2 0 0 0-3.42 0z"/>
         <line x1="12" y1="9" x2="12" y2="13"/>
         <line x1="12" y1="17" x2="12.01" y2="17"/>
       </svg>
       <div>
-        <p style="font-family:'Manrope',sans-serif;font-weight:600;font-size:13px;
-                  color:#FAC775;margin:0 0 3px;">
+        <p style="font-family:var(--font-sans);font-weight:600;font-size:13px;
+                  color:var(--warn-600);margin:0 0 3px;">
           {{ prev_date_str }} shift not closed
         </p>
-        <p style="font-family:'Inter',sans-serif;font-weight:400;font-size:11px;
-                  color:#988f8f;margin:0;line-height:1.5;">
+        <p style="font-family:var(--font-sans);font-weight:400;font-size:11px;
+                  color:var(--ink-600);margin:0;line-height:1.5;">
           Tap Close Shift to enter your closing readings.
         </p>
       </div>
@@ -111,17 +129,12 @@
   </div>
 
   <!-- Action cards -->
-  <div class="flex flex-col gap-4 px-5" style="flex:1;">
+  <div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:0 20px;">
 
-    <!-- Log Credit Sale -->
-    <a href="/attendant/credit/select-customer/"
-       class="flex flex-col items-center justify-center rounded-3xl"
-       style="flex:1;min-height:160px;
-              background:rgba(28,28,30,0.85);
-              border:1px solid rgba(255,255,255,0.08);
-              text-decoration:none;">
-      <div style="color:#3b82f6;margin-bottom:14px;">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+    <!-- Log Credit Sale — primary action -->
+    <a href="/attendant/credit/select-customer/" class="action-card action-card--primary">
+      <div style="color:var(--saffron-500);">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 22V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/>
           <path d="M3 22h11"/>
@@ -130,33 +143,30 @@
           <path d="M17 10v4a2 2 0 0 1-2 2"/>
         </svg>
       </div>
-      <p style="font-family:'Manrope',sans-serif;font-weight:600;font-size:1.1rem;color:#fff;margin-bottom:4px;">
+      <p style="font-family:var(--font-sans);font-weight:600;font-size:1rem;
+                color:var(--ink-900);margin:0;">
         Log Credit Sale
       </p>
-      <p style="font-family:'Inter',sans-serif;font-size:13px;color:#6b7280;">
+      <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);margin:0;">
         Record a fuel sale on credit
       </p>
     </a>
 
     <!-- Close Shift -->
-    <a href="/attendant/shift/select-product/"
-       class="flex flex-col items-center justify-center rounded-3xl"
-       style="flex:1;min-height:160px;
-              background:rgba(28,28,30,0.85);
-              border:1px solid rgba(255,255,255,0.08);
-              text-decoration:none;">
-      <div style="color:#9ca3af;margin-bottom:14px;">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+    <a href="/attendant/shift/select-product/" class="action-card">
+      <div style="color:var(--ink-600);">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
           <rect x="9" y="3" width="6" height="4" rx="1" ry="1"/>
           <path d="m9 12 2 2 4-4"/>
         </svg>
       </div>
-      <p style="font-family:'Manrope',sans-serif;font-weight:600;font-size:1.1rem;color:#fff;margin-bottom:4px;">
+      <p style="font-family:var(--font-sans);font-weight:600;font-size:1rem;
+                color:var(--ink-900);margin:0;">
         Close Shift
       </p>
-      <p style="font-family:'Inter',sans-serif;font-size:13px;color:#6b7280;">
+      <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);margin:0;">
         Enter closing nozzle readings
       </p>
     </a>
@@ -164,51 +174,35 @@
   </div>
 </div>
 
-<!-- Bottom nav (fixed) -->
-<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
-            background:rgba(14,14,16,0.97);
-            border-top:1px solid rgba(255,255,255,0.08);
-            display:flex;align-items:center;z-index:50;">
-
-  <!-- Home (active) -->
+<!-- Bottom nav -->
+<nav class="bottom-nav">
   <a href="{{ url_for('attendant.home') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#3b82f6;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+     class="bottom-nav__item bottom-nav__item--active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+    Home
   </a>
-
-  <!-- Activity -->
   <a href="{{ url_for('attendant.activity') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+     class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="12" width="4" height="8" rx="1"/>
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+    Activity
   </a>
-
-  <!-- Profile -->
   <a href="{{ url_for('attendant.profile') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+     class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
       <circle cx="12" cy="7" r="4"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">PROFILE</span>
+    Profile
   </a>
-
 </nav>
 {% endblock %}

@@ -2,25 +2,90 @@
 {% block title %}Log Sale — Pumpvision{% endblock %}
 
 {% block page %}
-<!-- Scroll container with room for sticky button + bottom nav -->
-<div style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:148px;">
+<style>
+  body { background: var(--paper-50); }
+
+  /* Product cards */
+  .prod-card {
+    padding: 16px;
+    border-radius: var(--r-card);
+    border: 1px solid var(--paper-300);
+    background: var(--paper-50);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+    width: 100%;
+  }
+  .prod-card.selected-HS { background: var(--hsd-100); border: 2px solid var(--hsd-600); }
+  .prod-card.selected-MS { background: var(--ms-100);  border: 2px solid var(--ms-600); }
+  .prod-card.selected-X2 { background: var(--x2-100);  border: 2px solid var(--x2-600); }
+  .prod-card.selected-XG { background: var(--xg-100);  border: 2px solid var(--xg-600); }
+
+  /* Mode toggle */
+  .mode-toggle {
+    display: flex;
+    background: var(--paper-200);
+    border-radius: var(--r-chip);
+    padding: 3px;
+    gap: 2px;
+  }
+  .mode-btn {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: var(--r-chip);
+    border: none;
+    cursor: pointer;
+    background: none;
+    color: var(--ink-500);
+    transition: background 0.15s, color 0.15s;
+  }
+  .mode-btn.active {
+    background: var(--paper-50);
+    color: var(--ink-900);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  /* Big number input */
+  #quantity-input {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    outline: none;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 2.5rem;
+    color: var(--ink-900);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    padding: 8px 0 4px;
+  }
+</style>
+
+<div style="min-height:100dvh;min-height:100vh;padding-bottom:136px;">
 
   <!-- Top bar -->
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:18px 20px 12px;">
     <a href="{{ url_for('attendant.select_customer') }}"
        style="display:flex;align-items:center;justify-content:center;
-              width:36px;height:36px;color:#9ca3af;text-decoration:none;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+              width:36px;height:36px;color:var(--ink-600);text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19 12H5M12 5l-7 7 7 7"/>
       </svg>
     </a>
-    <span style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.05rem;
-                 letter-spacing:-0.01em;color:#fff;">PUMPVISION</span>
+    <span class="app-mark">
+      <span class="app-mark-square"></span>
+      pump<span style="color:var(--saffron-600)">vision</span>
+    </span>
     <a href="{{ url_for('attendant.profile') }}"
        style="display:flex;align-items:center;justify-content:center;
-              width:36px;height:36px;color:#9ca3af;text-decoration:none;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+              width:36px;height:36px;color:var(--ink-500);text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
@@ -29,220 +94,146 @@
   </div>
 
   <!-- Heading -->
-  <div style="padding:4px 20px 20px;">
-    <p style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-              letter-spacing:0.07em;color:#f97316;margin:0 0 6px;text-transform:uppercase;">
-      New Transaction
-    </p>
-    <h2 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.75rem;
-               letter-spacing:-0.01em;color:#fff;margin:0;">Log sale details</h2>
+  <div style="padding:4px 20px 16px;">
+    <p class="eyebrow" style="color:var(--saffron-600);margin-bottom:6px;">New Transaction</p>
+    <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.875rem;
+               letter-spacing:-0.01em;color:var(--ink-900);margin:0;">Log sale details</h2>
   </div>
 
   <!-- Flash messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div style="padding:0 20px 12px;">
+    <div style="padding:0 20px 12px;">
       {% for category, message in messages %}
-        <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);
-                    color:#fca5a5;border-radius:12px;padding:12px 16px;margin-bottom:8px;
-                    font-family:'Inter',sans-serif;font-size:13px;">{{ message }}</div>
+      <div class="flash flash-error">{{ message }}</div>
       {% endfor %}
-      </div>
+    </div>
     {% endif %}
   {% endwith %}
 
   <form method="POST" id="sale-form">
 
     <!-- Customer card -->
-    <div style="margin:0 20px 24px;padding:16px;
-                background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
-                border-radius:16px;display:flex;align-items:center;gap:14px;">
-      <div style="width:40px;height:40px;border-radius:10px;
-                  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
-                  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6b7280;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+    <div style="margin:0 20px 20px;padding:14px 16px;
+                background:var(--paper-50);border:1px solid var(--paper-300);
+                border-left:3px solid var(--saffron-500);border-radius:var(--r-card);
+                display:flex;align-items:center;gap:12px;">
+      <div style="width:38px;height:38px;border-radius:var(--r-card);
+                  background:var(--paper-200);border:1px solid var(--paper-300);
+                  display:flex;align-items:center;justify-content:center;
+                  flex-shrink:0;color:var(--ink-500);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <rect x="9" y="13" width="6" height="8"/>
         </svg>
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;color:#fff;
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        <div style="font-family:var(--font-sans);font-weight:600;font-size:14px;
+                    color:var(--ink-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
           {{ customer.company_name }}
         </div>
-        <div style="font-family:'Inter',sans-serif;font-size:12px;color:#6b7280;margin-top:2px;">
+        <div style="font-family:var(--font-sans);font-size:11px;color:var(--ink-500);margin-top:2px;">
           ID: {{ account_id }}
         </div>
       </div>
-      <span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);
-                   color:#10b981;border-radius:20px;padding:4px 12px;
-                   font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                   white-space:nowrap;flex-shrink:0;">Active</span>
+      <span class="chip chip-ok">Active</span>
     </div>
 
     <!-- Vehicle section -->
-    <div style="padding:0 20px 24px;">
-      <p style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                letter-spacing:0.08em;color:#6b7280;text-transform:uppercase;margin:0 0 12px;">
-        Vehicle Registration Number
-      </p>
+    <div style="padding:0 20px 20px;">
+      <p class="eyebrow" style="margin-bottom:10px;">Vehicle Registration Number</p>
 
       <!-- Quick-select chips -->
-      <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
         <button type="button" onclick="setVehicleChip('UNREGISTERED')"
-                style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
-                       padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.15);
-                       background:rgba(28,28,30,0.9);color:#9ca3af;cursor:pointer;">
+                class="chip chip-neutral"
+                style="cursor:pointer;border:none;font-size:12px;padding:6px 14px;">
           Unregistered
         </button>
         <button type="button" onclick="setVehicleChip('CONTAINER')"
-                style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
-                       padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.15);
-                       background:rgba(28,28,30,0.9);color:#9ca3af;cursor:pointer;">
+                class="chip chip-neutral"
+                style="cursor:pointer;border:none;font-size:12px;padding:6px 14px;">
           Container
         </button>
       </div>
 
       <!-- Vehicle dropdown -->
-      <div style="display:flex;align-items:center;gap:10px;
-                  background:rgba(28,28,30,0.9);border:1px solid rgba(255,255,255,0.1);
-                  border-radius:14px;padding:0 16px;height:52px;position:relative;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-             stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-             style="flex-shrink:0;">
-          <rect x="1" y="3" width="15" height="13" rx="2"/>
-          <path d="m16 8 5 5v5h-5V8z"/>
-          <circle cx="5.5" cy="18.5" r="2.5"/>
-          <circle cx="18.5" cy="18.5" r="2.5"/>
-        </svg>
-        <select id="vehicle-select" name="vehicle_number" onchange="updateConfirmButton()"
-                style="flex:1;background:none;border:none;outline:none;
-                       font-family:'Inter',sans-serif;font-size:14px;color:#fff;
-                       appearance:none;-webkit-appearance:none;cursor:pointer;">
-          <option value="" style="background:#1c1c1e;color:#fff;">Select vehicle</option>
-          <option value="UNREGISTERED" style="background:#1c1c1e;color:#fff;">UNREGISTERED</option>
-          <option value="CONTAINER" style="background:#1c1c1e;color:#fff;">CONTAINER</option>
+      <div style="position:relative;">
+        <div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);
+                    color:var(--ink-500);pointer-events:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1" y="3" width="15" height="13" rx="2"/>
+            <path d="m16 8 5 5v5h-5V8z"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/>
+            <circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+        </div>
+        <select id="vehicle-select" name="vehicle_number"
+                onchange="updateConfirmButton()"
+                class="field-input"
+                style="padding-left:40px;">
+          <option value="">Select vehicle</option>
+          <option value="UNREGISTERED">UNREGISTERED</option>
+          <option value="CONTAINER">CONTAINER</option>
           {% for v in vehicles %}
-          <option value="{{ v }}" style="background:#1c1c1e;color:#fff;">{{ v }}</option>
+          <option value="{{ v }}">{{ v }}</option>
           {% endfor %}
         </select>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-             style="flex-shrink:0;pointer-events:none;">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
       </div>
     </div>
 
     <!-- Product grid -->
-    <div style="padding:0 20px 24px;">
-      <p style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                letter-spacing:0.08em;color:#6b7280;text-transform:uppercase;margin:0 0 12px;">
-        Select Product
-      </p>
+    <div style="padding:0 20px 20px;">
+      <p class="eyebrow" style="margin-bottom:10px;">Select Product</p>
       <input type="hidden" name="product" id="product-hidden">
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-
-        <!-- HS -->
-        <button type="button" id="card-HS" onclick="selectProduct('HS')"
-                data-color="#3b82f6"
-                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
-                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
-                       transition:border 0.15s,background 0.15s;">
-          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
-                      color:#3b82f6;letter-spacing:-0.01em;margin-bottom:4px;">HS</div>
-          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
-            High Speed Diesel
-          </div>
+      <div class="grid-2">
+        {% set products = [
+          ('HS', 'HS', 'hsd', 'High Speed Diesel'),
+          ('MS', 'MS', 'ms',  'Motor Spirit'),
+          ('X2', 'X2', 'x2',  'Xtra Premium 95'),
+          ('XG', 'XG', 'xg',  'Xtra Green'),
+        ] %}
+        {% for code, label, cls, full in products %}
+        <button type="button" id="card-{{ code }}" onclick="selectProduct('{{ code }}')"
+                class="prod-card">
+          <div style="font-family:var(--font-mono);font-weight:700;font-size:1.5rem;
+                      color:var(--{{ cls }}-600);font-variant-numeric:tabular-nums;
+                      letter-spacing:-0.01em;margin-bottom:4px;">{{ label }}</div>
+          <div class="eyebrow" style="color:var(--ink-500);">{{ full }}</div>
         </button>
-
-        <!-- MS -->
-        <button type="button" id="card-MS" onclick="selectProduct('MS')"
-                data-color="#10b981"
-                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
-                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
-                       transition:border 0.15s,background 0.15s;">
-          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
-                      color:#10b981;letter-spacing:-0.01em;margin-bottom:4px;">MS</div>
-          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
-            Motor Spirit
-          </div>
-        </button>
-
-        <!-- X2 -->
-        <button type="button" id="card-X2" onclick="selectProduct('X2')"
-                data-color="#a855f7"
-                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
-                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
-                       transition:border 0.15s,background 0.15s;">
-          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
-                      color:#a855f7;letter-spacing:-0.01em;margin-bottom:4px;">X2</div>
-          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
-            Xtra Premium 95
-          </div>
-        </button>
-
-        <!-- XG -->
-        <button type="button" id="card-XG" onclick="selectProduct('XG')"
-                data-color="#f97316"
-                style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);
-                       background:rgba(28,28,30,0.85);cursor:pointer;text-align:left;
-                       transition:border 0.15s,background 0.15s;">
-          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.4rem;
-                      color:#f97316;letter-spacing:-0.01em;margin-bottom:4px;">XG</div>
-          <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                      letter-spacing:0.06em;color:#6b7280;text-transform:uppercase;">
-            Xtra Green
-          </div>
-        </button>
-
+        {% endfor %}
       </div>
     </div>
 
-    <!-- Dispensed quantity -->
-    <div style="padding:0 20px 12px;">
+    <!-- Quantity section -->
+    <div style="padding:0 20px 16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <p style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
-                  letter-spacing:0.08em;color:#6b7280;text-transform:uppercase;margin:0;">
-          Dispensed Quantity
-        </p>
-        <!-- Toggle -->
-        <div style="display:flex;background:rgba(28,28,30,0.9);
-                    border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:3px;gap:2px;">
+        <p class="eyebrow">Dispensed Quantity</p>
+        <div class="mode-toggle">
           <button type="button" id="btn-amount" onclick="setMode('amount')"
-                  style="font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
-                         padding:5px 12px;border-radius:16px;border:none;cursor:pointer;
-                         background:rgba(255,255,255,0.12);color:#fff;">Amount (₹)</button>
+                  class="mode-btn active">Amount (₹)</button>
           <button type="button" id="btn-litres" onclick="setMode('litres')"
-                  style="font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
-                         padding:5px 12px;border-radius:16px;border:none;cursor:pointer;
-                         background:none;color:#6b7280;">Litres (L)</button>
+                  class="mode-btn">Litres (L)</button>
         </div>
       </div>
-
       <input type="hidden" name="input_mode" id="input-mode-hidden" value="amount">
 
-      <!-- Quantity input area -->
-      <div style="background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
-                  border-radius:16px;padding:20px 20px 14px;position:relative;">
+      <div style="background:var(--paper-100);border:1px solid var(--paper-300);
+                  border-radius:var(--r-card);padding:20px 16px 14px;
+                  position:relative;text-align:center;">
         <span id="currency-symbol"
-              style="font-family:'Inter',sans-serif;font-size:13px;color:#6b7280;
-                     position:absolute;top:16px;left:18px;">₹</span>
+              style="position:absolute;top:14px;left:16px;
+                     font-family:var(--font-sans);font-size:13px;color:var(--ink-500);">₹</span>
         <input type="number" name="quantity" id="quantity-input"
                step="0.01" min="0.01" inputmode="decimal"
                oninput="updateRateDisplay(); updateConfirmButton()"
-               placeholder="0.00"
-               style="display:block;width:100%;background:none;border:none;outline:none;
-                      font-family:'Manrope',sans-serif;font-weight:700;font-size:2.8rem;
-                      color:#fff;text-align:center;letter-spacing:-0.02em;padding:8px 0 4px;">
+               placeholder="0.00">
         <p id="rate-subtext"
-           style="font-family:'Inter',sans-serif;font-size:12px;color:#6b7280;
-                  text-align:center;margin:8px 0 0;">
+           style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);
+                  text-align:center;margin:6px 0 0;">
           Select a product to see rate
         </p>
       </div>
@@ -251,84 +242,54 @@
   </form>
 </div>
 
-<!-- Sticky confirm button (above bottom nav) -->
-<div style="position:fixed;bottom:72px;left:0;right:0;
-            padding:12px 20px;background:rgba(0,0,0,0.95);
-            border-top:1px solid rgba(255,255,255,0.06);z-index:40;">
+<!-- Sticky confirm button -->
+<div style="position:fixed;bottom:68px;left:0;right:0;
+            padding:12px 20px;
+            background:rgba(250,246,237,0.97);
+            border-top:1px solid var(--paper-300);z-index:40;">
   <button type="submit" form="sale-form" id="confirm-btn"
           disabled
-          style="display:flex;align-items:center;justify-content:center;gap:8px;
-                 width:100%;height:52px;border-radius:14px;border:none;cursor:pointer;
-                 background:#3b82f6;color:#fff;opacity:0.4;
-                 font-family:'Manrope',sans-serif;font-weight:700;font-size:16px;
-                 transition:opacity 0.2s;">
+          class="btn btn-saffron btn-full"
+          style="opacity:0.4;transition:opacity 0.2s;">
     Confirm &amp; Log Sale &rarr;
   </button>
 </div>
 
 <!-- Bottom nav -->
-<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
-            background:rgba(14,14,16,0.97);
-            border-top:1px solid rgba(255,255,255,0.08);
-            display:flex;align-items:center;z-index:50;">
-
-  <a href="{{ url_for('attendant.home') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+<nav class="bottom-nav">
+  <a href="{{ url_for('attendant.home') }}" class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+    Home
   </a>
-
-  <a href="{{ url_for('attendant.activity') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#3b82f6;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+  <a href="{{ url_for('attendant.activity') }}" class="bottom-nav__item bottom-nav__item--active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="12" width="4" height="8" rx="1"/>
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+    Activity
   </a>
-
-  <a href="{{ url_for('attendant.profile') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+  <a href="{{ url_for('attendant.profile') }}" class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
       <circle cx="12" cy="7" r="4"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">PROFILE</span>
+    Profile
   </a>
-
 </nav>
 
 <script>
 const PRICE_MAP = {{ price_map | tojson }};
-
 let selectedProduct = null;
 let inputMode = 'amount';
 
-const PRODUCT_BG = {
-  HS: 'rgba(59,130,246,0.12)',
-  MS: 'rgba(16,185,129,0.12)',
-  X2: 'rgba(168,85,247,0.12)',
-  XG: 'rgba(249,115,22,0.12)',
-};
-const PRODUCT_BORDER = {
-  HS: '2px solid #3b82f6',
-  MS: '2px solid #10b981',
-  X2: '2px solid #a855f7',
-  XG: '2px solid #f97316',
-};
+const PRODUCT_CLS = { HS: 'HS', MS: 'MS', X2: 'X2', XG: 'XG' };
 
 function setVehicleChip(value) {
   document.getElementById('vehicle-select').value = value;
@@ -339,15 +300,9 @@ function selectProduct(prod) {
   selectedProduct = prod;
   document.getElementById('product-hidden').value = prod;
 
-  ['HS','MS','X2','XG'].forEach(p => {
-    const card = document.getElementById('card-' + p);
-    if (p === prod) {
-      card.style.border = PRODUCT_BORDER[p];
-      card.style.background = PRODUCT_BG[p];
-    } else {
-      card.style.border = '1px solid rgba(255,255,255,0.08)';
-      card.style.background = 'rgba(28,28,30,0.85)';
-    }
+  ['HS', 'MS', 'X2', 'XG'].forEach(function (p) {
+    var card = document.getElementById('card-' + p);
+    card.className = 'prod-card' + (p === prod ? ' selected-' + p : '');
   });
 
   updateRateDisplay();
@@ -356,87 +311,64 @@ function selectProduct(prod) {
 
 function setMode(mode) {
   if (mode === inputMode) return;
+  var rate  = selectedProduct ? PRICE_MAP[selectedProduct] : null;
+  var input = document.getElementById('quantity-input');
+  var cur   = parseFloat(input.value) || 0;
 
-  const rate = selectedProduct ? PRICE_MAP[selectedProduct] : null;
-  const input = document.getElementById('quantity-input');
-  const currentVal = parseFloat(input.value) || 0;
-
-  if (currentVal > 0 && (!rate || rate <= 0)) {
-    const subtext = document.getElementById('rate-subtext');
-    subtext.textContent = 'Select a product before switching units.';
-    subtext.style.color = '#FAC775';
-    setTimeout(() => updateRateDisplay(), 2000);
+  if (cur > 0 && (!rate || rate <= 0)) {
+    var sub = document.getElementById('rate-subtext');
+    sub.textContent = 'Select a product before switching units.';
+    sub.style.color = 'var(--warn-600)';
+    setTimeout(updateRateDisplay, 2000);
     return;
   }
 
-  // Convert the displayed value into the new unit
-  if (currentVal > 0 && rate && rate > 0) {
-    const converted = mode === 'amount'
-      ? Math.round(currentVal * rate * 100) / 100   // L → ₹
-      : Math.round(currentVal / rate * 100) / 100;  // ₹ → L
+  if (cur > 0 && rate && rate > 0) {
+    var converted = mode === 'amount'
+      ? Math.round(cur * rate * 100) / 100
+      : Math.round(cur / rate * 100) / 100;
     input.value = converted.toFixed(2);
   }
 
   inputMode = mode;
   document.getElementById('input-mode-hidden').value = mode;
 
-  const btnAmount = document.getElementById('btn-amount');
-  const btnLitres = document.getElementById('btn-litres');
-
-  if (mode === 'amount') {
-    btnAmount.style.background = 'rgba(255,255,255,0.12)';
-    btnAmount.style.color = '#fff';
-    btnLitres.style.background = 'none';
-    btnLitres.style.color = '#6b7280';
-    document.getElementById('currency-symbol').textContent = '₹';
-  } else {
-    btnLitres.style.background = 'rgba(255,255,255,0.12)';
-    btnLitres.style.color = '#fff';
-    btnAmount.style.background = 'none';
-    btnAmount.style.color = '#6b7280';
-    document.getElementById('currency-symbol').textContent = 'L';
-  }
+  document.getElementById('btn-amount').className = 'mode-btn' + (mode === 'amount' ? ' active' : '');
+  document.getElementById('btn-litres').className = 'mode-btn' + (mode === 'litres' ? ' active' : '');
+  document.getElementById('currency-symbol').textContent = mode === 'amount' ? '₹' : 'L';
 
   updateRateDisplay();
   updateConfirmButton();
 }
 
 function updateRateDisplay() {
-  const subtext = document.getElementById('rate-subtext');
+  var sub = document.getElementById('rate-subtext');
   if (!selectedProduct) {
-    subtext.textContent = 'Select a product to see rate';
+    sub.textContent = 'Select a product to see rate';
+    sub.style.color = 'var(--ink-500)';
     return;
   }
-
-  const rate = PRICE_MAP[selectedProduct];
+  var rate = PRICE_MAP[selectedProduct];
   if (rate === null || rate === undefined) {
-    subtext.textContent = 'No rate available for ' + selectedProduct + '. Contact owner.';
-    subtext.style.color = '#f09595';
+    sub.textContent = 'No rate available for ' + selectedProduct + '. Contact owner.';
+    sub.style.color = 'var(--error-600)';
     return;
   }
-  subtext.style.color = '#6b7280';
-
-  const qty = parseFloat(document.getElementById('quantity-input').value) || 0;
-  let total = 0;
-  if (inputMode === 'amount') {
-    total = qty;
-  } else {
-    total = qty * rate;
-  }
-
-  subtext.textContent = 'Current Rate: ₹' + rate.toFixed(2) + '/L · Total: ₹' + total.toFixed(2);
+  sub.style.color = 'var(--ink-500)';
+  var qty   = parseFloat(document.getElementById('quantity-input').value) || 0;
+  var total = inputMode === 'amount' ? qty : qty * rate;
+  sub.textContent = 'Rate: ₹' + rate.toFixed(2) + '/L · Total: ₹' + total.toFixed(2);
 }
 
 function updateConfirmButton() {
-  const btn = document.getElementById('confirm-btn');
-  const vehicle = document.getElementById('vehicle-select').value;
-  const qty = parseFloat(document.getElementById('quantity-input').value) || 0;
-  const rate = selectedProduct ? PRICE_MAP[selectedProduct] : null;
-
-  const valid = vehicle && selectedProduct && qty > 0 && rate !== null && rate !== undefined;
+  var btn     = document.getElementById('confirm-btn');
+  var vehicle = document.getElementById('vehicle-select').value;
+  var qty     = parseFloat(document.getElementById('quantity-input').value) || 0;
+  var rate    = selectedProduct ? PRICE_MAP[selectedProduct] : null;
+  var valid   = vehicle && selectedProduct && qty > 0 && rate !== null && rate !== undefined;
   btn.disabled = !valid;
   btn.style.opacity = valid ? '1' : '0.4';
-  btn.style.cursor = valid ? 'pointer' : 'not-allowed';
+  btn.style.cursor  = valid ? 'pointer' : 'not-allowed';
 }
 </script>
 {% endblock %}

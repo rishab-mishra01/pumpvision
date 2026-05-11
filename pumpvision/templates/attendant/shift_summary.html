@@ -2,25 +2,39 @@
 {% block title %}Shift Summary — Pumpvision{% endblock %}
 
 {% block page %}
-<div style="min-height:100dvh;min-height:100vh;background:#000;padding-bottom:224px;">
+<style>
+  body { background: var(--paper-50); }
+
+  /* Nozzle card product accents */
+  {% set cls_map = {'HS1': 'hsd', 'HS2': 'hsd', 'MS1': 'ms', 'MS2': 'ms', 'X2': 'x2', 'XG': 'xg'} %}
+
+  .nozzle-summary-card {
+    background: var(--paper-50);
+    border: 1px solid var(--paper-300);
+    border-radius: var(--r-card);
+    padding: 14px 16px;
+  }
+</style>
+
+<div style="min-height:100dvh;min-height:100vh;padding-bottom:208px;">
 
   <!-- Top bar -->
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:18px 20px 10px;">
     <a href="{{ url_for('attendant.shift_select_product') }}"
-       style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;
-              color:#9ca3af;text-decoration:none;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:var(--ink-600);text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19 12H5M12 5l-7 7 7 7"/>
       </svg>
     </a>
-    <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1rem;color:#fff;">
-      Shift Settlement
-    </span>
+    <span style="font-family:var(--font-sans);font-weight:600;font-size:15px;
+                 color:var(--ink-900);">Shift Settlement</span>
     <a href="{{ url_for('attendant.profile') }}"
-       style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;
-              color:#9ca3af;text-decoration:none;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+       style="display:flex;align-items:center;justify-content:center;
+              width:36px;height:36px;color:var(--ink-500);text-decoration:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
@@ -29,88 +43,76 @@
   </div>
 
   <!-- Heading -->
-  <div style="padding:4px 20px 16px;">
-    <h2 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.4rem;
-               letter-spacing:-0.01em;color:#fff;margin:0 0 6px;">Review &amp; submit</h2>
-    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#6b7280;margin:0;line-height:1.5;">
+  <div style="padding:4px 20px 14px;">
+    <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.5rem;
+               color:var(--ink-900);margin:0 0 4px;">Review &amp; submit</h2>
+    <p style="font-family:var(--font-sans);font-size:13px;color:var(--ink-500);
+              margin:0;line-height:1.5;">
       Confirm closing readings before locking the shift.
     </p>
   </div>
 
-  <!-- Shift meta row -->
+  <!-- Shift meta -->
   <div style="display:flex;align-items:center;justify-content:space-between;
-              padding:0 20px 18px;">
+              padding:0 20px 16px;">
     <div>
-      <p style="font-family:'Inter',sans-serif;font-size:9px;font-weight:700;
-                letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;margin:0 0 4px;">
-        Shift
-      </p>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-             stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <p class="eyebrow" style="margin-bottom:4px;">Shift</p>
+      <div style="display:flex;align-items:center;gap:5px;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+             stroke="var(--ink-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/>
           <polyline points="12 6 12 12 16 14"/>
         </svg>
-        <span style="font-family:'Inter',sans-serif;font-size:13px;color:#fff;">
-          06:00 → 06:00
-        </span>
+        <span style="font-family:var(--font-sans);font-size:13px;color:var(--ink-700);">06:00 → 06:00</span>
       </div>
     </div>
     <div style="text-align:right;">
-      <p style="font-family:'Inter',sans-serif;font-size:9px;font-weight:700;
-                letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;margin:0 0 4px;">
-        Attendant
-      </p>
-      <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-             stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <p class="eyebrow" style="margin-bottom:4px;">Attendant</p>
+      <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+             stroke="var(--ink-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
         </svg>
-        <span style="font-family:'Inter',sans-serif;font-size:13px;color:#fff;">
-          {{ display_name }}
-        </span>
+        <span style="font-family:var(--font-sans);font-size:13px;color:var(--ink-700);">{{ display_name }}</span>
       </div>
     </div>
   </div>
 
   <!-- Nozzle cards -->
-  <div style="display:flex;flex-direction:column;gap:10px;padding:0 20px;">
+  <div style="display:flex;flex-direction:column;gap:8px;padding:0 20px;">
     {% for row in nozzle_rows %}
-    <div style="background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
-                border-radius:16px;border-left:3px solid {{ row.color }};
-                padding:16px 16px 14px;">
+    {# Determine product class from nozzle name #}
+    {%- if 'HS' in row.name -%}{%- set cls = 'hsd' -%}
+    {%- elif 'MS' in row.name -%}{%- set cls = 'ms' -%}
+    {%- elif 'X2' in row.name -%}{%- set cls = 'x2' -%}
+    {%- else -%}{%- set cls = 'xg' -%}{%- endif -%}
+
+    <div class="nozzle-summary-card"
+         style="border-left:3px solid var(--{{ cls }}-600);">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
 
-        <!-- Left: nozzle badge + readings -->
+        <!-- Left: name + readings -->
         <div style="flex:1;min-width:0;">
-          <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1.1rem;
-                      color:{{ row.color }};margin-bottom:10px;">
-            {{ row.name }}
-          </div>
+          <div style="font-family:var(--font-sans);font-weight:700;font-size:1rem;
+                      color:var(--{{ cls }}-600);margin-bottom:10px;">{{ row.name }}</div>
           <div style="display:grid;grid-template-columns:auto auto;column-gap:20px;row-gap:2px;">
-            <p style="font-family:'Inter',sans-serif;font-size:8px;font-weight:700;
-                      letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;margin:0;">
-              Opening
-            </p>
-            <p style="font-family:'Inter',sans-serif;font-size:8px;font-weight:700;
-                      letter-spacing:0.1em;color:#6b7280;text-transform:uppercase;margin:0;">
-              Closing
-            </p>
-            <p style="font-family:'Manrope',sans-serif;font-weight:600;font-size:14px;
-                      color:#d1d5db;margin:0;">
+            <p class="eyebrow" style="margin:0;">Opening</p>
+            <p class="eyebrow" style="margin:0;">Closing</p>
+            <p style="font-family:var(--font-mono);font-weight:600;font-size:14px;
+                      color:var(--ink-700);margin:0;font-variant-numeric:tabular-nums;">
               {% if row.opening is not none %}
                 {{ "{:,.2f}".format(row.opening) }}
               {% else %}
-                <span style="color:#f09595;">—</span>
+                <span style="color:var(--error-600);">—</span>
               {% endif %}
             </p>
-            <p style="font-family:'Manrope',sans-serif;font-weight:600;font-size:14px;
-                      color:#d1d5db;margin:0;">
+            <p style="font-family:var(--font-mono);font-weight:600;font-size:14px;
+                      color:var(--ink-700);margin:0;font-variant-numeric:tabular-nums;">
               {% if row.closing is not none %}
                 {{ "{:,.2f}".format(row.closing) }}
               {% else %}
-                <span style="color:#4b5563;">Not entered</span>
+                <span style="color:var(--ink-400);">Not entered</span>
               {% endif %}
             </p>
           </div>
@@ -119,19 +121,17 @@
         <!-- Right: delta + edit -->
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
           {% if row.delta is not none %}
-          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.2rem;
-                       color:#fff;white-space:nowrap;">
+          <span style="font-family:var(--font-mono);font-weight:700;font-size:1.1rem;
+                       color:var(--ink-900);white-space:nowrap;font-variant-numeric:tabular-nums;">
             +{{ "{:,.2f}".format(row.delta) }} L
           </span>
           {% else %}
-          <span style="font-family:'Inter',sans-serif;font-size:12px;color:#4b5563;">
-            Missing
-          </span>
+          <span style="font-family:var(--font-sans);font-size:12px;color:var(--ink-400);">Missing</span>
           {% endif %}
           {% if not row.is_locked %}
           <a href="{{ url_for('attendant.shift_numpad', nozzle=row.name) }}"
-             style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
-                    color:#3b82f6;text-decoration:none;">
+             style="font-family:var(--font-sans);font-size:13px;font-weight:600;
+                    color:var(--saffron-600);text-decoration:none;">
             Edit
           </a>
           {% endif %}
@@ -143,20 +143,21 @@
   </div>
 
   <!-- Product totals card -->
-  <div style="margin:16px 20px 0;
-              background:rgba(28,28,30,0.85);border:1px solid rgba(255,255,255,0.08);
-              border-radius:16px;padding:16px;">
-    <p style="font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;
-              color:#fff;margin:0 0 2px;">Shift totals by product</p>
-    <p style="font-family:'Inter',sans-serif;font-size:11px;color:#6b7280;margin:0 0 14px;">
+  <div style="margin:14px 20px 0;
+              background:var(--ink-900);border-radius:var(--r-card);padding:16px;">
+    <p style="font-family:var(--font-sans);font-weight:600;font-size:14px;
+              color:var(--paper-50);margin:0 0 2px;">Shift totals by product</p>
+    <p style="font-family:var(--font-sans);font-size:11px;color:var(--ink-400);margin:0 0 14px;">
       Net after 5&thinsp;L pump test per nozzle
     </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      {% for code, color in [('HS','#3b82f6'),('MS','#10b981'),('X2','#a855f7'),('XG','#f97316')] %}
+    <div class="grid-2">
+      {% for code, cls in [('HS','hsd'),('MS','ms'),('X2','x2'),('XG','xg')] %}
       <div style="display:flex;align-items:baseline;gap:8px;">
-        <span style="font-family:'Manrope',sans-serif;font-weight:800;font-size:1rem;
-                     color:{{ color }};">{{ code }}</span>
-        <span style="font-family:'Inter',sans-serif;font-size:14px;color:#d1d5db;">
+        <span style="font-family:var(--font-mono);font-weight:700;font-size:1rem;
+                     color:var(--{{ cls }}-400 , var(--paper-300));
+                     font-variant-numeric:tabular-nums;">{{ code }}</span>
+        <span style="font-family:var(--font-mono);font-size:13px;
+                     color:var(--paper-200);font-variant-numeric:tabular-nums;">
           {{ "{:,.2f}".format(product_totals[code]) }}&thinsp;L
         </span>
       </div>
@@ -164,14 +165,14 @@
     </div>
   </div>
 
-  <!-- Amber warnings -->
+  <!-- Warnings -->
   {% if warnings %}
   <div style="margin:12px 20px 0;padding:14px 16px;
-              background:rgba(250,199,117,0.08);border:1px solid rgba(250,199,117,0.25);
-              border-radius:14px;">
+              background:var(--warn-100);border:1px solid var(--warn-600);
+              border-radius:var(--r-card);">
     <div style="display:flex;gap:10px;align-items:flex-start;">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-           stroke="#fac775" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="var(--warn-600)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
            style="flex-shrink:0;margin-top:1px;">
         <path d="m10.29 3.86-7 12A2 2 0 0 0 5 19h14a2 2 0 0 0 1.71-3.14l-7-12a2 2 0 0 0-3.42 0z"/>
         <line x1="12" y1="9" x2="12" y2="13"/>
@@ -179,7 +180,7 @@
       </svg>
       <div>
         {% for row in nozzle_rows %}{% if row.name in warnings %}
-        <p style="font-family:'Inter',sans-serif;font-size:13px;color:#fac775;
+        <p style="font-family:var(--font-sans);font-size:13px;color:var(--warn-600);
                   margin:0 0 6px;line-height:1.5;">
           {% if row.delta == 0 %}
             <strong>{{ row.name }}</strong> — closing equals opening. Confirm no fuel dispensed.
@@ -196,70 +197,54 @@
 
 </div>
 
-<!-- Sticky submit + draft buttons -->
-<div style="position:fixed;bottom:72px;left:0;right:0;
-            padding:12px 20px 10px;background:rgba(0,0,0,0.95);
-            border-top:1px solid rgba(255,255,255,0.06);z-index:40;
-            display:flex;flex-direction:column;gap:10px;">
+<!-- Sticky submit + draft -->
+<div style="position:fixed;bottom:68px;left:0;right:0;
+            padding:12px 20px 10px;
+            background:rgba(250,246,237,0.97);
+            border-top:1px solid var(--paper-300);z-index:40;
+            display:flex;flex-direction:column;gap:8px;">
   <form method="POST" action="{{ url_for('attendant.shift_submit') }}">
     <button type="submit"
             {% if not all_entered %}disabled{% endif %}
-            style="width:100%;height:52px;border-radius:14px;border:none;
-                   background:{% if all_entered %}#3b82f6{% else %}rgba(59,130,246,0.3){% endif %};
-                   color:#fff;font-family:'Manrope',sans-serif;font-weight:700;font-size:16px;
-                   cursor:{% if all_entered %}pointer{% else %}not-allowed{% endif %};">
+            class="btn btn-saffron btn-full"
+            style="{% if not all_entered %}opacity:0.4;cursor:not-allowed;{% endif %}">
       Submit shift
     </button>
   </form>
   <a href="{{ url_for('attendant.shift_select_product') }}"
-     style="display:flex;align-items:center;justify-content:center;
-            height:48px;border-radius:14px;
-            background:rgba(28,28,30,0.6);border:1px solid rgba(255,255,255,0.1);
-            text-decoration:none;color:#9ca3af;
-            font-family:'Manrope',sans-serif;font-weight:600;font-size:15px;">
+     class="btn btn-ghost btn-full">
     Save as draft
   </a>
 </div>
 
 <!-- Bottom nav -->
-<nav style="position:fixed;bottom:0;left:0;right:0;height:72px;
-            background:rgba(14,14,16,0.97);
-            border-top:1px solid rgba(255,255,255,0.08);
-            display:flex;align-items:center;z-index:50;">
-  <a href="{{ url_for('attendant.home') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+<nav class="bottom-nav">
+  <a href="{{ url_for('attendant.home') }}" class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
+    Home
   </a>
-  <a href="{{ url_for('attendant.activity') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+  <a href="{{ url_for('attendant.activity') }}" class="bottom-nav__item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="12" width="4" height="8" rx="1"/>
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">ACTIVITY</span>
+    Activity
   </a>
   <a href="{{ url_for('attendant.shift_select_product') }}"
-     style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#3b82f6;min-height:72px;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+     class="bottom-nav__item bottom-nav__item--active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
       <rect x="9" y="3" width="6" height="4" rx="1" ry="1"/>
       <path d="m9 12 2 2 4-4"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
-                 letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">SHIFT</span>
+    Shift
   </a>
 </nav>
 {% endblock %}
