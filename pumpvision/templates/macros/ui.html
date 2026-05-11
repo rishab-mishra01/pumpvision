@@ -1,0 +1,250 @@
+{# ============================================================
+   Pumpvision UI Macros — import with:
+     {% from 'macros/ui.html' import totalizer, product_chip, … %}
+   ============================================================ #}
+
+
+{# ── TOTALIZER ──────────────────────────────────────────────
+   Renders a value string as individual dark-navy cells.
+   value      : str or number — the value to display
+   size       : 'xl' | 'l' | 'm' | 's'
+   accent_last: bool — render last digit in saffron
+   unit       : optional unit label (e.g. 'L', '₹') shown after cells
+#}
+{% macro totalizer(value, size='l', accent_last=false, unit='') %}
+{%- set chars = value | string | list -%}
+<span class="cell-row" aria-label="{{ value }}">
+  {%- for ch in chars -%}
+  {%- set is_last = loop.last -%}
+  <span class="cell cell-{{ size }}{% if is_last and accent_last %} cell--accent{% endif %}">{{ ch }}</span>
+  {%- endfor -%}
+  {%- if unit %}<span style="font-family:var(--font-sans);font-size:0.75em;color:var(--ink-500);margin-left:4px;align-self:flex-end;padding-bottom:3px;">{{ unit }}</span>{%- endif -%}
+</span>
+{% endmacro %}
+
+
+{# ── PRODUCT CHIP ───────────────────────────────────────────
+   code: 'HS' | 'MS' | 'X2' | 'XG'
+#}
+{% macro product_chip(code) %}
+{%- set map = {'HS': 'hsd', 'MS': 'ms', 'X2': 'x2', 'XG': 'xg'} -%}
+{%- set cls = map.get(code, 'neutral') -%}
+<span class="chip chip-{{ cls }}">{{ code }}</span>
+{% endmacro %}
+
+
+{# ── STATUS CHIP ────────────────────────────────────────────
+   label: display text
+   state: 'ok' | 'warn' | 'error' | 'neutral'
+#}
+{% macro status_chip(label, state='neutral') %}
+<span class="chip chip-{{ state }}">{{ label }}</span>
+{% endmacro %}
+
+
+{# ── FORM FIELD ─────────────────────────────────────────────
+   Standard labeled input field.
+#}
+{% macro field(name, label, value='', type='text', placeholder='', required=false, id='') %}
+{%- set fid = id if id else name -%}
+<div class="field-wrapper">
+  <label class="field-label" for="{{ fid }}">{{ label }}</label>
+  <input
+    class="field-input"
+    type="{{ type }}"
+    id="{{ fid }}"
+    name="{{ name }}"
+    value="{{ value }}"
+    placeholder="{{ placeholder }}"
+    {% if required %}required{% endif %}
+  >
+</div>
+{% endmacro %}
+
+
+{# ── SELECT FIELD ───────────────────────────────────────────
+   Labeled <select> with options list.
+   options: list of (value, label) tuples
+   selected: currently selected value
+#}
+{% macro select_field(name, label, options, selected='', required=false, id='') %}
+{%- set fid = id if id else name -%}
+<div class="field-wrapper">
+  <label class="field-label" for="{{ fid }}">{{ label }}</label>
+  <select class="field-input" id="{{ fid }}" name="{{ name }}" {% if required %}required{% endif %}>
+    {% for val, lbl in options %}
+    <option value="{{ val }}" {% if val == selected %}selected{% endif %}>{{ lbl }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endmacro %}
+
+
+{# ── TEXTAREA FIELD ─────────────────────────────────────────
+#}
+{% macro textarea_field(name, label, value='', placeholder='', rows=3, required=false, id='') %}
+{%- set fid = id if id else name -%}
+<div class="field-wrapper">
+  <label class="field-label" for="{{ fid }}">{{ label }}</label>
+  <textarea
+    class="field-input"
+    id="{{ fid }}"
+    name="{{ name }}"
+    placeholder="{{ placeholder }}"
+    rows="{{ rows }}"
+    {% if required %}required{% endif %}
+  >{{ value }}</textarea>
+</div>
+{% endmacro %}
+
+
+{# ── TOTALIZER FIELD ────────────────────────────────────────
+   Nozzle reading input — full-width numeric input styled like
+   a totalizer display. Used on shift close numpad screens.
+   The actual value entry is handled by numpad JS; this renders
+   the display widget.
+   display_id: element id of the display span (for JS targeting)
+#}
+{% macro totalizer_field(name, label, value='', display_id='totalizer-display') %}
+<div class="field-wrapper">
+  <div class="field-label">{{ label }}</div>
+  <div style="background:var(--ink-900);border-radius:var(--r-card);
+              padding:20px 16px 14px;text-align:center;">
+    <div style="display:flex;align-items:baseline;justify-content:center;gap:8px;min-height:52px;">
+      <span id="{{ display_id }}"
+            style="font-family:var(--font-mono);font-weight:600;font-size:2.5rem;
+                   color:var(--paper-50);font-variant-numeric:tabular-nums;
+                   letter-spacing:-0.01em;line-height:1;word-break:break-all;">
+        {{ value if value else '0' }}
+      </span>
+      <span style="font-family:var(--font-sans);font-size:1rem;color:var(--ink-500);flex-shrink:0;">L</span>
+    </div>
+    <input type="hidden" id="{{ name }}-hidden" name="{{ name }}" value="{{ value }}">
+  </div>
+</div>
+{% endmacro %}
+
+
+{# ── CARD WRAPPER ───────────────────────────────────────────
+   Card with optional left-border accent color.
+   accent_color: a CSS color value, or a product code (HS/MS/X2/XG),
+                 or a CSS variable name like '--saffron-500'
+   caller() renders the card body.
+#}
+{% macro card(title='', accent='') %}
+{%- set extra_style = '' -%}
+{%- if accent == 'HS' -%}
+  {%- set extra_style = 'border-left:3px solid var(--hsd-600);' -%}
+{%- elif accent == 'MS' -%}
+  {%- set extra_style = 'border-left:3px solid var(--ms-600);' -%}
+{%- elif accent == 'X2' -%}
+  {%- set extra_style = 'border-left:3px solid var(--x2-600);' -%}
+{%- elif accent == 'XG' -%}
+  {%- set extra_style = 'border-left:3px solid var(--xg-600);' -%}
+{%- elif accent == 'saffron' -%}
+  {%- set extra_style = 'border-left:3px solid var(--saffron-500);' -%}
+{%- elif accent -%}
+  {%- set extra_style = 'border-left:3px solid ' ~ accent ~ ';' -%}
+{%- endif -%}
+<div class="card" style="{{ extra_style }}">
+  {% if title %}
+  <div class="eyebrow" style="margin-bottom:10px;">{{ title }}</div>
+  {% endif %}
+  {{ caller() }}
+</div>
+{% endmacro %}
+
+
+{# ── SECTION RULE ───────────────────────────────────────────
+   Dotted divider with optional eyebrow label.
+#}
+{% macro section_rule(label='') %}
+<div class="section-rule">
+  {% if label %}
+  <span class="section-rule__label">{{ label }}</span>
+  {% endif %}
+  <span class="section-rule__line"></span>
+</div>
+{% endmacro %}
+
+
+{# ── RECEIPT ROW ────────────────────────────────────────────
+   A single row in a receipt-style layout.
+   label: left-side eyebrow text
+   value: right-side mono value
+   divider: bool — render dotted rule below this row
+#}
+{% macro receipt_row(label, value, divider=false) %}
+<div style="display:flex;align-items:baseline;justify-content:space-between;
+            padding:8px 0;">
+  <span class="eyebrow">{{ label }}</span>
+  <span style="font-family:var(--font-mono);font-size:14px;font-weight:500;
+               font-variant-numeric:tabular-nums;color:var(--ink-900);">{{ value }}</span>
+</div>
+{% if divider %}
+<div class="rule-dotted"></div>
+{% endif %}
+{% endmacro %}
+
+
+{# ── BACK BUTTON ────────────────────────────────────────────
+   Standard top-left back chevron.
+   href: URL to go back to
+#}
+{% macro back_btn(href) %}
+<a href="{{ href }}"
+   style="display:flex;align-items:center;justify-content:center;
+          width:36px;height:36px;color:var(--ink-600);text-decoration:none;
+          border-radius:var(--r-btn);">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 12H5M12 5l-7 7 7 7"/>
+  </svg>
+</a>
+{% endmacro %}
+
+
+{# ── SCREEN TOPBAR ──────────────────────────────────────────
+   Standard top bar for full-screen attendant/manager pages.
+   back_href : URL for back button (omit to hide back button)
+   title     : center title text (optional)
+   right_href: URL for right icon (omit to hide)
+#}
+{% macro screen_topbar(back_href='', title='', right_href='') %}
+<div style="display:flex;align-items:center;justify-content:space-between;
+            padding:16px 20px 10px;flex-shrink:0;">
+  {% if back_href %}
+  <a href="{{ back_href }}"
+     style="display:flex;align-items:center;justify-content:center;
+            width:36px;height:36px;color:var(--ink-600);text-decoration:none;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 12H5M12 5l-7 7 7 7"/>
+    </svg>
+  </a>
+  {% else %}
+  <div style="width:36px;height:36px;"></div>
+  {% endif %}
+
+  {% if title %}
+  <span style="font-family:var(--font-sans);font-weight:600;font-size:15px;
+               color:var(--ink-900);">{{ title }}</span>
+  {% else %}
+  <span></span>
+  {% endif %}
+
+  {% if right_href %}
+  <a href="{{ right_href }}"
+     style="display:flex;align-items:center;justify-content:center;
+            width:36px;height:36px;color:var(--ink-500);text-decoration:none;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+  </a>
+  {% else %}
+  <div style="width:36px;height:36px;"></div>
+  {% endif %}
+</div>
+{% endmacro %}

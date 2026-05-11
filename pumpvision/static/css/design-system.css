@@ -1,0 +1,570 @@
+/* ============================================================
+   Pumpvision Design System v0.1
+   Load this file FIRST — all other styles depend on these tokens.
+   ============================================================ */
+
+/* ── 1. TOKENS ─────────────────────────────────────────────── */
+:root {
+  /* Paper — warm substrate */
+  --paper-50:  #faf6ed;
+  --paper-100: #f5efe1;
+  --paper-200: #ece4d2;
+  --paper-300: #ddd2bb;
+  --paper-400: #b8aa8e;
+  --paper-500: #8a7d63;
+
+  /* Ink — engineered systems / navy */
+  --ink-900: #16202e;
+  --ink-800: #1f2c3f;
+  --ink-700: #324154;
+  --ink-600: #4a5870;
+  --ink-500: #6b7891;
+
+  /* Saffron — energy accent (use with restraint) */
+  --saffron-700: #b8421a;
+  --saffron-600: #d4541f;
+  --saffron-500: #e96821;
+  --saffron-400: #f08a4d;
+  --saffron-200: #f7c9a8;
+  --saffron-100: #fbe5d3;
+
+  /* Status */
+  --ok-600:    #4a7a3a;
+  --ok-100:    #e3ecd6;
+  --warn-600:  #a86a16;
+  --warn-100:  #f4e3c1;
+  --error-600: #a8321f;
+  --error-100: #f3d6cd;
+
+  /* Product layer — fuel grades */
+  --hsd-600: #4a6b3a;  --hsd-100: #dde6cf;
+  --ms-600:  #c43d2a;  --ms-100:  #f3d4ce;
+  --x2-600:  #6b3a86;  --x2-100:  #e3d4ec;
+  --xg-600:  #1f6b6b;  --xg-100:  #cde3e3;
+
+  /* Typography */
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-sans:  'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', 'Courier New', monospace;
+  --font-mech:  'Major Mono Display', monospace;
+
+  /* Border radius — era: balanced (default) */
+  --r-cell: 2px;
+  --r-card: 6px;
+  --r-btn:  4px;
+  --r-chip: 999px;
+
+  /* Shadows — only on totalizer cells */
+  --shadow-cell: inset 0 1px 0 rgba(255,255,255,0.04),
+                 0 1px 3px rgba(0,0,0,0.4);
+
+  /* Spacing scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+}
+
+/* ── 2. ERA OVERRIDES ───────────────────────────────────────── */
+[data-era="mechanical"] {
+  --r-cell: 0px;
+  --r-card: 2px;
+  --r-btn:  2px;
+  --r-chip: 2px;
+}
+[data-era="balanced"] {
+  --r-cell: 2px;
+  --r-card: 6px;
+  --r-btn:  4px;
+  --r-chip: 999px;
+}
+[data-era="modern"] {
+  --r-cell: 4px;
+  --r-card: 14px;
+  --r-btn:  10px;
+  --r-chip: 999px;
+}
+
+/* ── 3. RESETS ──────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background-color: var(--paper-50);
+  color: var(--ink-900);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+input, button, a, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+::placeholder {
+  color: var(--paper-400);
+  opacity: 1;
+}
+
+/* ── 4. TYPOGRAPHY ──────────────────────────────────────────── */
+.h1 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 2.5rem;     /* 40px */
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  margin: 0;
+}
+.h2 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 1.875rem;   /* 30px */
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  margin: 0;
+}
+.h3 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 1.375rem;   /* 22px */
+  line-height: 1.3;
+  color: var(--ink-900);
+  margin: 0;
+}
+.lede {
+  font-family: var(--font-serif);
+  font-weight: 300;
+  font-size: 1.125rem;   /* 18px */
+  line-height: 1.55;
+  color: var(--ink-700);
+  margin: 0;
+}
+.body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 0.9375rem;  /* 15px */
+  line-height: 1.55;
+  color: var(--ink-800);
+  margin: 0;
+}
+.label {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 0.8125rem;  /* 13px */
+  line-height: 1.4;
+  color: var(--ink-700);
+  margin: 0;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.9375rem;  /* 15px */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-900);
+  margin: 0;
+}
+.eyebrow {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.625rem;   /* 10px */
+  line-height: 1.3;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  margin: 0;
+}
+
+/* ── 5. LAYOUT ──────────────────────────────────────────────── */
+.page {
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--sp-5);
+  padding-right: var(--sp-5);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-4); }
+.grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: var(--sp-4); }
+
+/* ── 6. RULES ───────────────────────────────────────────────── */
+.rule {
+  border: none;
+  border-top: 1px solid var(--paper-300);
+  margin: 0;
+}
+.rule-dotted {
+  border: none;
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--paper-300) 0,
+    var(--paper-300) 4px,
+    transparent 4px,
+    transparent 10px
+  );
+  margin: 0;
+}
+
+/* ── 7. CARD ────────────────────────────────────────────────── */
+.card {
+  background: var(--paper-50);
+  border: 1px solid var(--paper-300);
+  border-radius: var(--r-card);
+  padding: var(--sp-4);
+}
+.card--accented {
+  border-left: 3px solid var(--saffron-500);
+}
+.card--hsd { border-left: 3px solid var(--hsd-600); }
+.card--ms  { border-left: 3px solid var(--ms-600); }
+.card--x2  { border-left: 3px solid var(--x2-600); }
+.card--xg  { border-left: 3px solid var(--xg-600); }
+
+/* ── 8. BUTTONS ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.9375rem;  /* 15px */
+  line-height: 1;
+  border: none;
+  border-radius: var(--r-btn);
+  cursor: pointer;
+  padding: 0 var(--sp-5);
+  height: 48px;
+  text-decoration: none;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-full { width: 100%; }
+
+/* Saffron — primary CTA (one per screen maximum) */
+.btn-saffron {
+  background: var(--saffron-500);
+  color: var(--ink-900);
+}
+.btn-saffron:hover { opacity: 0.9; }
+
+/* Primary — ink fill */
+.btn-primary {
+  background: var(--ink-900);
+  color: var(--paper-50);
+}
+.btn-primary:hover { opacity: 0.88; }
+
+/* Secondary — paper fill */
+.btn-secondary {
+  background: var(--paper-200);
+  color: var(--ink-900);
+}
+.btn-secondary:hover { background: var(--paper-300); }
+
+/* Ghost — outline only */
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-900);
+  border: 1px solid var(--ink-700);
+}
+.btn-ghost:hover { background: var(--paper-100); }
+
+/* Danger */
+.btn-danger {
+  background: var(--error-100);
+  color: var(--error-600);
+  border: 1px solid var(--error-600);
+}
+
+/* ── 9. CHIPS ───────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.6875rem;  /* 11px */
+  line-height: 1;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: var(--r-chip);
+  white-space: nowrap;
+}
+
+/* Status chips */
+.chip-ok    { background: var(--ok-100);   color: var(--ok-600); }
+.chip-warn  { background: var(--warn-100); color: var(--warn-600); }
+.chip-error { background: var(--error-100); color: var(--error-600); }
+.chip-neutral { background: var(--paper-200); color: var(--ink-600); }
+
+/* Product chips */
+.chip-hsd { background: var(--hsd-100); color: var(--hsd-600); }
+.chip-ms  { background: var(--ms-100);  color: var(--ms-600); }
+.chip-x2  { background: var(--x2-100);  color: var(--x2-600); }
+.chip-xg  { background: var(--xg-100);  color: var(--xg-600); }
+
+/* ── 10. FORM FIELDS ────────────────────────────────────────── */
+.field-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-label {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.625rem;   /* 10px */
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-600);
+}
+.field-input {
+  width: 100%;
+  height: 52px;
+  padding: 0 var(--sp-4);
+  background: var(--paper-100);
+  border: 1px solid var(--paper-300);
+  border-radius: var(--r-card);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: var(--ink-900);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field-input:focus {
+  border-color: var(--saffron-500);
+}
+.field-input::placeholder {
+  color: var(--paper-400);
+}
+select.field-input {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7891' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+}
+textarea.field-input {
+  height: auto;
+  padding: var(--sp-3) var(--sp-4);
+  resize: vertical;
+}
+
+/* ── 11. TOTALIZER CELLS ────────────────────────────────────── */
+.cell-row {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+.cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink-900);
+  color: var(--paper-50);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--r-cell);
+  box-shadow: var(--shadow-cell);
+  flex-shrink: 0;
+}
+.cell--accent {
+  background: var(--saffron-500);
+  color: var(--ink-900);
+}
+
+/* Sizes */
+.cell-xl { width: 42px; height: 64px; font-size: 28px; }
+.cell-l  { width: 28px; height: 44px; font-size: 18px; }
+.cell-m  { width: 20px; height: 32px; font-size: 13px; }
+.cell-s  { width: 14px; height: 22px; font-size: 10px; }
+
+/* Totalizer input field — looks like cell row, but editable */
+.cell-input-row {
+  display: inline-flex;
+  gap: 2px;
+}
+.cell-input {
+  background: var(--ink-900);
+  color: var(--paper-50);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  border: none;
+  border-radius: var(--r-cell);
+  text-align: center;
+  width: 28px;
+  height: 44px;
+  outline: none;
+}
+.cell-input:focus {
+  background: var(--ink-800);
+  box-shadow: 0 0 0 2px var(--saffron-500);
+}
+
+/* ── 12. APP MARK (wordmark) ────────────────────────────────── */
+.app-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mech);
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--ink-900);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.app-mark-square {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: var(--saffron-500);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.app-mark--lg {
+  font-size: 23px;
+}
+.app-mark--lg .app-mark-square {
+  width: 13px;
+  height: 13px;
+}
+
+/* ── 13. METER BASE ─────────────────────────────────────────── */
+.meter-base {
+  position: relative;
+  height: 3px;
+  background: var(--ink-900);
+  border-radius: 0;
+  overflow: hidden;
+}
+.meter-base::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 25%;
+  height: 100%;
+  background: var(--saffron-500);
+}
+
+/* ── 14. NAVIGATION ─────────────────────────────────────────── */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 var(--sp-5);
+  background: rgba(250, 246, 237, 0.92);  /* paper-50 + alpha */
+  border-bottom: 1px solid var(--paper-300);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 68px;
+  background: rgba(250, 246, 237, 0.97);
+  border-top: 1px solid var(--paper-300);
+  display: flex;
+  align-items: stretch;
+  z-index: 100;
+}
+.bottom-nav__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  color: var(--ink-500);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-top: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.bottom-nav__item--active {
+  color: var(--saffron-600);
+  border-top-color: var(--saffron-600);
+}
+
+/* ── 15. FLASH MESSAGES ─────────────────────────────────────── */
+.flash {
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-card);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: var(--sp-2);
+}
+.flash-error   { background: var(--error-100); color: var(--error-600); border: 1px solid var(--error-600); }
+.flash-warning { background: var(--warn-100);  color: var(--warn-600);  border: 1px solid var(--warn-600); }
+.flash-ok      { background: var(--ok-100);    color: var(--ok-600);    border: 1px solid var(--ok-600); }
+
+/* ── 16. SECTION RULE ───────────────────────────────────────── */
+.section-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+}
+.section-rule__label {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.section-rule__line {
+  flex: 1;
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--paper-300) 0,
+    var(--paper-300) 4px,
+    transparent 4px,
+    transparent 10px
+  );
+}
+
+/* ── 17. UTILITIES ──────────────────────────────────────────── */
+.text-saffron { color: var(--saffron-600); }
+.text-ink     { color: var(--ink-900); }
+.text-muted   { color: var(--ink-500); }
+.font-mono    { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.font-sans    { font-family: var(--font-sans); }
+.font-serif   { font-family: var(--font-serif); }
+.tabular      { font-variant-numeric: tabular-nums; }

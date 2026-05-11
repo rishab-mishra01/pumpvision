@@ -4,96 +4,98 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Pumpvision{% endblock %}</title>
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root {
-      --color-bg: #000000;
-      --color-surface: rgba(28, 28, 30, 0.85);
-      --color-border: rgba(255, 255, 255, 0.1);
-      --color-hs: #3b82f6;
-      --color-ms: #10b981;
-      --color-x2: #a855f7;
-      --color-xg: #f97316;
-      --color-warn: #FAC775;
-      --color-crit: #F09595;
-      --color-ok: #97C459;
-    }
-    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-    body { background-color: #000; color: #fff; font-family: 'Inter', sans-serif; }
-    .font-manrope { font-family: 'Manrope', sans-serif; }
-    .font-inter  { font-family: 'Inter', sans-serif; }
-    .card-surface {
-      background: rgba(28, 28, 30, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    ::placeholder { color: rgba(255,255,255,0.3); }
-    input, button, a { -webkit-tap-highlight-color: transparent; }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Design system — must be first -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">
+
   <!-- PWA -->
   <link rel="manifest" href="/static/manifest.json">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#faf6ed">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Pumpvision">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
   {% block head %}{% endblock %}
 </head>
-<body class="min-h-screen">
+<body data-era="balanced">
 
   {#
-    New dark screens (login, attendant home, etc.) override {% block page %} entirely,
-    so none of the legacy nav below is rendered for them.
-    Old owner templates only override {% block content %}, so they inherit the indigo nav.
+    Attendant and auth screens override {% block page %} entirely — no legacy nav rendered.
+    Owner templates override {% block content %} only — they inherit this shell.
   #}
   {% block page %}
 
     {% if current_user.is_authenticated %}
-    <nav class="bg-indigo-700 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow">
-      <a href="{{ url_for('dashboard.index') }}" class="font-bold text-lg tracking-wide">PumpVision</a>
-      <div class="flex items-center gap-3">
-        <span class="text-indigo-200 text-sm capitalize">{{ current_user.role }}</span>
-        <a href="{{ url_for('auth.logout') }}" class="text-sm bg-indigo-900 hover:bg-indigo-800 px-3 py-2 rounded">Logout</a>
+    <nav class="top-nav">
+      <a href="{{ url_for('dashboard.index') }}" class="app-mark">
+        <span class="app-mark-square"></span>
+        pump<span style="color:var(--saffron-600)">vision</span>
+      </a>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="chip chip-neutral" style="text-transform:capitalize;">
+          {{ current_user.role }}
+        </span>
+        <a href="{{ url_for('auth.logout') }}"
+           class="btn btn-ghost"
+           style="height:34px;font-size:13px;padding:0 14px;">
+          Logout
+        </a>
       </div>
     </nav>
 
     {% if current_user.role == 'owner' %}
-    <div class="bg-indigo-600 text-indigo-100 text-sm overflow-x-auto">
-      <div class="flex whitespace-nowrap px-2">
-        <a href="{{ url_for('dashboard.index') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Dashboard</a>
-        <a href="{{ url_for('recon.index') }}"        class="px-4 py-3 hover:bg-indigo-500 block">Reconcile</a>
-        <a href="{{ url_for('credit.dashboard') }}"   class="px-4 py-3 hover:bg-indigo-500 block">Credit</a>
-        <a href="{{ url_for('paytm.index') }}"        class="px-4 py-3 hover:bg-indigo-500 block">Paytm</a>
-        <a href="{{ url_for('meters.index') }}"       class="px-4 py-3 hover:bg-indigo-500 block relative">
-          Meters
-          {% if unread_notification_count > 0 %}
-          <span class="absolute top-1.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4
-                       flex items-center justify-center text-xs font-bold leading-none">
+    <div style="background:var(--paper-100);border-bottom:1px solid var(--paper-300);
+                overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <div style="display:flex;white-space:nowrap;padding:0 8px;">
+        {% set nav_items = [
+          ('Dashboard',  url_for('dashboard.index')),
+          ('Reconcile',  url_for('recon.index')),
+          ('Credit',     url_for('credit.dashboard')),
+          ('Paytm',      url_for('paytm.index')),
+          ('Meters',     url_for('meters.index')),
+          ('Prices',     url_for('credit.prices')),
+          ('Settings',   url_for('credit.settings')),
+        ] %}
+        {% for label, href in nav_items %}
+        <a href="{{ href }}"
+           style="display:inline-block;padding:10px 14px;
+                  font-family:var(--font-sans);font-size:13px;font-weight:500;
+                  color:var(--ink-700);text-decoration:none;
+                  border-bottom:2px solid transparent;position:relative;">
+          {{ label }}
+          {% if label == 'Meters' and unread_notification_count > 0 %}
+          <span style="position:absolute;top:6px;right:4px;
+                       width:16px;height:16px;border-radius:50%;
+                       background:var(--error-600);color:var(--paper-50);
+                       font-family:var(--font-sans);font-size:9px;font-weight:700;
+                       display:flex;align-items:center;justify-content:center;">
             {{ unread_notification_count if unread_notification_count < 10 else '9+' }}
           </span>
           {% endif %}
         </a>
-        <a href="{{ url_for('credit.prices') }}"      class="px-4 py-3 hover:bg-indigo-500 block">Prices</a>
-        <a href="{{ url_for('credit.settings') }}"    class="px-4 py-3 hover:bg-indigo-500 block">Settings</a>
+        {% endfor %}
       </div>
     </div>
     {% endif %}
     {% endif %}
 
-    <main class="max-w-2xl mx-auto px-4 py-4">
+    <main style="max-width:680px;margin:0 auto;padding:16px 20px;">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="space-y-2 mb-4">
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
           {% for category, message in messages %}
             {% if category == 'error' %}
-              <div class="bg-red-900/60 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm">{{ message }}</div>
+              <div class="flash flash-error">{{ message }}</div>
             {% elif category == 'warning' %}
-              <div class="bg-yellow-900/60 border border-yellow-700/50 text-yellow-300 px-4 py-3 rounded-xl text-sm">{{ message }}</div>
+              <div class="flash flash-warning">{{ message }}</div>
             {% else %}
-              <div class="bg-green-900/60 border border-green-700/50 text-green-300 px-4 py-3 rounded-xl text-sm">{{ message }}</div>
+              <div class="flash flash-ok">{{ message }}</div>
             {% endif %}
           {% endfor %}
           </div>
