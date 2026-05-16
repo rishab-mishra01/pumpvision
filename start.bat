@@ -21,7 +21,7 @@ timeout /t 2 /nobreak >nul
 
 echo Starting Pumpvision...
 cd /d "%~dp0"
-start "Pumpvision" python -m flask --app wsgi:app run --host=0.0.0.0 --port=5000
+start "Pumpvision" "C:\Users\Rishab 2\AppData\Local\Python\bin\python.exe" -m flask --app wsgi:app run --host=0.0.0.0 --port=5000
 
 timeout /t 3 /nobreak >nul
 echo.

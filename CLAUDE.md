@@ -1,6 +1,7 @@
 > Always read this entire file before starting any task in this project.
-> Visual references for every UI screen live in `docs/screens/` — read them
-> before implementing any template.
+> Visual references for every UI screen live in `docs/screens/`. Read them before
+> implementing any template. For owner screens 10 and 15, the canonical visual
+> reference is `docs/design/Owner_Screens.html` — not the design system PNG files.
 
 # Pumpvision — Project Briefing
 
@@ -12,34 +13,29 @@ It is operated by the dealer's family (owner: father + son Rishab).
 
 The goal is to give the owners a 360-degree real-time view of:
 - Daily fuel sales and revenue (by product, by nozzle)
-- Stock levels and delivery reconciliation
+- Stock levels and delivery tracking
 - Payment collection breakdown (cash vs card/UPI vs credit vs fleet card)
 - Anomaly and theft detection
-- Delivery quality (fuel adulteration checks)
 - Credit customer ledger and invoicing
 
-The project is being built with vibe coding (no professional software engineering background).
-If successful, it will be sold as a SaaS product to other IndianOil (and potentially HPCL/BPCL) dealers.
+The project is built with vibe coding (no professional software engineering background).
+If successful, it will be sold as SaaS to other IndianOil (and HPCL/BPCL) dealers.
 
-**Competitive context:** PetroByte is the main mobile-capable competitor (cloud-based, Android app,
-~₹3,990/year). Pumpvision's differentiation: automated IRAS data ingestion (no manual entry),
-owner-first design (not operator-first), IOC/IRAS-native integration, and a distinct visual identity.
-The market has ~100,000 petrol pumps in India (90%+ public sector — IOC, BPCL, HPCL).
+**Competitive context:** PetroByte is the main mobile-capable competitor (~₹3,990/year).
+Pumpvision's differentiation: automated IRAS data ingestion, owner-first design, IOC-native
+integration, distinct visual identity. Market: ~100,000 petrol pumps in India.
 
 ---
 
 ## Version Control
 
-The project is under Git, hosted at **github.com/rishab-mishra01/pumpvision** (private repo).
-The default branch is `main`. Every push to `main` auto-deploys to Railway.
-
-`.gitignore` excludes secrets (`.env`), operational data (CSVs, Excel files), Python build artifacts,
-the database file, virtual environments, and OS junk.
+Hosted at **github.com/rishab-mishra01/pumpvision** (private). Default branch: `main`.
+Every push to `main` auto-deploys to Railway.
 
 Daily workflow:
 ```
 git add .
-git commit -m "Plain-English description of the change"
+git commit -m "Plain-English description"
 git push
 ```
 
@@ -49,92 +45,81 @@ git push
 
 | Item | Value |
 |------|-------|
-| Platform | Railway (paid tier, usage-based ~$10–15/month) |
+| Platform | Railway (paid tier) |
 | Live URL | `web-production-a1322.up.railway.app` |
-| Database | PostgreSQL on Railway (SQLite only for local dev) |
-| Auto-deploy | Every push to `main` triggers a redeploy |
-| PWA | Installed on phone — manifest.json + icons at `pumpvision/static/` |
+| Database | PostgreSQL on Railway (SQLite locally) |
+| Auto-deploy | Every push to `main` |
+| PWA | manifest.json + icons at `pumpvision/static/` |
 | Owner login | `admin` / `shreeadmin2026` |
 | Attendant login | `operations` / `shreeoperations2026` |
 
-**Customer data:** 29 customers + 66 vehicles migrated from local SQLite into production PostgreSQL (May 2026).
+29 customers + 66 vehicles migrated to production PostgreSQL (May 2026).
 
 ---
 
 ## Products Sold at This Outlet
 
-| Code | Full Name | Type |
-|------|-----------|------|
-| HS | High Speed Diesel (HSD) | Diesel |
-| MS | Motor Spirit | Petrol |
-| X2 | Xtra Premium 95 (XP95) | Premium Petrol |
-| XG | Xtra Green | Bio Diesel |
-| CNG | Compressed Natural Gas | Gas (deferred to Phase 2) |
+| Code | Full Name | Type | Data Source |
+|------|-----------|------|-------------|
+| HS | High Speed Diesel (HSD) | Diesel | IRAS ISS + nozzle map |
+| MS | Motor Spirit | Petrol | IRAS ISS + nozzle map |
+| X2 | Xtra Premium 95 (XP95) | Premium Petrol | IRAS ISS + nozzle map |
+| XG | Xtra Green | Bio Diesel | IRAS ISS + nozzle map |
+| CNG | Compressed Natural Gas | Gas | Attendant manual totalizer reading (kg) |
+
+**CNG is active — not deferred.** CNG does not appear in IRAS nozzle or ISS tables.
+Its data comes entirely from attendant shift close meter readings.
 
 ---
 
 ## Payment Modes
 
-- **Cash** — not recorded digitally; derived as a remainder
-- **Card + UPI** — processed via Paytm POS machines; data from Paytm for Business app
-- **Credit** — institutional/fleet customers; paper parchis being digitised
-- **Fleet card** — fourth payment mode; customer swipes fleet card (prepaid), value credited to IOCL depot account (not bank account). Settles monthly against fuel purchases from IOCL.
+- **Cash** — derived remainder; never recorded directly
+- **Card + UPI** — Paytm POS machines; data from Paytm scraper
+- **Credit** — fleet/institutional customers
+- **Fleet card** — IOCL depot account; data from SDMS PAD scraper — **no manager entry needed**
 
-### Revised Payment Reconciliation Formula
+### Payment Reconciliation Formula
 ```
-Gross fuel sales (litres × RSP)
+Gross fuel sales (liquid fuel litres × RSP  +  CNG kg × RSP/kg)
 + Lube sales (cash component)
 = Total revenue
 
 Total revenue
-= Cash collected (derived)
-+ Paytm (UPI + card)
-+ Credit extended to customers
-+ Fleet card swipes (settles to IOCL depot account)
+= Cash (derived)
++ Paytm UPI + Card
++ Credit extended
++ Fleet card (SDMS PAD data)
 
-Cash = Total revenue − Paytm − Credit − Fleet card   (derived, not measured)
+Cash = Total revenue − Paytm − Credit − Fleet card
 ```
 
-The IOCL depot account is a separate ledger:
-- Credits: fleet card swipes processed at the outlet
-- Debits: fuel purchases from IOCL depot
-- Balance: what IOCL owes you or you owe IOCL
-Depot account reconciliation is deferred to Phase 2 pending exploration of settlement report format.
+Fleet card swipes settle to the IOCL depot account (separate ledger from bank account).
+Depot account reconciliation deferred to Stage 3.
 
 ---
 
 ## Three-User Model
 
-The app serves three distinct user roles via a common Flask application. All share one codebase,
-one database, one deployment. Role is determined at login.
+One Flask app, one DB, one deployment. Role set at login via `users.role`.
 
-### Owner (Rishab / father)
-**Primary goal:** Financial control and strategic oversight.
-**Interface:** Executive dashboard, reconciliation, credit management, intelligence layer.
-**Actions:** View daily P&L, review reconciliation, manage credit customers and limits,
-confirm bank transfer payments, view all alerts, generate invoices (via owner copy).
+### Owner (father / Rishab)
+Dashboard, Daily Summary, Tanks, Credit management.
+Reviews daily P&L, browses historical summaries, manages credit customers,
+confirms bank transfer payments.
 
-### Manager (outlet manager)
-**Primary goal:** Daily operational accountability and cash management.
-**Interface:** Shift-contextual task checklist — tells him exactly what's pending each day.
-**Actions:** Log lube sales (cash or credit), log expenses, record fleet card swipes,
-record payments received from credit customers, generate invoices.
+### Manager
+Shift-contextual daily task checklist. Prescriptive — app tells him what to do.
+**Stage 1:** Log expenses · Record payments received.
+**Stage 2:** Log lube sales · Generate invoices.
+**Does not log fleet card swipes** — fleet data comes from SDMS PAD scraper.
 
-The manager is typically an unskilled operator who's been at the outlet long enough to be
-promoted. The interface must be prescriptive — it tells him what to do, not the other way around.
-
-### Attendant (pump attendant)
-**Primary goal:** Field operations — logging credit fuel sales and shift close readings.
-**Interface:** Two-card home, credit sale flow, shift close flow.
-**Actions:** Log credit fuel sales, enter shift close totalizer readings.
-
-### Auth Architecture Note
-User is DB-backed (converted in Sprint 0). Passwords seeded from `.env` vars at startup via
-upsert pattern. Safe to redeploy on non-empty DB.
+### Attendant
+Credit sale flow · Shift close flow (including CNG totalizer reading).
 
 ---
 
-## Hardware at the Outlet (Physical Layout)
+## Hardware at the Outlet
 
 ### Underground Tanks
 | Tank | Product | Capacity |
@@ -144,405 +129,326 @@ upsert pattern. Safe to redeploy on non-empty DB.
 | 3 | X2 | 10,000 L |
 | 4 | XG | 20,000 L |
 
-All tanks have GVR MAG PLUS ATG probes. CNG has no tank in this system.
-Tank 4 (XG) ATG data is unreliable — probe appears uncalibrated for XG.
-ATG data refreshes every 30 minutes — that is the freshest the Stock screen can be.
+All tanks: GVR MAG PLUS ATG probes. ATG refreshes every 30 minutes.
+Tank 4 (XG): probe unreliable — data stored but flagged in UI.
+CNG has no underground tank.
 
-### Dispensing Units (DUs) and Nozzles
-| DU | Pump | Nozzle | Product | Tank | Attendant Name |
-|----|------|--------|---------|------|---------------|
+### Liquid Fuel Nozzles
+| DU | Pump | Nozzle | Product | Tank | Label |
+|----|------|--------|---------|------|-------|
 | 9 (MIDCO) | 1 | 7 | HS | 1 | HS1 |
-| 9 (MIDCO) | 2 | 11 | XG | 4 | XG (only nozzle) |
-| 14 (MIDCO) | 3 | 17 | X2 | 3 | X2 (only nozzle) |
+| 9 (MIDCO) | 2 | 11 | XG | 4 | XG |
+| 14 (MIDCO) | 3 | 17 | X2 | 3 | X2 |
 | 14 (MIDCO) | 4 | 18 | MS | 2 | MS1 |
 | 15 (GILBARCO) | 5 | 15 | MS | 2 | MS2 |
 | 15 (GILBARCO) | 6 | 16 | HS | 1 | HS2 |
 
-Only DU 9 (Pumps 1 & 2) has receipt printers. NPND interlock is disabled on all pumps.
+Only DU 9 has receipt printers. NPND interlock disabled on all pumps.
 
-**Attendant Nomenclature (locked).** Attendant UI uses HS1/HS2/MS1/MS2 as primary nozzle
-identifiers. DB stores nozzle numbers. X2 and XG have only one nozzle each, so no suffix.
+### CNG Dispenser
+One nozzle. Not in IRAS. No ISS records. Unit: kg. RSP: static (`cng_rsp_per_kg` in `app_settings`).
+Attendant label: **CNG** (no suffix — single nozzle).
+No pump test deduction for CNG.
+
+---
+
+## CNG — Full Implementation Spec
+
+### How it works
+The attendant enters the CNG meter reading (in kg) at shift close, exactly like liquid fuel.
+Opening reading for day N = closing reading from day N−1. First-ever entry: manual opening.
+
+### Schema: `cng_shift_readings` ← NEW (Stage 1)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | |
+| op_date | Date NOT NULL | Operational date |
+| opening_reading | Float NOT NULL | Meter kg at 06:00 |
+| closing_reading | Float NOT NULL | Meter kg at shift close |
+| kg_sold | Float NOT NULL | closing − opening (computed) |
+| rsp_per_kg | Float NOT NULL | Snapshot of `cng_rsp_per_kg` at entry time |
+| revenue | Float NOT NULL | kg_sold × rsp_per_kg |
+| submitted_by | Integer FK → users | |
+| created_at | DateTime | |
+
+### RSP
+`app_settings` table, key: `cng_rsp_per_kg`. Parse as float. Updated manually when price changes.
+No IRAS price lookup. CNG RSP does not appear in the Price (PRM) table.
+
+### Shift Close Flow
+CNG appears as a 5th product tile on the product selection screen.
+Selecting CNG → numpad directly (no DU selection step, same pattern as X2/XG).
+Numpad unit label: **kg** (not L). Delta label: **kg sold**.
+CNG row appears in shift close summary. Invalid if closing < opening → warn-100 block.
+
+### Daily Summary
+CNG row in FUEL SALES section:
+`CNG  [kg_sold] kg  ×  ₹[rsp]/kg  =  ₹[revenue]`
+Included in GROSS FUEL SALES subtotal.
 
 ---
 
 ## Data Sources
 
-### Primary Source: IRAS Portal
-**URL:** https://iras.iocliras.in
-**Credentials:** stored in `.env` file (never hardcode in scripts)
-**Automation:** Playwright Python scripts under `scrapers/`
+### Primary: IRAS Portal
+**URL:** https://iras.iocliras.in · **Creds:** `.env` · **Automation:** Playwright (`scrapers/`)
 
-#### Key constraint: ISS tab exports max 30 minutes of data at a time.
+ISS tab: 30-min export limit. Boundary mode (built) gives 06:00 totalizer readings.
+Full 48-window scrape deferred to Stage 3.
 
-#### ISS usage strategy
-- **Boundary mode** (built) gives 06:00 totalizer readings per nozzle — sufficient for reconciliation.
-- **Full 48-window scrape** deferred to Phase 2.
+#### IRAS Tables Used
+| Tab | Sheet | Contents | Freq |
+|-----|-------|----------|------|
+| FCC > Product(PDM) | Product(PDM) | Code → name | Static |
+| FCC > Tank(TKM) | Tank | Capacity, ATG details | Static |
+| FCC > Pump | Pump | DU config | Static |
+| FCC > Nozzle | Nozzle | Nozzle → pump → tank → product | Static |
+| FCC > Price(PRM) | Price(PDM) | RSP per liquid fuel product | Daily 06:00 |
+| FCC > Issue(ISS) | Issue(ISS) | Every liquid fuel transaction | Per transaction |
+| FCC > Stock | Stock | ATG tank level snapshots | Every 30 min |
+| FCC > Shift Totalizer | Shift Totalizer Record | Nozzle open/close totalizers | Daily |
+| RDB > Invoice | RDB SAP Invoice | Depot invoice + density | Per delivery |
+| FCC > SAP Invoice | SAP Invoice | Chamber breakdown, truck no. | Per delivery |
+| FCC > Receipt | TT Receipt | Decanting: ATG pre/post | Per delivery |
+| FCC > Receipt Density | Receipt Density Records | Hydrometer per chamber | Per delivery |
+| FCC > Density Records | Density Records | Post-decant ATG density | Per delivery |
 
-### IRAS Tables We Use
+### ATG Scraper — Stage 1 (build before launch)
+Scrapes IRAS Stock tab. Stores snapshots in `tank_readings` table every 30 minutes.
+Integrated into `daily_scrape.py` as Job 5.
+Follow the same Playwright pattern as existing scrapers.
+XG data: store but set `is_reliable = False`.
 
-#### Static Reference Tables
-| Tab | Sheet | Contents |
-|-----|-------|----------|
-| FCC Data > Product(PDM) | Product(PDM) | Product code → name mapping |
-| FCC Data > Tank(TKM) | Tank | Tank config, capacity, ATG probe details |
-| FCC Data > Pump | Pump | DU make/model, pump config |
-| FCC Data > Nozzle | Nozzle | Nozzle → pump → tank → product mapping |
+### Paytm for Business
+`scrapers/paytm_exporter.py` — headless Playwright, stealth. Job 0 in `daily_scrape.py`.
+Downloads previous operational day's transaction CSV from `dashboard.paytm.com`.
+Session: `scrapers/paytm_state.json`.
 
-#### Daily Operations Tables
-| Tab | Sheet | Contents | Frequency |
-|-----|-------|----------|-----------| 
-| FCC Data > Price(PRM) | Price(PDM) | Daily RSP per product (IOC-pushed at 06:00) | Daily |
-| FCC Data > Issue(ISS) | Issue(ISS) | Every fuel transaction (30-min export limit) | Per transaction |
-| FCC Data > Stock | Stock | ATG tank level snapshots | Every 30 min |
-| FCC Data > Shift Totalizer | Shift Totalizer Record | Daily nozzle totalizer open/close (midnight boundary) | Daily |
-
-#### Delivery Tables
-| Tab | Sheet | Contents |
-|-----|-------|----------|
-| RDB Data > Invoice | RDB SAP Invoice | Depot invoice: purchase amount + depot density |
-| FCC Data > SAP Invoice | SAP Invoice | Delivery summary: chamber breakdown, truck no |
-| FCC Data > Receipt | TT Receipt | Actual decanting: ATG-measured pre/post tank levels |
-| FCC Data > Receipt Density | Receipt Density Records | Employee hydrometer readings per chamber |
-| FCC Data > Density Records | Density Records | Post-decant ATG density in tank |
-
-### Secondary Source: Paytm for Business
-- **Transaction report** — individual UPI and card transactions per operational day
-- **Settlement report** — actual amounts settled into bank account
-
-**Current (Sprint 1):** `scrapers/paytm_exporter.py` — Playwright scraper that downloads the
-previous operational day's transaction CSV (06:00 yesterday → 05:59 today) from
-`dashboard.paytm.com`. Runs headless with stealth mode. Integrated into `daily_scrape.py`
-as Job 0. Session persisted via `scrapers/paytm_state.json` (JSON cookie store).
-
-**Future (Sprint 2):** Automated ingestion via email watcher — Paytm exports CSVs to email,
-cloud server watches inbox, detects Paytm emails, ingests automatically. Eliminates manual
-scraping.
+### SDMS PAD Portal
+`scrapers/sdms_pad_exporter.py` — headless Playwright, Claude Vision CAPTCHA. Job 4.
+Fleet card posting totals + CSV. Session: `scrapers/sdms_state.json`.
 
 ---
 
 ## Critical Business Logic
 
-### The Operational Day is 06:00 to 05:59 (not midnight to midnight)
-RSP records are effective from 06:00:00 to 05:59:59 the next day. Manual reconciliation happens
-on this 06:00-to-06:00 boundary. Shift Totalizer records midnight-to-midnight — this mismatch
-must be handled.
+### Operational Day: 06:00 to 05:59
+RSPs effective 06:00:00 → 05:59:59 next day. Shift Totalizer is midnight-to-midnight.
+Boundary mode resolves the mismatch.
 
-### How We Resolve the 6AM Boundary Problem
-Find the last ISS transaction before 06:00 per nozzle. Its `Totalizer End` = the 06:00 opening
-reading for the operational day.
-
-**Boundary mode algorithm:**
-1. Run XG Shift Totalizer pre-check (resolves nozzle 11 without ISS search).
-2. ISS backward search from 05:30–06:00 for 5 active nozzles: 7, 15, 16, 17, 18.
+### Boundary Mode Algorithm
+1. XG pre-check: nozzle 11 movement ≤ 7L → carry forward, skip ISS. > 7L → ISS search.
+2. ISS backward search 05:30–06:00 for nozzles 7, 15, 16, 17, 18.
 3. Stop when all 5 resolved or 48 windows checked.
+XG threshold: 5L pump test + 2L buffer = 7L.
 
-The step-0 window (06:00–06:30) is skipped — it belongs to the new shift.
-
-### XG (Nozzle 11) Handling — Boundary Mode Exemption
-**Pre-check algorithm:**
-1. Read nozzle 11 movement from Shift Totalizer: `xg_movement = close - open`
-2. If xg_movement ≤ 7L → carry forward previous totalizer, XG net sales = 0, no ISS search.
-3. If xg_movement > 7L → run ISS search, deduct 5L pump test from net sales.
-
-Threshold: 5L pump test + 2L buffer = 7L. Outlet runs 24x7 but no XG sold midnight–06:00.
-
-### Reconciliation Formulas
-
-**Stock reconciliation (per product per day):**
-```
-Opening Stock (ATG at 06:00)
-+ Deliveries Received (TT Receipt, Net Qty Decanted)
-- Sales Volume (Totalizer Close − Totalizer Open at 06:00)
-= Expected Closing Stock
-
-Actual Closing Stock (ATG at 06:00 next day)
-vs Expected = Stock Variance (flag if > threshold)
-```
-Requires ATG scraper (not yet built) + delivery scraper (not yet built).
-
-**Payment reconciliation (per day):**
-See revised formula in Payment Modes section above.
-
-### Price Lookup Logic
-Never hardcode prices. Join transaction datetime to Price table:
-- Match Product Code
-- Match where DateTime falls between Effective Date From (06:00) and To (05:59:59 next day)
+### Price Lookup (liquid fuel only)
+Never hardcode. Join transaction datetime to Price table:
+match Product Code + datetime in [Effective From 06:00, Effective To 05:59:59].
+CNG: read from `app_settings.cng_rsp_per_kg` — not from Price table.
 
 ### Totalizer Facts
-- Hardware odometers — cumulative litres since installation. Only go up, never reset.
-- Tamper-evident: gap in sequence = unreported dispensing.
-- Closing reading must always be greater than opening.
+Hardware odometers, cumulative since installation. Only increase, never reset.
+Closing > opening always. Gap = unreported dispensing (tamper signal).
+
+### Pump Tests (liquid fuel only, not CNG)
+5L/nozzle every ~08:20, all 6 liquid nozzles. ISS type "Pump Test (105)".
+Fuel returns to tank — not a sale. Deducted from totalizer diff before net sales.
 
 ### Fuel Adulteration Check
-Three-stage density chain per delivery:
-1. Depot density → RDB SAP Invoice
-2. Tanker chamber density → Receipt Density Records (employee hydrometer)
-3. Post-decant tank density → Density Records + TT Receipt
+Depot density (RDB Invoice) → Tanker hydrometer (Receipt Density) → Post-decant (Density Records).
+Alert if depot density vs hydrometer delta ≥ 5%.
 
-Alert rule: delta between depot density and employee hydrometer ≥ 5% → flag.
+### `get_operational_date()`
+`services/operational.py`. Before 06:00 → yesterday. At/after 06:00 → today.
+Used **only** in attendant home nudge.
+Shift close uses `_shift_op_date() = date.today() − 1` (always yesterday). Do not conflate.
 
-### Pump Tests
-- 5L per nozzle every morning, all 6 nozzles, typically ~08:20
-- ISS type: "Pump Test (105)" — fuel goes back into tank, not a sale
-- Deducted from totalizer diff before net sales calculation
-- Totals show "incl. 5L pump test/nozzle" — all figures are net
-
-### Operational Date Function
-`get_operational_date()` in `services/operational.py`:
-- Before 06:00 → returns yesterday (shift still open)
-- At/after 06:00 → returns today (new shift started)
-Used only in attendant home nudge. **Do not use in shift close routes** — those use
-`_shift_op_date() = date.today() - 1` (always yesterday, the shift being closed).
-Conflating these caused a critical bug.
+### Stock Watch Calculation (owner dashboard)
+Rolling 7-day avg daily consumption per product from ISS data.
+Days remaining = current ATG volume ÷ avg daily consumption.
+Order-by date = today + days_remaining − 2 (2-day depot lead time).
+Show stock watch card only if any product ≤ 7 days. Hidden if all > 7 days.
 
 ---
 
-## Lube Products Module
+## Lube Products (44 SKUs)
 
-Lubricants are sold at the outlet counter. They can be sold for cash (dominant) or on credit.
-Credit lube sales add to the customer's outstanding balance like credit fuel sales.
+Seeded in `lube_products`. Cash or credit sales. Credit adds to customer balance.
+Source: pump_stock_10_04_2026.pdf + godam_stock_10_04_2026.pdf.
+Sale rates in `lube_products.sale_rate`.
 
-### The Catalogue (44 SKUs — seeded in `lube_products` table)
-
-**Engine Oils**
-2T Supreme 1L · 2T Tractor Oil MG 20W40 7.5L · 4T Green Oil 1L · 4T Green Oil 900ml ·
-4T Oil 1L · Honda Josh 900ml · Kool Plus 1L · Premium 15W40 CF4 1L · Premium 15W40 10L ·
-Premium 15W40 15L · Premium 15W40 20L · Pride TC 15W40 7.5L · Pride TC 15W40 10L ·
-Pride XL Plus 15W40 10L · Pride XL Plus 15W40 15L · Pride XL Plus 15W40 20L ·
-Servo FLT CF4 15W40 1L · Servo FLT CF4 15W40 7.5L · Servo FLT CF4 15W40 15L ·
-Servo SMG 20W40 5L · Servo SMG 20W40 7.5L · Super 20W40 MG 500ml · Super 20W40 MG 1L ·
-Super 20W40 MG 10L · Super 20W40 MG 20L · Fleet CF4 15W40 1L · Fleet CF4 15W40 5L ·
-Fleet Supreme CF4 Plus 15W40 15L
-
-**Gear Oils & Hydraulic**
-Gear HP 90 1L · Gear HP 90 5L · Gear HP 90 20L · Hydra Shakti 68 26L ·
-System 46 26L · System 46 20L · System 68 20L (bucket) · System 68 20L (hydraulic) · System 68 26L
-
-**Transmission**
-Transfluid A 1L
-
-**Brake Fluid**
-Brake Oil 250ml · Brake Oil 500ml
-
-**Grease**
-Grease MP3 1kg · Grease MP3 2kg
-
-**Urea / AdBlue**
-IOC ClearBlue 20L · Servo Clear Blue 20L
-
-Source: pump_stock_10_04_2026.pdf + godam_stock_10_04_2026.pdf (deduplicated).
-Sale rates per SKU are in those files and should be seeded into `lube_products.sale_rate`.
+**Stage 1:** Lube manager flow NOT built yet. Show "—" / "Logging not active" in
+Daily Summary lube row until Stage 2 ships.
 
 ---
 
-## Schema — New Tables (Sprint 0 additions)
+## Schema
 
-### `users` (DB-backed — replaces in-memory User)
+### `users`
+username · password_hash (bcrypt) · role (owner/manager/attendant) · first_name ·
+is_active · created_at. Seed via upsert at startup from `.env`.
+
+### `cng_shift_readings` ✓ built (migration `2fc50a7d52a6`)
+Full spec in CNG section above.
+
+### `tank_readings` ✓ built (migration `2fc50a7d52a6`)
 | Column | Type | Notes |
 |--------|------|-------|
 | id | Integer PK | |
-| username | String NOT NULL UNIQUE | |
-| password_hash | String NOT NULL | bcrypt |
-| role | String NOT NULL | 'owner' / 'manager' / 'attendant' |
-| first_name | String | For greeting on home screen |
-| is_active | Boolean DEFAULT True | |
+| scraped_at | DateTime NOT NULL | ATG snapshot timestamp |
+| tank_id | Integer NOT NULL | 1–4 |
+| product | String NOT NULL | HS / MS / X2 / XG |
+| level_mm | Float | Raw ATG level |
+| volume_litres | Float | Computed volume |
+| capacity_litres | Float | Tank capacity |
+| pct_full | Float | volume / capacity × 100 |
+| is_reliable | Boolean DEFAULT True | False for XG |
 | created_at | DateTime | |
 
-Seed at startup: owner (`admin`), attendant (`operations`), and manager account.
-Passwords from `.env` env vars — never hardcode.
-Seed uses upsert pattern — checks if username exists before inserting. Safe to
-run on non-empty DB. Adding new users to the seed block will always work on redeploy.
-
-### `lube_products` (seeded catalogue)
-| Column | Type | Notes |
-|--------|------|-------|
-| id | Integer PK | |
-| name | String NOT NULL | e.g. "Servo FLT CF4 15W40" |
-| pack_size | String NOT NULL | e.g. "1L", "7.5L", "900ml" |
-| unit | String DEFAULT 'unit' | |
-| sale_rate | Float NOT NULL | From stock file |
-| is_active | Boolean DEFAULT True | |
+### `lube_products` (seeded)
+name · pack_size · unit · sale_rate · is_active
 
 ### `lube_transactions`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | Integer PK | |
-| product_id | Integer FK → lube_products | |
-| quantity | Float NOT NULL | |
-| unit_price | Float NOT NULL | Sale rate at time of transaction |
-| amount | Float NOT NULL | quantity × unit_price |
-| payment_mode | String NOT NULL | 'cash' / 'credit' |
-| customer_id | Integer FK → customers NULLABLE | Only if credit |
-| op_date | Date NOT NULL | Operational date |
-| transaction_time | DateTime NOT NULL | |
-| logged_by | Integer FK → users | Manager who logged it |
-| created_at | DateTime | |
+product_id · quantity · unit_price · amount · payment_mode · customer_id (nullable) ·
+op_date · transaction_time · logged_by · created_at
 
 ### `expenses`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | Integer PK | |
-| amount | Float NOT NULL | |
-| category | String NOT NULL | 'Staff' / 'Maintenance' / 'Utilities' / 'Supplies' / 'Misc' |
-| description | String | Free text |
-| op_date | Date NOT NULL | |
-| logged_by | Integer FK → users | |
-| created_at | DateTime | |
-
-Categories are configurable via `app_settings` table (existing).
+amount · category · description · op_date · logged_by · created_at
+Categories: Staff / Maintenance / Utilities / Supplies / Misc (configurable via `app_settings`)
 
 ### `fleet_card_transactions`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | Integer PK | |
-| card_identifier | String NOT NULL | Free text — card number or customer name |
-| amount | Float NOT NULL | Value of the swipe |
-| op_date | Date NOT NULL | |
-| transaction_time | DateTime | |
-| logged_by | Integer FK → users | Manager |
-| notes | String | |
-| created_at | DateTime | |
+card_identifier · amount · op_date · transaction_time · logged_by · notes · created_at
+**Note:** Originally built for manager manual entry. Fleet data now comes from SDMS PAD
+scraper. Do not build a manager UI for fleet card entry. Table may be repurposed Stage 2.
 
-Fleet card swipes credit the IOCL depot account, not the bank account.
-Depot account reconciliation deferred to Phase 2.
-
-### `payments_received` — update existing table
-Add columns:
-- `status` String DEFAULT 'confirmed': 'confirmed' / 'pending_verification' / 'flagged'
-- `verified_by` Integer FK → users NULLABLE (owner who confirmed)
-- `verified_at` DateTime NULLABLE
-
-**Logic:** Cash and cheque payments → status = 'confirmed' immediately (manager has physical evidence).
-Bank transfers → status = 'pending_verification' until owner confirms against bank statement.
-Owner sees pending bank transfers in their Action Center / dashboard. On confirm → status = 'confirmed',
-customer balance updates. On flag → status = 'flagged', manager is notified.
+### `payments_received` (extended)
+Added: status (confirmed / pending_verification / flagged) · verified_by (FK users, nullable)
+· verified_at (nullable).
+Cash/cheque → confirmed immediately. Bank transfer → pending_verification → owner confirms.
 
 ---
 
-## Manager Workflows (Sprint 1)
+## Manager Workflows
 
-### Manager Home — Shift-Contextual Checklist
-The manager home screen is a **daily task checklist** that resets every operational day.
-It tells the manager exactly what's pending, not what's possible.
+### Stage 1 — Build Now
 
-Checklist items populate dynamically based on events and completion state:
-
-**Always present:**
-- Log today's expenses (amber if not yet logged, green if done)
-- Upload Paytm report (until automated ingestion is built)
-
-**Triggered by events:**
-- Fleet card swipe — if a fleet customer came in (manager logs it immediately)
-- Record payment received — per customer who said they'd pay today
-
-**Periodic (end of month):**
-- Generate invoices for customers with uninvoiced transactions
-
-**Carried from previous day if not done:**
-- Any unpaid / un-invoiced items from yesterday surface as overdue
-
-Each row is tappable, routes directly to the relevant form. The manager cannot miss
-something because the app tells them explicitly what is incomplete.
-
-### Manager Actions
-
-**Log lube sale:**
-- Select product from `lube_products` catalogue
-- Enter quantity
-- Unit price pre-filled from catalogue (editable)
-- Toggle: Cash or Credit
-- If Credit → select customer (same customer picker as attendant credit flow)
-- Submit → creates `lube_transaction`, updates `customers.outstanding_balance` if credit
+**Manager home (daily checklist):**
+Resets every operational day. Prescriptive — not a nav menu.
+Items: Log expenses (warn if not done, ok if done) · Record payments per customer
+· Overdue items from previous day.
 
 **Log expense:**
-- Amount, category (dropdown from seeded categories), description (free text), date (defaults today)
-- Submit → creates `expenses` record
-
-**Log fleet card swipe:**
-- Card identifier (free text), amount, optional notes
-- Submit → creates `fleet_card_transactions` record
+Amount · category (dropdown) · description · date (defaults today) → `expenses`
 
 **Record payment received:**
-- Select customer
-- Amount, payment mode (Cash / Cheque / Bank Transfer)
-- Reference number (for cheque/bank transfer)
-- Cash/Cheque → status = confirmed immediately
-- Bank Transfer → status = pending_verification (owner must confirm)
-- Confirmed payments → update customer outstanding_balance atomically
+Customer picker · amount · mode (Cash / Cheque / Bank Transfer) · reference number
+Cash/Cheque → confirmed, balance updated immediately
+Bank Transfer → pending_verification, owner must confirm
+
+### Stage 2 — After Live Testing
+
+**Log lube sale:**
+Catalogue picker · quantity · unit price (pre-filled, editable) · Cash or Credit
+If Credit → customer picker → `lube_transaction`, balance updated
 
 **Generate invoice:**
-- Select customer
-- System shows uninvoiced credit transactions for the period
-- Confirm total → generate PDF → mark transactions as invoiced
-- Owner gets an alert in their Action Center: "Invoice generated for [customer] — review"
+Customer picker → show uninvoiced credit transactions → confirm → ReportLab PDF
+→ mark transactions as invoiced
 
-### Intelligence Layer (Owner receives)
-The owner's Action Center / dashboard surfaces accountability signals:
-- "X bank transfers pending your verification" (with date and customer details)
-- "Invoice generated for [customer] by [manager] — [date]" (informational)
-- "[Customer] payment not recorded in [N] days — follow up" (based on payment terms)
-- "No expenses logged today" (if manager hasn't logged by a configurable time)
-- Credit alerts: customers over utilization threshold
+### Intelligence Signals (owner receives on dashboard)
+- "X bank transfers pending verification"
+- "[Customer] payment not recorded in N days"
+- "No expenses logged today"
+- Credit utilisation alerts
 
 ---
 
-## Architecture Principles
+## Build Stages
+
+Sprint 1/2/3 naming retired. Use Stage 1/2/3.
+
+### Stage 1 — Live Testing (current priority)
+
+| Task | Status |
+|------|--------|
+| ATG scraper (`iras_atg_exporter.py`, `tank_readings` table, Job 5) | Build now |
+| Owner dashboard (screen 10, wire to real data) | ✓ Done |
+| Owner daily summary (screen 15, wire to real data) | ✓ Done |
+| Tanks screen (screen 11, wire to `tank_readings`) | Build now |
+| Manager home checklist | Build now |
+| Manager log expense | Build now |
+| Manager record payment | Build now |
+| CNG shift close (`cng_shift_readings` table, attendant flow) | ✓ Done |
+| Credit screens polish (12, 13, 14) | Build now |
+
+### Stage 2 — Complete Operational Layer
+
+| Task | Notes |
+|------|-------|
+| Manager lube sale | Full catalogue, cash or credit |
+| Manager generate invoice | ReportLab PDF |
+| Owner bank transfer verification | Confirm / flag pending transfers |
+| Automated Paytm ingestion | Email watcher replaces scraper |
+
+### Stage 3 — Infrastructure and Advanced
+
+| Task | Notes |
+|------|-------|
+| Full ISS 48-window scrape | Intraday sales data |
+| Delivery receipt scraper | TT Receipt, SAP Invoice, density chain |
+| Stock variance screen | Requires ATG + delivery data |
+| Anomaly detection | Tamper signals, adulteration flags |
+| Depot account reconciliation | Fleet card vs fuel purchase ledger |
+| CNG RSP edit UI | Owner settings screen |
+| Phase 2 features | P&L, HR, compliance, daybook |
+
+---
+
+## Architecture
 
 ### Single Tree, Three Branches
-One Flask app, one database, one deployment. Three roles via `users.role`.
+One Flask app, one DB, one deployment. Three roles via `users.role`.
 
-Build order:
-1. Foundation ✓ Done
-2. Attendant branch ✓ Done
-3. Sprint 0: three-user foundation ✓ Done
-4. Sprint 1: manager operational flows ← CURRENT
-5. Sprint 2: ATG scraper + automated Paytm ingestion
-6. Sprint 3: owner branch UI (new design system applied)
-
-Design system implementation (running in parallel with Sprint 1):
-- Phase 1 ✓ — design-system.css + macros/ui.html + base.html updated
-- Phase 2 ✓ — login screen with drum-roll animation
+### Design System Phases (historical reference)
+- Phase 1 ✓ — design-system.css + macros/ui.html + base.html
+- Phase 2 ✓ — login drum-roll animation
 - Phase 3 ✓ — all 9 attendant screens reskinned
-- Phase 4 — manager screens (build in new design from the start)
-- Phase 5 — owner screens (after Sprint 2)
+- Phase 4 — manager screens (new design from start)
+- Phase 5 — owner screens (`Owner_Screens.html` as visual reference)
 
 ### Cloud Deployment
-- Production: Railway (paid tier), PostgreSQL
-- Mobile-first PWA, runs in phone browser
-- Bind to `0.0.0.0` in dev for local network phone testing
-- Auto-deploys on every push to `main`
+Railway (paid tier), PostgreSQL. Mobile-first PWA. Bind `0.0.0.0` in dev.
+Auto-deploys on push to `main`.
 
-### SQLite Locally, PostgreSQL-Ready
-SQLAlchemy ORM only (no raw SQL). `DATABASE_URL` env var switches backend.
+### Local Dev
+`start.bat` uses full Python path: `C:\Users\Rishab 2\AppData\Local\Python\bin\python.exe`
+(Windows Store `python` stub does not work.) Local login: `rishab` / `changeme`.
+
+### Database
+SQLAlchemy ORM only — no raw SQL. `DATABASE_URL` env var switches SQLite ↔ PostgreSQL.
 Flask-Migrate / Alembic for all schema changes.
 
 ---
 
 ## Tech Stack
 
-### Web App
 - **Backend:** Python / Flask (app factory, blueprints)
 - **ORM:** SQLAlchemy + Flask-Migrate
-- **Database:** SQLite locally → PostgreSQL on Railway
 - **Frontend:** Jinja2 + Tailwind CSS (mobile-first)
 - **Auth:** Flask-Login (session-based)
 - **PDF:** ReportLab (NOT WeasyPrint — Windows incompatibility)
-- **Deployment:** Railway (paid tier)
-
-### Scraper
-- **Language:** Python 3.14
-- **Automation:** Playwright (async)
-- **CAPTCHA:** Claude Vision API (PoC at `scrapers/captcha_test.py`)
-- **Modes:** boundary (built), full (Phase 2)
+- **Scraping:** Playwright async + Claude Vision API (CAPTCHA)
+- **Deployment:** Railway
 
 ### Environment Variables
 ```
 IRAS_USERNAME=206858
 IRAS_PASSWORD=<see .env>
 IRAS_URL=https://iras.iocliras.in
-ANTHROPIC_API_KEY=<for CAPTCHA solving>
+ANTHROPIC_API_KEY=<CAPTCHA solving>
 SECRET_KEY=<random string>
-DATABASE_URL=sqlite:///pumpvision.db  (overridden to postgres:// on Railway)
+DATABASE_URL=sqlite:///pumpvision.db
 OUTPUT_FOLDER=C:\IRAS_Data
 OWNER_USERNAME=admin
 OWNER_PASSWORD=shreeadmin2026
@@ -550,272 +456,285 @@ ATTENDANT_USERNAME=operations
 ATTENDANT_PASSWORD=shreeoperations2026
 MANAGER_USERNAME=<see .env>
 MANAGER_PASSWORD=<see .env>
-PAYTM_EMAIL=<email registered with Paytm Business>
+PAYTM_EMAIL=<see .env>
 PAYTM_PASSWORD=<see .env>
-PAYTM_STATE_PATH=scrapers/paytm_state.json  (optional, default as shown)
-PAYTM_HEADLESS=false  (omit or set true for headless; false for headed/debug)
+PAYTM_STATE_PATH=scrapers/paytm_state.json
+PAYTM_HEADLESS=false
 SDMS_USERNAME=<see .env>
 SDMS_PASSWORD=<see .env>
-SDMS_STATE_PATH=scrapers/sdms_state.json  (optional, default as shown)
+SDMS_STATE_PATH=scrapers/sdms_state.json
 ```
 
 ---
 
 ## Design System
 
-### Pumpvision Design System v0.1 — Active (Phases 1–3 complete)
+### Active Implementation
+Full spec: `docs/design/Pumpvision_Design_System.html`
+CSS: `pumpvision/static/css/design-system.css`
+Macros: `pumpvision/templates/macros/ui.html`
 
-Full spec lives in `docs/design/Pumpvision_Design_System.html`.
-Implementation: `pumpvision/static/css/design-system.css` + `pumpvision/templates/macros/ui.html`.
+**Owner screens 10 and 15 deviate from the v0.1 design system.**
+Use `docs/design/Owner_Screens.html` as the sole visual and CSS reference for those
+two screens. Extract all tokens, colors, and component styles from that file directly.
+Login and attendant screens retain the original design system.
 
-**Brand philosophy:** "Pulling something stuck in the past into modernity, without the clean break."
-The interface borrows the language of the totalizer, the receipt, and the shift register.
-Light, warm, precise. Made to be read in sunlight, used with one hand, trusted at the end of every shift.
-
-**Wordmark:** Option C — Major Mono Display lowercase "pump**vision**" with saffron square LED left of text.
-```html
-<span class="app-mark">
-  <span class="app-mark-square"></span>
-  pump<span style="color:var(--saffron-600)">vision</span>
-</span>
-```
-
-**Color palette (CSS custom properties in design-system.css):**
-- `--paper-*` (50–500): warm substrate — backgrounds, card fills
-- `--ink-*` (500–900): navy — structure, numbers, rules
-- `--saffron-*` (100–700): energy accent — one primary CTA per screen, precision digits
+### Design Tokens (design-system.css, used for login + attendant)
+- `--paper-*` (50–500): warm substrate
+- `--ink-*` (500–900): navy
+- `--saffron-*` (100–700): energy accent — one CTA per screen max
 - `--ok-*` / `--warn-*` / `--error-*`: status states
-- Product layer (fuel grades only — NOT for primary UI):
-  - HS: `--hsd-600` forest green / `--hsd-100` tint
-  - MS: `--ms-600` brick red / `--ms-100` tint
-  - X2: `--x2-600` purple / `--x2-100` tint
-  - XG: `--xg-600` teal / `--xg-100` tint
+- Product layer: `--hsd-*` (green) · `--ms-*` (brick red) · `--x2-*` (purple) · `--xg-*` (teal)
 
-**Typography:**
-- **Newsreader** — serif headings / editorial. Weights 300, 400, 500. Never bold, never italic in UI.
-  (Exception: login "Welcome back" uses italic intentionally.)
-- **IBM Plex Sans** — all UI labels, body, nav. Weights 400, 500, 600.
-- **JetBrains Mono** — all operational numbers. Always `font-variant-numeric: tabular-nums`.
-- **Major Mono Display** — wordmark only. No other use.
+### Typography
+- **Newsreader** — serif headings (login + attendant)
+- **IBM Plex Sans** — UI labels, body, nav
+- **JetBrains Mono** — all operational numbers (`font-variant-numeric: tabular-nums`)
+- **Major Mono Display** — wordmark only
 
-**Background rule:** Always `var(--paper-50)`. No dark backgrounds anywhere.
+### Macros (`{% from 'macros/ui.html' import … %}`)
+totalizer · product_chip · status_chip · field · select_field · textarea_field ·
+totalizer_field · card · section_rule · receipt_row · back_btn · screen_topbar
 
-**Saffron rule:** One `.btn-saffron` per screen maximum. Not decorative.
-
-**Totalizer cells:** Dark navy cells (`background: var(--ink-900)`) for numbers with operational weight.
-Sizes: `.cell-xl` (42×64px) · `.cell-l` (28×44px) · `.cell-m` (20×32px) · `.cell-s` (14×22px).
-Last cell may use `.cell--accent` (saffron) for precision digit.
-
-**Macros available** (`{% from 'macros/ui.html' import … %}`):
-`totalizer`, `product_chip`, `status_chip`, `field`, `select_field`, `textarea_field`,
-`totalizer_field`, `card`, `section_rule`, `receipt_row`, `back_btn`, `screen_topbar`
-
-**Login animation:** 10 drum cells scroll to spell PUMPVISION. `document.fonts.ready` gate required.
-Duration 680ms–2335ms left→right, `cubic-bezier(0.04,0.06,0,1)`. Hero exits → form fades up 80ms later.
+### Login Animation
+10 drum cells → PUMPVISION. `document.fonts.ready` gate required.
+680ms–2335ms left→right, `cubic-bezier(0.04,0.06,0,1)`. Hero exits → form fades 80ms later.
 
 ### Forbidden — Do Not Invent
-- "Efficiency Score", accuracy %, quality metrics, reconciliation cycles as %
+- Efficiency scores, accuracy %, quality metrics
 - "Auto-settlement", "Automated Payouts", "Settlement batches"
-- "Team members reviewing", multi-user collaboration features
-- "Live Alerts" branding, "STATION OS", "Diagnostics", "Run Diagnostics"
-- WhatsApp/SMS confirmation (deferred until cloud deployment)
-- "Fleet Account" or "Corporate Account" customer types — all one type
-- Any branding other than "Pumpvision"
-- Hardware features that don't exist: temperature, pressure, flow rate
+- Multi-user collaboration features
+- "Live Alerts", "STATION OS", "Diagnostics"
+- WhatsApp/SMS (deferred)
+- "Fleet Account" or "Corporate Account" types
+- Any branding other than Pumpvision
+- Hardware features that don't exist (temperature, pressure, flow rate)
+- Time selector (Today/Week/Month) on owner dashboard
+- 7-day revenue bar chart on owner dashboard
+- Circular tank rings — horizontal fill bars only
+- "Reconcile" as nav label or screen
+- Reconciliation open items workflow
+- "Variance" screen — needs delivery scraper (Stage 3)
+- Aggregate total volume across all products
+- Manager fleet card entry UI
 
 ---
 
 ## Screen Inventory
 
-All visual references live in `docs/screens/`. Read before implementing any template.
-All implemented screens use Pumpvision Design System v0.1 (paper background, ink/saffron palette).
+PNG refs in `docs/screens/`. **Owner screens 10 + 15: use `docs/design/Owner_Screens.html`.**
+
+---
 
 ### Auth
 
-#### `01_login.png` ✓ Implemented
-**Route:** `GET/POST /login` · **Scroll:** No · **Bottom nav:** None
+#### `01_login.png` ✓
+**Route:** `GET/POST /login`
 Drum-roll animation → form. Newsreader italic heading, saffron left-border card, saffron CTA.
-Forbidden: "Forgot Password", "Remember me", "Contact System Admin", version footer.
 
 ---
 
-### Attendant Branch (3-tab nav: Home · Activity · Profile) ✓ All reskinned
+### Attendant Branch ✓ All implemented
+
+Nav: Home · Activity · Profile
 
 #### `02_attendant_home.png` ✓
-**Route:** `GET /` (role=attendant) · **Scroll:** No
-Shift status nudge: ok-100/ok-600 (closed) or warn-100/warn-600 (not closed).
-Two action cards: "Log Credit Sale" (saffron left border, primary) · "Close Shift" (plain).
+**Route:** `GET /` (role=attendant)
+Shift status nudge (ok/warn). Two action cards: Log Credit Sale · Close Shift.
 
 #### `03_select_customer.png` ✓
-**Route:** `GET /attendant/credit/select-customer` · **Scroll:** Yes
-Search bar in paper-100, filter chips, customer rows with colored avatars.
-Suspended customers: 50% opacity, error-600 lock icon, "Credit Blocked".
+**Route:** `GET /attendant/credit/select-customer`
+Search, filter chips, customer rows. Suspended: 50% opacity + error-600 lock.
 
 #### `04_log_sale_details.png` ✓
-**Route:** `GET/POST /attendant/credit/log/<customer_id>` · **Scroll:** Yes (sticky CTA)
-Customer card (saffron left border). Vehicle dropdown. 2×2 product grid with product-color selected
-state (hsd/ms/x2/xg-100 fill, hsd/ms/x2/xg-600 border). Amount/Litres toggle. Sticky saffron CTA.
+**Route:** `GET/POST /attendant/credit/log/<customer_id>`
+Customer card · vehicle dropdown · 2×2 product grid · amount/litres toggle · sticky saffron CTA.
 
 #### `05_transaction_confirmed.png` ✓
-**Route:** Post-submit redirect · **Scroll:** No
-ok-100 circle checkmark. ink-900 receipt header (JetBrains Mono total). Dotted-rule receipt rows.
-warn-100 parchi reminder. Saffron "Log new sale" + ghost "Go to home".
-NO WhatsApp block — paper parchi continues until cloud SMS is built.
+**Route:** post-submit redirect
+ok-100 checkmark · receipt rows · warn-100 parchi reminder · saffron + ghost CTAs.
 
 #### `06_shift_close_product_selection.png` ✓
-**Route:** `GET /attendant/shift/select-product` · **Scroll:** No
-2×2 product tiles, product-color icon squares, chip-ok DONE badge.
-HS/MS → DU selection. X2/XG → numpad directly.
+**Route:** `GET /attendant/shift/select-product`
+2×2 grid (HS / MS / X2 / XG) + full-width CNG tile. HS/MS → DU selection. X2/XG/CNG → numpad directly.
+Chip-ok DONE badge when reading submitted.
 
-#### `07_shift_close_du_selection.png` ✓
-**Route:** `GET /attendant/shift/du/<product>` (HS or MS only) · **Scroll:** Yes (sticky CTA)
-Nozzle cards with product-color left border and tinted banner.
-Dashed border = empty, solid = filled. Sticky saffron "Confirm Readings".
+#### `07_shift_close_du_selection.png` ✓ (HS/MS only — no change)
+**Route:** `GET /attendant/shift/du/<product>`
+Not used for X2, XG, or CNG.
 
 #### `08_shift_close_numpad.png` ✓
-**Route:** `GET/POST /attendant/shift/numpad/<nozzle>` · **Scroll:** No
-ink-900 totalizer display panel (JetBrains Mono 2.75rem). Delta pill: ok-100/warn-100/error-100.
-Paper numpad buttons. Sticky saffron "Save & Confirm".
+**Route:** `GET/POST /attendant/shift/numpad/<nozzle>`
+CNG: unit label = **kg**, delta label = **kg sold**. Liquid fuel: unchanged.
 
 #### `09_shift_close_summary.png` ✓
-**Route:** `GET/POST /attendant/shift/summary` · **Scroll:** Yes (sticky CTAs)
-Six nozzle cards with product left border. JetBrains Mono readings. ink-900 product totals card.
-warn-100 block if delta = 0 or < 5L. Sticky: saffron "Submit shift" + ghost "Save as draft".
+**Route:** `GET/POST /attendant/shift/summary`
+CNG card after nozzle rows: kg opening · kg closing · kg sold · ₹ revenue.
+Revenue = kg_sold × `cng_rsp_per_kg`. CNG optional — does not block 6-nozzle submit.
 
 ---
 
-### Manager Branch ← Sprint 1 CURRENT
+### Manager Branch — Stage 1
 
-Bottom nav: Home / Lubes / Expenses / Fleet / Payments (5 tabs).
-Build all manager screens in the new design system from the start — no dark scaffolding.
-Manager home is a shift-contextual daily checklist — prescriptive, not navigational.
-Manager screens needed: Home (checklist) · Log Lube Sale · Log Expense · Log Fleet Card ·
-Record Payment · Generate Invoice.
+Nav: Home · Expenses · Payments · More
+(Fleet tab removed — no manual fleet entry.)
+
+#### Manager home
+**Route:** `GET /manager/`
+Daily checklist. Resets each operational day.
+Items: Expenses (warn/ok) · Pending payment recordings · Overdue items.
+
+#### Log expense
+**Route:** `GET/POST /manager/expense`
+Amount · category · description · date → `expenses`
+
+#### Record payment received
+**Route:** `GET/POST /manager/payment`
+Customer picker · amount · mode (Cash/Cheque/Bank Transfer) · reference.
+Cash/Cheque → confirmed. Bank Transfer → pending_verification.
 
 ---
 
-### Owner Branch (to be designed — screens in docs/screens/)
+### Owner Branch — Stage 1
 
-Bottom nav: Home · Tanks · Credit · Reconcile · More (5 tabs)
+Nav: Home · Tanks · Credit · Summary · More
 
-#### `10_executive_dashboard.png`
-**Route:** `GET /` (role=owner) · **Scroll:** No
-Outlet identity + Action Center pill (with unread count) in topbar.
-Price ticker (all 4 products, day-over-day delta, "—" for no change).
-Time selector: Today/Week/Month.
-Revenue card with 7-day BAR chart (not smooth waves).
-Tank levels strip (4 compact circular rings with %, product name, k-litres).
-Vehicle delivery teaser card → links to Tanks screen.
+#### `10_owner_dashboard.png` ✓
+**Route:** `GET /` (role=owner)
+**Design ref: `docs/design/Owner_Screens.html` screen 10 — implemented.**
 
-#### `11_owner_tanks.png`
-**Route:** `GET /tanks` · **Scroll:** Yes
-"AS OF [HH:MM]" timestamp (30-min ATG cadence).
-Four tank cards: vertical test-tube fill visual (product color), %, Volume, Capacity, Days Left.
-Days-Left color: > 7 days white, 3-7 amber, ≤ 2 red. ≤ 25% → card border red + "Order soon" pill.
-Tank capacities: HS 20kL · MS 20kL · X2 10kL (smaller!) · XG 20kL.
-Deliveries section: in-transit (orange) + scheduled (blue).
+Data wiring:
+- Revenue: ISS (litres × RSP per product) + `cng_shift_readings` (kg × rsp/kg)
+- Cash in hand: Revenue − Paytm − Credit − Fleet card (derived)
+- Per-product breakdown: ISS per product code + CNG from `cng_shift_readings`
+- Stock watch: rolling 7-day consumption from ISS → days remaining → order-by date.
+  Card only appears when any product ≤ 7 days. Hidden otherwise.
+- Price ticker: RSP from Price table (liquid) + `cng_rsp_per_kg` (CNG)
 
-#### `12_credit_customer_list.png`
-**Route:** `GET /credit/customers` · **Scroll:** Yes (sticky "+ Add customer")
-Summary cells: Total Outstanding + Overdue.
-Filter chips: All / Over 80% / Overdue / Suspended.
-Customer cards: avatar + name + vehicle count + utilization bar + balance + %.
-Border tint: < 70% default, 70-80% amber, > 80% red.
+#### `11_owner_tanks.png` — Build now
+**Route:** `GET /tanks`
+Latest `tank_readings` per tank. "AS OF HH:MM" timestamp.
+Fill bar (product color) · % · volume · capacity · days left.
+Days left: > 7 default · 3–7 warn-600 · ≤ 2 error-600.
+≤ 25% → card border error-600 + "Order soon" chip.
+XG: always show warn-100 "Probe unreliable — reading approximate".
+No data state: "Data unavailable" empty state with last-known timestamp.
 
-#### `13_credit_customer_detail.png`
-**Route:** `GET /credit/customers/<id>` · **Scroll:** Yes
-Customer header: name, meta, outstanding balance, utilization pill + progress bar.
-Action row: "Record payment" + "Generate invoice" (both ghost, equal weight).
-Activity feed: fuel transactions + lube transactions + payments received (chronological).
-Invoices section at bottom.
+#### `12_credit_customer_list.png` — Build now
+**Route:** `GET /credit/customers`
+Summary: Total Outstanding + Overdue. Filter chips: All / Over 80% / Overdue / Suspended.
+Customer cards: avatar · name · vehicles · utilisation bar · balance.
+Border: < 70% default · 70–80% warn-600 · > 80% error-600. Sticky "+ Add customer".
 
-#### `14_credit_customer_add.png`
-**Route:** `GET/POST /credit/customers/new` and `/<id>/edit` · **Scroll:** Yes (sticky save)
-Form: company name, account ID + GST, fleet manager, contact, credit limit + payment terms (15/30/45).
-Authorized vehicles list with "+ Add vehicle" dashed button.
-"Suspend account" destructive button — hidden in New mode, visible in Edit mode only.
+#### `13_credit_customer_detail.png` — Build now
+**Route:** `GET /credit/customers/<id>`
+Header: name · balance · utilisation pill. Action row: "Record payment" + "Generate invoice" (both ghost).
+Activity feed: fuel + lube + payments (chronological, dotted rules). Invoices at bottom.
 
-#### Reconciliation screens (17, 15, 16)
-See detailed specs in previous CLAUDE.md versions. Summary:
-- `17_recon_open_items.png`: action rows with date, description, action button. Open items landing.
-- `15_recon_day_view.png`: date selector + Day/Trend toggle, sales by product, stock variance card, collections grid.
-- `16_recon_trend_view.png`: 30-day bar chart revenue, 4 product variance sparklines, collection mix stacked area. ENDS after collection mix — no invented metrics.
+#### `14_credit_customer_add.png` — Build now
+**Route:** `GET/POST /credit/customers/new` and `/<id>/edit`
+Company name · account ID + GST · fleet manager · contact · credit limit · payment terms (15/30/45).
+Vehicles: "+ Add vehicle" dashed button. "Suspend account" destructive: hidden in New, visible in Edit.
+
+#### `15_owner_daily_summary.png` ✓
+**Route:** `GET /summary` and `GET /summary/<date_str>`
+**Design ref: `docs/design/Owner_Screens.html` screen 15 — implemented.**
+
+Data wiring (full calculation chain):
+
+1. **FUEL SALES** — one row per product (HS / MS / X2 / XG / CNG):
+   Liquid: ISS litres × RSP from Price table.
+   CNG: kg_sold × rsp_per_kg from `cng_shift_readings`.
+   → Subtotal: GROSS FUEL SALES
+
+2. **LUBE SALES** — cash lube from `lube_transactions` for the day.
+   Show "—" + "Logging not active" until Stage 2 manager flow is live.
+
+3. **GROSS REVENUE** — fuel + lube (totalizer per Owner_Screens.html)
+
+4. **DEDUCTIONS:**
+   - Credit extended: sum of credit fuel + credit lube for the day
+   - POS (UPI + Card): Paytm data for the day, combined
+   - Fleet card: SDMS PAD data for the day
+   - Expenses: `expenses` sum for the day ("—" if none logged)
+
+5. **CASH IN HAND** — derived. Totalizer at bottom of receipt card.
+
+Date nav: ← [date] → via URL param. Default: today's operational date.
+No data → "No data for [date]" with nav still present.
+PDF via ReportLab matching on-screen layout. "Share" (ghost) + "Print / Save PDF" (saffron CTA).
 
 ---
 
 ## Delivery Workflow
-1. IOC depot loads tanker → appears in RDB SAP Invoice
-2. Tanker arrives → employee hydrometers each chamber → Receipt Density Records
-3. Decanting → TT Receipt records ATG before/after
-4. Post-decant density → Density Records
 
-Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point: Depot 3356.
-**MP17HH4740 is the supply tanker, NOT a customer vehicle.**
+1. IOC depot loads tanker → RDB SAP Invoice
+2. Tanker arrives → hydrometer readings per chamber → Receipt Density Records
+3. Decanting → TT Receipt (ATG before/after)
+4. Post-decant → Density Records
+
+Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 3356.
+**MP17HH4740 is the supply tanker — NOT a customer vehicle.**
 
 ---
 
 ## Known Anomalies
-- **Receipt 1107 (25 Mar 2026):** 463L MS with no invoice/truck/density records. Suspicious.
-- **Product XP (legacy):** Predates X2. Ignore in all reporting.
+- Receipt 1107 (25 Mar 2026): 463L MS, no invoice/truck/density. Suspicious.
+- Product XP (legacy — predates X2): ignore in all reporting.
 
 ---
 
-## Files in This Project
+## Files
 
-### App package (`pumpvision/`)
+### App (`pumpvision/`)
 - `__init__.py` — app factory, blueprint registration
 - `extensions.py` — db, login_manager, migrate
-- `models.py` — all SQLAlchemy models
+- `models.py` — all models
 - `constants.py` — NOZZLE_LABEL_MAP, PRODUCT_LABELS, PUMP_TEST_NOZZLES
 - `decorators.py` — owner_required, attendant_required
-- `user.py` — DB-backed User model (converted in Sprint 0; in-memory User removed)
+- `user.py` — DB-backed User
 - `services/prices.py` — get_rsp()
 - `services/operational.py` — get_operational_date()
-- `blueprints/auth/routes.py` — login, logout, redirect
-- `blueprints/attendant/routes.py` — all 9 attendant screens
-- `blueprints/owner/routes.py` — placeholder (redirects to dashboard)
-- `blueprints/credit/owner.py` — credit owner routes
-- `blueprints/dashboard/routes.py` — owner dashboard stub
-- `blueprints/paytm/routes.py` — Paytm CSV upload + day views
-- `blueprints/recon/routes.py` — reconciliation engine + scraper trigger
-- `blueprints/meters/routes.py` — totalizer reading views
-
-### Project root
-- `wsgi.py` — WSGI entry point
-- `migrations/` — Flask-Migrate baseline (Apr 2026)
-- `requirements.txt`, `Procfile`, `railway.json`
-- `start.bat` — Windows launcher
+- `blueprints/auth/routes.py`
+- `blueprints/attendant/routes.py` — all 9 screens + CNG shift close (`/shift/cng`)
+- `blueprints/owner/routes.py` — stub redirect to dashboard
+- `blueprints/credit/owner.py`
+- `blueprints/dashboard/routes.py` — owner dashboard (`/`) + daily summary (`/summary`, `/summary/<date_str>`)
+- `blueprints/paytm/routes.py`
+- `blueprints/recon/routes.py` — data logic retained, UI retired
+- `blueprints/meters/routes.py`
 
 ### Static
-- `pumpvision/static/css/design-system.css` — full design token system, component styles, era system (v0.1)
-- `pumpvision/static/manifest.json` — PWA manifest
-- `pumpvision/static/icons/icon-192.png` + `icon-512.png` — PWA icons
+- `pumpvision/static/css/design-system.css`
+- `pumpvision/static/css/owner.css` — owner dashboard + summary styles (separate from design-system)
+- `pumpvision/static/manifest.json`
+- `pumpvision/static/icons/icon-192.png` + `icon-512.png`
 
 ### Templates
-- `pumpvision/templates/macros/ui.html` — Jinja2 macro library (totalizer, product_chip, field, card, screen_topbar, etc.)
+- `pumpvision/templates/macros/ui.html`
+- `pumpvision/templates/owner/summary.html` — daily summary (screen 15)
 
 ### Scrapers
-- `scrapers/iras_iss_exporter.py` — ISS boundary mode (XG exemption implemented)
-- `scrapers/iras_price_exporter.py` — Price (PRM) scraper
-- `scrapers/paytm_exporter.py` — Paytm transaction CSV downloader (headless, stealth mode)
-- `scrapers/paytm_state.json` — persisted Paytm session cookies (gitignored)
-- `scrapers/sdms_pad_exporter.py` — SDMS PAD Statement scraper; fleet card posting total + CSV (headless, stealth, Claude Vision CAPTCHA)
-- `scrapers/sdms_state.json` — persisted SDMS session cookies (gitignored)
-- `scrapers/captcha_test.py` — Claude Vision CAPTCHA PoC
-- `scrapers/daily_scrape.py` — orchestration (Job 0: Paytm, Job 1: Price, Job 2: ST, Job 3: ISS, Job 4: SDMS PAD)
+- `scrapers/iras_iss_exporter.py` — ISS boundary mode
+- `scrapers/iras_price_exporter.py` — Price (PRM)
+- `scrapers/iras_atg_exporter.py` — ATG Stock tab (Stage 1 — build now)
+- `scrapers/paytm_exporter.py`
+- `scrapers/sdms_pad_exporter.py`
+- `scrapers/daily_scrape.py` — Job 0: Paytm · Job 1: Price · Job 2: ST · Job 3: ISS · Job 4: SDMS · Job 5: ATG
+- `scrapers/captcha_test.py`
 
 ### Documentation
 - `CLAUDE.md` — this file
-- `docs/screens/` — 17 visual references (01_login.png → 17_recon_open_items.png)
+- `docs/screens/` — PNG refs (01–15)
+- `docs/design/Pumpvision_Design_System.html` — design system v0.1
+- `docs/design/Owner_Screens.html` — **canonical visual ref for screens 10 and 15**
 
 ---
 
 ## Observed Operating Patterns
-
 - Outlet closes ~01:00–06:00. No XG sold midnight–06:00.
-- Nozzle 11 (XG): last pre-06:00 transaction on 26-Feb was ~10:00am previous morning.
-- Nozzle 16 (HS): 25L on 26-Feb vs Nozzle 7's 1,860L. Possible overflow-only usage.
-- Pump tests: ~08:20, 5L/nozzle, every day.
+- Nozzle 16 (HS2): very low volume (~25L/day) — possible overflow-only usage.
+- Pump tests: ~08:20, 5L/nozzle, all 6 liquid nozzles, every day.
 
 ---
 
@@ -823,67 +742,20 @@ Trucks: MP17HH4740 (regular), MP53HA2180, MP20ZQ9560 (occasional). Supply point:
 
 | Stream | Status |
 |--------|--------|
-| **Deployment** | ✓ Complete — Railway live, PWA, PostgreSQL, 29 customers migrated |
-| **Attendant branch** | ✓ Complete — 9 screens, all wired to real data |
-| **Sprint 0: three-user foundation** | ✓ Complete — DB-backed users, manager role, lube/expense/fleet schemas |
-| **Sprint 1: manager flows** | ← CURRENT — stubs wired, need full implementation |
-| **Paytm scraper** | ✓ Complete — headless, stealth mode, integrated into daily_scrape.py |
-| **SDMS PAD scraper** | ✓ Complete — merged to main 11 May 2026 |
-| **Sprint 2: ATG scraper + Paytm automation** | After Sprint 1 |
-| **Sprint 3: owner UI + design system** | After Sprint 2 (or in parallel) |
-| **Design rework (Pumpvision Narrative)** | In progress in separate design conversation |
-
----
-
-## What to Work On Next
-
-1. ~~ISS scraper verify~~ ✓
-2. ~~Boundary mode confirm~~ ✓
-3. ~~Credit module~~ ✓
-4. ~~Price scraper~~ ✓
-5. ~~Paytm CSV uploader~~ ✓
-6. ~~Reconciliation engine~~ ✓
-7. ~~XG boundary exemption~~ ✓
-8. ~~CAPTCHA PoC~~ ✓
-9. ~~Design system + 17 screen mockups~~ ✓
-10. ~~Git + GitHub~~ ✓
-11. ~~Foundation refactor~~ ✓
-12. ~~Attendant branch (9 screens)~~ ✓
-13. ~~Activity + Profile tabs for attendant~~ — deprioritised
-14. ~~Deploy to Railway + PWA~~ ✓ — live at `web-production-a1322.up.railway.app`
-15. ~~Sprint 0: three-user foundation~~ ✓ — DB-backed users, manager role, all new tables, 44 lube SKUs seeded
-16. ~~Paytm scraper~~ ✓ — `scrapers/paytm_exporter.py`, headless + stealth, integrated into `daily_scrape.py`
-    - Session cookie reuse, auto-login fallback, set-based new-link detection
-    - `PAYTM_HEADLESS=false` for debug; headless works reliably with stealth mode
-16b. **SDMS PAD scraper** — `scrapers/sdms_pad_exporter.py`, branch `sdms-pad-scraper`
-    - Logs into SDMS portal (Retail role, Claude Vision CAPTCHA), navigates to PAD Statement
-    - Extracts full table to CSV + fleet card posting summary JSON
-    - Integrated into `daily_scrape.py` as Job 4; skips if credentials not set
-    - All `page.goto()` calls use `timeout=0` — SDMS portal is very slow (60s+ to load)
-    - SPA render: after initial load waits for `networkidle` + nav element visible before clicking
-    - Date inputs (`id="fromdate"` / `id="todate"`) set via JS injection + dispatchEvent to
-      bypass datepicker widget interception; portal defaults to today if skipped (wrong data)
-    - Session persisted to `sdms_state.json`; auto-login fallback if session expires
-    - Verified working: 09-05-2026 — 11 rows, Rs. 14,500.93 fleet card total (3 txns)
-    - ✓ Complete — merged to main 11 May 2026
-17. **Sprint 1: manager operational flows** ← CURRENT PRIORITY
-    - Manager home (shift-contextual checklist)
-    - Log lube sale (cash or credit)
-    - Log expense
-    - Log fleet card swipe
-    - Record payment received (cash/cheque instant confirm; bank transfer → pending)
-    - Owner: bank transfer verification workflow
-    - Owner: intelligence/action center for accountability nudges
-    - Generate invoice (moves from owner to manager; owner gets alert)
-18. **Sprint 2: ATG scraper + automated Paytm ingestion** — after Sprint 1
-    - ATG stock scraper (tank levels, enables Tanks screen)
-    - Delivery receipt scraper (TT Receipt, SAP Invoice, density chain)
-    - Email watcher for automated Paytm CSV ingestion (replaces scraper)
-19. **Sprint 3: owner UI + new design system** — after Sprint 2 (or in parallel)
-    - Build all owner screens (Tanks, Credit Module, Executive Dashboard, Recon)
-    - Apply Pumpvision Narrative design system across all roles
-20. ~~Convert User to DB-backed model~~ ✓ — completed in Sprint 0.
-    Current `.env`-based auth does not scale beyond 1–2 users.
-20. Integrate autonomous CAPTCHA into main scraper + deploy to cloud cron
-21. Phase 2: smart anomaly warnings, manual pump test entry
-22. Phase 3: P&L, HR/attendance, compliance tracker, daybook
+| Deployment | ✓ Live — Railway, PostgreSQL, PWA |
+| Attendant branch | ✓ Complete — 9 screens, live data, reskinned |
+| Three-user foundation | ✓ Complete |
+| Paytm scraper | ✓ Complete |
+| SDMS PAD scraper | ✓ Complete |
+| ATG scraper | Stage 1 — build now |
+| Owner dashboard (screen 10) | ✓ Complete |
+| Owner daily summary (screen 15) | ✓ Complete |
+| Owner tanks screen (screen 11) | Stage 1 — wires to ATG |
+| Manager core (checklist, expenses, payments) | Stage 1 — build now |
+| CNG shift close + `cng_shift_readings` | ✓ Complete |
+| Credit screens polish (12, 13, 14) | Stage 1 |
+| Manager lube sales + invoicing | Stage 2 |
+| Bank transfer verification UI | Stage 2 |
+| Automated Paytm ingestion | Stage 2 |
+| Full ISS + delivery scraper + variance | Stage 3 |
+| Anomaly detection, P&L, Phase 2 features | Stage 3 |

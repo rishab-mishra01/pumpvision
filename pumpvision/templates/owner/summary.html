@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Summary — {{ date_display }} — Pumpvision{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>
+  body { margin: 0; background: #faf6ee; }
+</style>
+{% endblock %}
+
+{% block page %}
+<div class="summary" style="display:flex;flex-direction:column;height:100vh;height:100dvh;background:#faf6ee;">
+
+  <!-- Scrollable body -->
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+
+    <!-- HERO -->
+    <div class="sum-hero">
+
+      <div class="sum-datenav">
+        <a href="{{ url_for('dashboard.summary', date_str=prev_date) }}" class="arrow">‹</a>
+        <div class="date">
+          <span class="dow">{{ dow_display }}</span>
+          <span class="dn">{{ date_display }}</span>
+        </div>
+        {% if next_date %}
+        <a href="{{ url_for('dashboard.summary', date_str=next_date) }}" class="arrow">›</a>
+        {% else %}
+        <span class="arrow disabled">›</span>
+        {% endif %}
+      </div>
+
+      <div class="sum-cash">
+        {% if has_data %}
+        <div class="amount">
+          <span class="rs">₹</span>{{ derived_cash | inr }}<span class="paise">.{{ cash_paise }}</span>
+        </div>
+        {% else %}
+        <div class="amount" style="font-size:40px;opacity:0.45;">—</div>
+        {% endif %}
+        <div class="label">Cash in hand</div>
+      </div>
+
+    </div><!-- /sum-hero -->
+
+    {% if has_data %}
+
+    <!-- RECONCILIATION CARD -->
+    <div class="sum-recon">
+
+      <div class="rhead">
+        <span class="ttl">Cash Reconciliation</span>
+        <span class="stamp">{{ date_display }}</span>
+      </div>
+
+      <!-- Fuel Sales -->
+      <div class="seyebrow"><span>Fuel sales</span><span>Amount</span></div>
+
+      {% for p, data in products.items() %}
+      <div class="sum-prow" data-p="{{ p }}">
+        <span class="pcode"><span class="stripe"></span>{{ p }}</span>
+        {% if data.litres > 0 %}
+        <span class="calc">{{ "%.1f"|format(data.litres) }} L<span class="x">×</span><span class="px">₹{{ "%.2f"|format(data.rsp) }}</span></span>
+        <span class="amt">₹ {{ data.revenue | inr_full }}</span>
+        {% else %}
+        <span class="calc" style="color:var(--ink-4);">No reading</span>
+        <span class="amt" style="color:var(--ink-3);">—</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      {% if cng %}
+      <div class="sum-prow" data-p="CNG">
+        <span class="pcode"><span class="stripe"></span>CNG</span>
+        <span class="calc">{{ cng.kg_sold | int }} kg<span class="x">×</span><span class="px">₹{{ "%.2f"|format(cng.rsp_per_kg) }}</span></span>
+        <span class="amt">₹ {{ cng.revenue | inr_full }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Lube -->
+      <div class="seyebrow"><span>Lube sales</span></div>
+      <div class="sum-irow">
+        <span class="lab">Lubricants</span>
+        {% if lube_cash > 0 %}
+        <span class="amt">₹ {{ lube_cash | inr_full }}</span>
+        {% else %}
+        <span class="amt" style="color:var(--ink-3);">—</span>
+        {% endif %}
+      </div>
+
+      <!-- Gross Revenue -->
+      <div class="sum-totalrow">
+        <span class="lab" style="font-weight:500">Gross revenue</span>
+        <span class="amt" style="font-size:18px">₹ {{ total_rev | inr_full }}</span>
+      </div>
+
+      <!-- Deductions -->
+      <div class="seyebrow" style="margin-top:18px;"><span>Deductions</span></div>
+
+      {% if credit > 0 %}
+      <div class="sum-irow deduct">
+        <span class="lab">Credit</span>
+        <span class="amt">− ₹ {{ credit | inr_full }}</span>
+      </div>
+      {% endif %}
+      {% if paytm > 0 %}
+      <div class="sum-irow deduct">
+        <span class="lab">POS (UPI + Card)</span>
+        <span class="amt">− ₹ {{ paytm | inr_full }}</span>
+      </div>
+      {% endif %}
+      {% if fleet > 0 %}
+      <div class="sum-irow deduct">
+        <span class="lab">Fleet card</span>
+        <span class="amt">− ₹ {{ fleet | inr_full }}</span>
+      </div>
+      {% endif %}
+      {% if expenses > 0 %}
+      <div class="sum-irow deduct">
+        <span class="lab">Expenses</span>
+        <span class="amt">− ₹ {{ expenses | inr_full }}</span>
+      </div>
+      {% endif %}
+      {% if credit == 0 and paytm == 0 and fleet == 0 and expenses == 0 %}
+      <div class="sum-irow">
+        <span class="lab" style="color:var(--ink-3);">No deductions recorded</span>
+        <span class="amt" style="color:var(--ink-3);">—</span>
+      </div>
+      {% endif %}
+
+      <!-- Cash in hand band -->
+      <div class="sum-cihband">
+        <span class="lab">Cash in hand</span>
+        <span class="amt">₹ {{ derived_cash | inr_full }}</span>
+      </div>
+
+    </div><!-- /sum-recon -->
+
+    <!-- Actions -->
+    <div class="summary-actions">
+      <button class="sum-btn sum-btn-ghost" disabled style="opacity:0.5;cursor:not-allowed;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+          <polyline points="16 6 12 2 8 6"/>
+          <line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
+        Share
+      </button>
+      <button class="sum-btn sum-btn-gold" disabled style="opacity:0.6;cursor:not-allowed;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 6 2 18 2 18 9"/>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+          <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+        Print / Save PDF
+      </button>
+    </div>
+
+    {% else %}
+
+    <!-- No data state -->
+    <div style="margin:32px 18px;text-align:center;">
+      <div style="font-family:var(--font-sans);font-size:15px;color:var(--ink-3);">
+        No data for {{ date_display }}
+      </div>
+    </div>
+
+    {% endif %}
+
+    <div style="height:18px;"></div>
+
+  </div><!-- /scrollbody -->
+
+  <!-- Bottom nav -->
+  <nav class="owner-nav">
+    <a href="{{ url_for('dashboard.index') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-3v-7H8v7H5a2 2 0 0 1-2-2v-9z"/>
+      </svg>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="5" y="4" width="14" height="17" rx="2"/>
+        <line x1="9" y1="9" x2="15" y2="9"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+      </svg>
+      <span class="nav-label">Tanks</span>
+    </a>
+    <a href="{{ url_for('credit.dashboard') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="6" width="18" height="13" rx="2"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span class="nav-label">Credit</span>
+    </a>
+    <a href="{{ url_for('dashboard.summary') }}" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
+      </svg>
+      <span class="nav-label">Summary</span>
+    </a>
+    <a href="{{ url_for('auth.logout') }}">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="5" cy="12" r="1.6"/>
+        <circle cx="12" cy="12" r="1.6"/>
+        <circle cx="19" cy="12" r="1.6"/>
+      </svg>
+      <span class="nav-label">More</span>
+    </a>
+  </nav>
+
+</div><!-- /summary wrapper -->
+{% endblock %}

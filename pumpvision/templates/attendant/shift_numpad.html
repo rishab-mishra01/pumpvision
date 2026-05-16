@@ -61,7 +61,7 @@
         <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;
                      font-weight:600;color:var(--ink-900);">
           {{ "{:,.2f}".format(opening) }}
-        </span> L
+        </span> {{ unit | default('L') }}
       </p>
       {% else %}
       <p style="font-family:var(--font-sans);font-size:13px;color:var(--error-600);margin:0;">
@@ -87,7 +87,7 @@
         0
       </span>
       <span style="font-family:var(--font-sans);font-size:1rem;
-                   color:var(--ink-500);flex-shrink:0;">L</span>
+                   color:var(--ink-500);flex-shrink:0;">{{ unit | default('L') }}</span>
     </div>
     <div style="display:flex;justify-content:center;margin-top:14px;">
       <div id="delta-pill"
@@ -170,6 +170,7 @@
 <script>
 const openingValue = {{ opening | tojson }};
 const initVal = {{ existing_value | tojson }};
+const unit = {{ (unit | default('L')) | tojson }};
 let displayStr = initVal !== null ? initVal.toFixed(2) : "";
 
 function press(key) {
@@ -222,7 +223,9 @@ function render() {
       btn.style.opacity = "1";
       btn.style.cursor = "pointer";
     } else {
-      deltaEl.textContent = "↗ Litres dispensed: +" + delta.toFixed(2) + " L";
+      var decimals = unit === "kg" ? 1 : 2;
+      var label = unit === "kg" ? "kg sold" : "Litres dispensed";
+      deltaEl.textContent = "↗ " + label + ": +" + delta.toFixed(decimals) + " " + unit;
       deltaEl.style.color = "var(--ok-600)";
       deltaEl.style.background = "var(--ok-100)";
       btn.disabled = false;

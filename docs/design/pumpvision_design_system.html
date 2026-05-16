@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pumpvision — Design System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Major+Mono+Display&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper-50:  #faf6ed;
+      --paper-100: #f5efe1;
+      --paper-200: #ece4d2;
+      --paper-300: #ddd2bb;
+      --paper-400: #b8aa8e;
+      --paper-500: #8a7d63;
+      --ink-900: #16202e;
+      --ink-800: #1f2c3f;
+      --ink-700: #324154;
+      --ink-600: #4a5870;
+      --ink-500: #6b7891;
+      --saffron-700: #b8421a;
+      --saffron-600: #d4541f;
+      --saffron-500: #e96821;
+      --saffron-400: #f08a4d;
+      --saffron-200: #f7c9a8;
+      --saffron-100: #fbe5d3;
+      --ok-600: #4a7a3a;   --ok-100: #e3ecd6;
+      --warn-600: #a86a16; --warn-100: #f4e3c1;
+      --error-600: #a8321f;--error-100: #f3d6cd;
+      --hsd-600: #4a6b3a;  --hsd-100: #dde6cf;
+      --ms-600:  #c43d2a;  --ms-100:  #f3d4ce;
+      --x2-600:  #6b3a86;  --x2-100:  #e3d4ec;
+      --xg-600:  #1f6b6b;  --xg-100:  #cde3e3;
+      --font-serif: "Newsreader", "Source Serif Pro", Georgia, serif;
+      --font-sans:  "IBM Plex Sans", "Inter", -apple-system, system-ui, sans-serif;
+      --font-mono:  "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+      --font-mech:  "Major Mono Display", "JetBrains Mono", ui-monospace, monospace;
+      --shadow-cell: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 0 rgba(0,0,0,0.25);
+      --shadow-1: 0 1px 0 rgba(22,32,46,0.04), 0 1px 2px rgba(22,32,46,0.06);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--paper-50); color: var(--ink-900); font-family: var(--font-sans); }
+    body {
+      -webkit-font-smoothing: antialiased;
+      --era: 0; /* 0 = mechanical, 1 = modern */
+      --saff: 1; /* 0 reserved, 1 confident, 2 loud */
+    }
+
+    /* ── ERA: mechanical ↔ modern ─────────────────────────────────
+       Reshapes corner radius, cell tallness, shadow density, rule
+       style, and overall density. */
+    body[data-era="mechanical"] {
+      --r-cell: 1px;
+      --r-card: 0px;
+      --r-btn: 0px;
+      --r-chip: 2px;
+      --cell-stretch: 1.45;
+      --section-pad: 56px;
+      --shadow-cell: inset 0 1px 0 rgba(255,255,255,.06), 0 2px 0 rgba(0,0,0,.35);
+      background:
+        repeating-linear-gradient(0deg, transparent 0 27px, rgba(22,32,46,.025) 27px 28px),
+        var(--paper-50);
+    }
+    body[data-era="balanced"] {
+      --r-cell: 2px; --r-card: 6px; --r-btn: 4px; --r-chip: 999px;
+      --cell-stretch: 1.0;
+      --section-pad: 80px;
+    }
+    body[data-era="modern"] {
+      --r-cell: 6px; --r-card: 16px; --r-btn: 10px; --r-chip: 999px;
+      --cell-stretch: 0.85;
+      --section-pad: 112px;
+      --shadow-cell: inset 0 1px 0 rgba(255,255,255,.04), 0 1px 2px rgba(0,0,0,.12);
+    }
+    body[data-era="modern"] .rule-dotted { background-image: none; background: var(--paper-300); }
+    body[data-era="mechanical"] .rule { background: var(--ink-900); height: 2px; }
+    body[data-era="mechanical"] .rule-dotted { background-size: 4px 1px; }
+    .cell { border-radius: var(--r-cell, 2px); }
+    .btn { border-radius: var(--r-btn, 4px); }
+    .chip { border-radius: var(--r-chip, 999px); }
+    .section { padding-top: var(--section-pad, 80px); padding-bottom: var(--section-pad, 80px); }
+
+    /* ── VOICE: editorial ↔ stencil ────────────────────────────── */
+    body[data-voice="stencil"] .h1,
+    body[data-voice="stencil"] .h2,
+    body[data-voice="stencil"] .h3 {
+      font-family: var(--font-mech) !important;
+      font-weight: 400 !important;
+      text-transform: lowercase;
+      letter-spacing: 0;
+    }
+    body[data-voice="stencil"] .h1 { font-size: 64px; line-height: 1.0; }
+    body[data-voice="stencil"] .h2 { font-size: 36px; }
+    body[data-voice="stencil"] .h3 { font-size: 24px; }
+    body[data-voice="stencil"] em { font-style: normal; color: var(--saffron-600); }
+    body[data-voice="stencil"] .lede {
+      font-family: var(--font-mono);
+      font-size: 14px; line-height: 1.7;
+    }
+    body[data-voice="stencil"] .lede em { color: inherit; }
+
+    /* ── SAFFRON PRESENCE ──────────────────────────────────────── */
+    /* Reserved: only markers + accent cells. Confident: + buttons +
+       headline emphasis. Loud: + headline highlight surfaces +
+       saffron rules. */
+    body[data-saff="reserved"] .btn-saffron { background: var(--ink-900); color: var(--paper-50); }
+    body[data-saff="reserved"] .saff { color: var(--ink-900) !important; }
+    body[data-saff="reserved"] .meter-base::after { display: none; }
+    body[data-saff="reserved"] .cell.accent { background: var(--ink-900); color: var(--paper-50); }
+
+    body[data-saff="loud"] .h1 em,
+    body[data-saff="loud"] .h2 em,
+    body[data-saff="loud"] .h3 em {
+      background: var(--saffron-200); padding: 0 .12em; font-style: italic;
+    }
+    body[data-saff="loud"] .meter-base::after { width: 60%; }
+    body[data-saff="loud"] .anchor-nav { border-bottom-color: var(--saffron-500); border-bottom-width: 2px; }
+    body[data-saff="loud"] .section { border-top-color: var(--saffron-500); }
+    body[data-saff="loud"] .btn-primary { background: var(--saffron-600); color: var(--paper-50); }
+
+    /* ── Tweaks panel (vanilla) ───────────────────────────────── */
+    .tw {
+      position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+      width: 280px;
+      background: rgba(250,246,237,.92);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border: 1px solid var(--paper-300);
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(22,32,46,.18);
+      font-family: var(--font-sans); font-size: 12px; color: var(--ink-900);
+      overflow: hidden;
+      transform-origin: bottom right;
+      transition: opacity .2s, transform .2s;
+    }
+    .tw[data-open="false"] { opacity: 0; pointer-events: none; transform: scale(.96) translateY(8px); }
+    .tw-hd { display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px; border-bottom: 1px solid var(--paper-300);
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--paper-500); }
+    .tw-x { background: transparent; border: 0; color: var(--paper-500); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+    .tw-x:hover { background: rgba(0,0,0,.06); color: var(--ink-900); }
+    .tw-body { padding: 14px; display: flex; flex-direction: column; gap: 18px; }
+    .tw-grp { display: flex; flex-direction: column; gap: 8px; }
+    .tw-grp-h { display: flex; justify-content: space-between; align-items: baseline; }
+    .tw-grp-h b { font-weight: 600; font-size: 12px; }
+    .tw-grp-h span { font-family: var(--font-mono); font-size: 10px; color: var(--paper-500); letter-spacing: 0.06em; text-transform: uppercase; }
+    .tw-grp p { margin: 0; font-size: 11px; line-height: 1.45; color: var(--ink-700); }
+    .tw-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+      background: var(--paper-200); border-radius: 6px; padding: 2px; gap: 2px; }
+    .tw-seg button {
+      appearance: none; border: 0; background: transparent; padding: 7px 6px;
+      font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+      color: var(--ink-700); cursor: pointer; border-radius: 4px;
+      letter-spacing: 0.02em;
+    }
+    .tw-seg button[data-on="true"] {
+      background: var(--paper-50); color: var(--ink-900);
+      box-shadow: 0 1px 2px rgba(22,32,46,.12);
+    }
+    .tw-toggle {
+      position: fixed; right: 16px; bottom: 16px; z-index: 9998;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      background: var(--ink-900); color: var(--paper-50);
+      border: 0; border-radius: 999px;
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      cursor: pointer; box-shadow: 0 8px 24px rgba(22,32,46,.25);
+    }
+    .tw-toggle .dot { width: 6px; height: 6px; background: var(--saffron-500); border-radius: 1px; }
+    .tw-toggle[data-hide="true"] { display: none; }
+
+    .page { max-width: 1240px; margin: 0 auto; padding: 56px 48px 80px; }
+    .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-500); }
+    .rule { height: 1px; background: var(--paper-300); }
+    .rule-dotted { height: 1px; background-image: linear-gradient(to right, var(--paper-300) 50%, transparent 0); background-size: 6px 1px; background-repeat: repeat-x; }
+    .h1 { font-family: var(--font-serif); font-weight: 300; font-size: 80px; line-height: 1.0; letter-spacing: -0.02em; margin: 0; }
+    .h1 em { font-style: italic; }
+    .h2 { font-family: var(--font-serif); font-weight: 400; font-size: 44px; line-height: 1.05; letter-spacing: -0.01em; margin: 0 0 12px; }
+    .h3 { font-family: var(--font-serif); font-weight: 400; font-size: 28px; line-height: 1.15; margin: 0; }
+    .lede { font-size: 17px; line-height: 1.55; color: var(--ink-700); max-width: 720px; margin: 0; }
+
+    .section { padding: 80px 0; border-top: 1px solid var(--paper-300); }
+    .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 36px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+
+    .swatch { display: flex; flex-direction: column; gap: 8px; }
+    .swatch-chip { width: 100%; aspect-ratio: 1.4 / 1; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(22,32,46,0.06); }
+    .swatch-name { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; }
+    .swatch-hex { font-family: var(--font-mono); font-size: 10px; color: var(--paper-500); }
+
+    /* Digit cell */
+    .cell { display: inline-flex; align-items: center; justify-content: center; background: var(--ink-900); color: var(--paper-50); font-family: var(--font-mono); font-weight: 600; line-height: 1; border-radius: 2px; box-shadow: var(--shadow-cell); position: relative; user-select: none; overflow: hidden; }
+    .cell.accent { background: var(--saffron-500); color: var(--ink-900); }
+    .cell.punct { background: transparent; color: var(--ink-900); box-shadow: none; }
+    .cell::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.05) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,.18) 100%); pointer-events: none; }
+    .cell.punct::after { display: none; }
+    .row-cells { display: inline-flex; gap: 3px; align-items: center; }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 4px; font-family: var(--font-sans); font-weight: 600; font-size: 14px; cursor: pointer; border: 1.5px solid transparent; }
+    .btn-primary { background: var(--ink-900); color: var(--paper-50); }
+    .btn-saffron { background: var(--saffron-500); color: var(--ink-900); }
+    .btn-secondary { background: var(--paper-50); color: var(--ink-900); border-color: var(--ink-900); }
+    .btn-ghost { background: transparent; color: var(--ink-900); border-color: var(--paper-300); }
+
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+    .chip-dot { width: 6px; height: 6px; border-radius: 1px; }
+
+    /* Phone frame */
+    .phone-row { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
+    .phone {
+      width: 390px; height: 844px; border-radius: 48px;
+      background: #0a0a0a; padding: 14px; position: relative;
+      box-shadow: 0 30px 60px -20px rgba(22,32,46,0.25), 0 0 0 1px rgba(22,32,46,0.08);
+      flex: none;
+    }
+    .phone-screen {
+      width: 100%; height: 100%; border-radius: 36px; overflow: hidden;
+      background: var(--paper-50); position: relative;
+      display: flex; flex-direction: column;
+    }
+    .phone-notch {
+      position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+      width: 110px; height: 32px; background: #0a0a0a; border-radius: 999px; z-index: 5;
+    }
+    .phone-status {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 28px 6px; font-family: var(--font-sans); font-weight: 600;
+      font-size: 14px; color: var(--ink-900);
+    }
+    .phone-home {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      width: 134px; height: 5px; background: var(--ink-900); border-radius: 999px; opacity: .85;
+    }
+
+    .app-header {
+      padding: 12px 20px 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .app-mark {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-mech); font-size: 16px; letter-spacing: 0.02em; text-transform: lowercase;
+    }
+    .app-mark-square { width: 18px; height: 18px; background: var(--saffron-500); border-radius: 2px; box-shadow: var(--shadow-cell); }
+
+    .row { display: flex; justify-content: space-between; padding: 4px 0; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .row-k { color: var(--paper-500); }
+
+    .label-row { display: grid; grid-template-columns: 70px 1fr; gap: 8px 16px; align-items: baseline; padding: 6px 0; }
+    .label-size { font-family: var(--font-mono); font-size: 11px; color: var(--paper-500); }
+
+    .footnote { font-size: 13px; color: var(--paper-500); margin: 12px 0 0; }
+
+    .mech-mark {
+      font-family: var(--font-mech); line-height: 1; letter-spacing: 0.02em; text-transform: lowercase;
+      display: inline-flex; align-items: baseline;
+    }
+    .mech-mark .ink { color: var(--ink-900); }
+    .mech-mark .saff { color: var(--saffron-600); }
+
+    .meter-base { height: 4px; background: var(--ink-900); border-radius: 1px; position: relative; }
+    .meter-base::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 26%; background: var(--saffron-500); }
+
+    .anchor-nav {
+      position: sticky; top: 0; background: rgba(250, 246, 237, 0.92);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--paper-300); z-index: 10;
+      padding: 14px 48px; display: flex; justify-content: space-between; align-items: center;
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper-500);
+    }
+    .anchor-nav a { color: var(--ink-700); text-decoration: none; }
+    .anchor-nav a:hover { color: var(--saffron-600); }
+    .anchor-nav-right { display: flex; gap: 22px; }
+  </style>
+</head>
+<body>
+
+  <nav class="anchor-nav">
+    <span>Pumpvision · Design System v0.1</span>
+    <span class="anchor-nav-right">
+      <a href="#brand">Brand</a>
+      <a href="#color">Color</a>
+      <a href="#type">Type</a>
+      <a href="#totalizer">Totalizer</a>
+      <a href="#components">Components</a>
+      <a href="#screens">Screens</a>
+    </span>
+  </nav>
+
+  <div class="page">
+
+    <!-- COVER -->
+    <header style="padding: 60px 0 40px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 14px;" class="eyebrow">
+        <span>Design system · v0.1</span>
+        <span>05 · 2026</span>
+      </div>
+      <div class="rule"></div>
+
+      <div style="margin-top: 80px;">
+        <div class="mech-mark" style="font-size: 96px; letter-spacing: 0.02em; flex-direction: column; align-items: flex-start; gap: 6px;">
+          <span><span class="ink">pump</span><span class="saff">vision</span></span>
+          <span class="meter-base" style="width: 520px; height: 6px;"></span>
+          <span style="font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.24em; color: var(--paper-500); text-transform: uppercase; margin-top: 8px;">fuel · operations · trust</span>
+        </div>
+      </div>
+
+      <h1 class="h1" style="margin: 80px 0 24px; max-width: 880px;">
+        Numbers worth <em>trusting.</em><br/>
+        Operations worth <em>running.</em>
+      </h1>
+
+      <p class="lede">
+        A field-grade interface for the petrol pump — built on the language of the totalizer, the receipt, and the shift register. Light, warm, precise. Made to be read in sunlight, used with one hand, and trusted at the end of every shift. We are pulling something stuck in the past into modernity, without the clean break.
+      </p>
+
+      <div style="display: flex; justify-content: space-between; margin-top: 80px;" class="eyebrow">
+        <span>Accuracy · Efficiency · Trust</span>
+        <span>Sheet 01 / 06</span>
+      </div>
+    </header>
+
+    <!-- BRAND -->
+    <section id="brand" class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">02 · Wordmark</div>
+          <h2 class="h2">Three readings of the totalizer.</h2>
+        </div>
+        <div class="eyebrow">A / B / C</div>
+      </div>
+
+      <p class="lede" style="margin-bottom: 56px;">
+        Each option treats the wordmark as a <em>mechanical instrument</em>. We're carrying tradition into modernity — the dial, the cell, the dispenser face — without nostalgia or pastiche.
+      </p>
+
+      <!-- A -->
+      <div style="padding: 32px 0; border-top: 1px solid var(--paper-300);">
+        <div class="eyebrow" style="margin-bottom: 18px;">A · Compressed display + saffron marker</div>
+        <div style="display: inline-flex; align-items: center; gap: 12px;">
+          <span style="width: 22px; height: 22px; background: var(--saffron-500); border-radius: 2px; box-shadow: var(--shadow-cell);"></span>
+          <span style="font-family: var(--font-mech); font-size: 64px; line-height: 0.85; letter-spacing: -0.04em; text-transform: lowercase; transform: scaleY(1.15); transform-origin: left bottom; display: inline-block;">pumpvision</span>
+        </div>
+        <p class="footnote" style="max-width: 600px;">Squarish, vertically stretched lowercase. The saffron square reads as a status LED — small, deliberate, the only color in the mark.</p>
+      </div>
+
+      <!-- B -->
+      <div style="padding: 32px 0; border-top: 1px solid var(--paper-300);">
+        <div class="eyebrow" style="margin-bottom: 18px;">B · Letters framed as totalizer cells</div>
+        <div id="logo-b" class="row-cells"></div>
+        <p class="footnote" style="max-width: 600px;">The most literal — each letter housed in a dark digit cell. One cell rendered in saffron as the precision digit. Reads as an instrument, not a brand.</p>
+      </div>
+
+      <!-- C -->
+      <div style="padding: 32px 0; border-top: 1px solid var(--paper-300);">
+        <div class="eyebrow" style="margin-bottom: 18px;">C · Two-tone with meter base   ← recommended</div>
+        <div class="mech-mark" style="font-size: 56px; flex-direction: column; align-items: flex-start; gap: 4px;">
+          <span><span class="ink">pump</span><span class="saff">vision</span></span>
+          <span class="meter-base" style="width: 100%;"></span>
+          <span style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.24em; color: var(--paper-500); text-transform: uppercase; margin-top: 4px;">fuel · operations · trust</span>
+        </div>
+        <p class="footnote" style="max-width: 600px;">The wordmark sits on a meter base — half ink, quarter saffron — that doubles as a fill-level indicator. Readable at small sizes, distinct at large.</p>
+      </div>
+    </section>
+
+    <!-- COLOR -->
+    <section id="color" class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">03 · Color</div>
+          <h2 class="h2">Cream paper, ink navy, saffron energy.</h2>
+        </div>
+      </div>
+      <p class="lede" style="margin-bottom: 48px;">
+        Two poles — warm energy and engineered systems — sit on a single warm cream substrate. Saffron appears with restraint, never as a large surface. Ink lives in numbers, rules, and structure. Product colors are a <em>secondary</em> layer, used only to identify fuel grades.
+      </p>
+
+      <div class="eyebrow" style="margin-bottom: 14px;">Paper · neutral substrate (warm)</div>
+      <div class="grid-6" id="paper-row" style="margin-bottom: 40px;"></div>
+
+      <div class="eyebrow" style="margin-bottom: 14px;">Ink · engineered systems</div>
+      <div class="grid-6" id="ink-row" style="margin-bottom: 40px;"></div>
+
+      <div class="eyebrow" style="margin-bottom: 14px;">Saffron · energy (used with restraint)</div>
+      <div class="grid-6" id="saffron-row" style="margin-bottom: 40px;"></div>
+
+      <div class="eyebrow" style="margin-bottom: 14px;">Product layer · fuel grades (secondary)</div>
+      <div class="grid-4" id="product-row"></div>
+    </section>
+
+    <!-- TYPE -->
+    <section id="type" class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">04 · Type</div>
+          <h2 class="h2">A serif for voice. A grotesk for labels. A mono for numbers.</h2>
+        </div>
+      </div>
+      <p class="lede" style="margin-bottom: 24px;">
+        Three families, used at distinct registers. Newsreader carries the editorial voice; IBM Plex Sans handles UI labels and dense interface text; JetBrains Mono is reserved for any quantity that has to be read precisely. Major Mono Display is a single-purpose instrument — only the wordmark and the totalizer.
+      </p>
+      <div style="display: inline-flex; align-items: baseline; gap: 12px; padding: 10px 14px; background: var(--paper-100); border: 1px dashed var(--paper-300); margin-bottom: 48px;">
+        <span class="label-size" style="background: transparent; padding: 0;">28 / 34</span>
+        <span style="font-family: var(--font-sans); font-size: 12px; color: var(--ink-700);">reads as <b style="color: var(--ink-900);">size&nbsp;28px&nbsp;/&nbsp;line-height&nbsp;34px</b> — the standard size/leading shorthand used in every scale below.</span>
+      </div>
+
+      <div style="border-top: 1px solid var(--paper-300); padding-top: 28px; margin-bottom: 36px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 18px;" class="eyebrow"><span>Newsreader · serif · voice</span><span>Weights · Light · Regular · Italic · Medium</span></div>
+        <div style="font-family: var(--font-serif); font-size: 64px; font-weight: 300; line-height: 1.05; letter-spacing: -0.01em;">The shift closes at <em style="font-style: italic;">nineteen hundred.</em></div>
+        <div style="display: grid; grid-template-columns: 70px 1fr 70px 1fr; gap: 8px 16px; margin-top: 26px; align-items: baseline;">
+          <span class="label-size">40 / 44</span><span style="font-family: var(--font-serif); font-size: 40px;">Reconciliation</span>
+          <span class="label-size">28 / 34</span><span style="font-family: var(--font-serif); font-size: 28px;">Today's reading</span>
+          <span class="label-size">20 / 28</span><span style="font-family: var(--font-serif); font-size: 20px;">End-of-shift handover</span>
+          <span class="label-size">16 / 24</span><span style="font-family: var(--font-serif); font-size: 16px;">Sub-section title</span>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--paper-300); padding-top: 28px; margin-bottom: 36px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 18px;" class="eyebrow"><span>IBM Plex Sans · grotesk · interface</span><span>Weights · Regular · Medium · Semibold</span></div>
+        <div style="font-family: var(--font-sans); font-size: 36px; font-weight: 500; letter-spacing: -0.01em;">Nozzle · 03 · MS</div>
+        <div style="display: grid; grid-template-columns: 70px 1fr 70px 1fr; gap: 8px 16px; margin-top: 26px; align-items: baseline;">
+          <span class="label-size">14 / 22</span><span style="font-size: 14px;">Body — operations text used in lists, cards, forms.</span>
+          <span class="label-size">13 / 18</span><span style="font-size: 13px; color: var(--ink-700);">Caption / hint — secondary information.</span>
+          <span class="label-size">11 / 14</span><span style="font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper-500);">EYEBROW · METADATA</span>
+          <span class="label-size">—</span><span style="font-size: 14px; font-weight: 600;">Button label · Primary action</span>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--paper-300); padding-top: 28px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 18px;" class="eyebrow"><span>JetBrains Mono · numerals · readings</span><span>Tabular figures · all weights</span></div>
+        <div style="font-family: var(--font-mono); font-size: 40px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;">₹ 84,329.40   ·   1,247.218 L</div>
+        <div style="margin-top: 16px; font-family: var(--font-mono); font-size: 13px; color: var(--paper-500); font-variant-numeric: tabular-nums;">0123456789 · ₹ . , : / —   tabular figures, contextual ligatures off</div>
+      </div>
+    </section>
+
+    <!-- TOTALIZER -->
+    <section id="totalizer" class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">05 · Component · Totalizer</div>
+          <h2 class="h2">The numeric instrument.</h2>
+        </div>
+      </div>
+      <p class="lede" style="margin-bottom: 48px;">
+        Whenever a number carries operational weight — a shift total, a tank reading, a cumulative dispense — it is rendered as a totalizer: each digit framed in its own cell, monospaced, mechanical.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 28px;">
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px;">XL · 64px cells · headline number</div>
+          <div id="tot-xl" class="row-cells"></div>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px;">L · 44px cells · primary readings</div>
+          <div id="tot-l" class="row-cells"></div>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px;">M · 32px cells · inline values</div>
+          <div id="tot-m" class="row-cells"></div>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px;">S · 22px cells · table cells</div>
+          <div id="tot-s" class="row-cells"></div>
+        </div>
+      </div>
+
+      <div style="margin-top: 36px; padding: 28px; background: var(--paper-100); border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px;">
+        <div>
+          <div class="eyebrow" style="margin-bottom: 8px;">Cell</div>
+          <p style="font-size: 13px; color: var(--ink-700); line-height: 1.5; margin: 0;">Dark navy ground (ink/900). Faint inset highlight top, shadow bottom, like a recessed digit window.</p>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom: 8px;">Numeral</div>
+          <p style="font-size: 13px; color: var(--ink-700); line-height: 1.5; margin: 0;">JetBrains Mono, 600 weight, paper/50. Centered. Tabular figures only.</p>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom: 8px;">Precision digit</div>
+          <p style="font-size: 13px; color: var(--ink-700); line-height: 1.5; margin: 0;">Last cell may render in saffron — used when the value is mid-update or when the precision digit deserves emphasis.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPONENTS -->
+    <section id="components" class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">06 · Components</div>
+          <h2 class="h2">Buttons · chips · fields · state.</h2>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 44px;">
+        <div class="eyebrow" style="margin-bottom: 14px;">Buttons</div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button class="btn btn-primary">Close shift</button>
+          <button class="btn btn-saffron">Record dispense</button>
+          <button class="btn btn-secondary">Cancel</button>
+          <button class="btn btn-ghost">View history</button>
+        </div>
+        <p class="footnote">Saffron is reserved for the single most-likely action on a screen. Ink is the workhorse primary; secondary and ghost handle everything else.</p>
+      </div>
+
+      <div style="margin-bottom: 44px;">
+        <div class="eyebrow" style="margin-bottom: 14px;">Product chips · status chips</div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;">
+          <span class="chip" style="background: var(--hsd-100); color: var(--hsd-600);"><span class="chip-dot" style="background: var(--hsd-600);"></span>HSD · Diesel</span>
+          <span class="chip" style="background: var(--ms-100); color: var(--ms-600);"><span class="chip-dot" style="background: var(--ms-600);"></span>MS · Petrol</span>
+          <span class="chip" style="background: var(--x2-100); color: var(--x2-600);"><span class="chip-dot" style="background: var(--x2-600);"></span>X2 · Premium</span>
+          <span class="chip" style="background: var(--xg-100); color: var(--xg-600);"><span class="chip-dot" style="background: var(--xg-600);"></span>XG · Bio Diesel</span>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <span class="chip" style="background: var(--saffron-100); color: var(--saffron-700);">Mid-shift</span>
+          <span class="chip" style="background: var(--paper-200); color: var(--ink-900);">Reconciled</span>
+          <span class="chip" style="background: var(--ms-100); color: var(--ms-600);">Variance</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 44px;">
+        <div class="eyebrow" style="margin-bottom: 14px;">Fields</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 800px;">
+          <label style="display: flex; flex-direction: column; gap: 8px; font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-500);">
+            Attendant
+            <input value="R. Mehta" style="font-family: var(--font-sans); font-size: 16px; color: var(--ink-900); background: var(--paper-50); border: 1.5px solid var(--paper-300); border-radius: 4px; padding: 12px 14px; outline: none;" />
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 8px; font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-500);">
+            Opening reading · Nozzle 03
+            <span id="field-totalizer" style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--paper-50); border: 1.5px solid var(--ink-900); border-radius: 4px;"></span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom: 14px;">State indicators</div>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--ok-100); color: var(--ok-600); border-radius: 4px; font-weight: 500; font-size: 13px;"><span style="width: 8px; height: 8px; background: var(--ok-600); border-radius: 1px;"></span>OK · Tank healthy</span>
+          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--warn-100); color: var(--warn-600); border-radius: 4px; font-weight: 500; font-size: 13px;"><span style="width: 8px; height: 8px; background: var(--warn-600); border-radius: 1px;"></span>Warning · Low stock</span>
+          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--error-100); color: var(--error-600); border-radius: 4px; font-weight: 500; font-size: 13px;"><span style="width: 8px; height: 8px; background: var(--error-600); border-radius: 1px;"></span>Error · Variance &gt; 0.5%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- MOTION -->
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">07 · Motion</div>
+          <h2 class="h2">The roll, the lock, the snap.</h2>
+        </div>
+      </div>
+      <p class="lede" style="margin-bottom: 36px;">
+        Numbers don't fade in. They <em>roll into place</em>. Motion is the product's most distinctive interaction — it should feel mechanical, cinematic, and resolved.
+      </p>
+
+      <div class="grid-3">
+        <div style="padding: 28px; background: var(--paper-100); border-radius: 6px;">
+          <div style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--saffron-600); margin-bottom: 14px;">01</div>
+          <div class="h3" style="margin-bottom: 10px;">All digits start</div>
+          <div style="font-size: 13px; color: var(--ink-700); line-height: 1.5;">Every cell begins rolling at the same moment. Random-looking but synchronized — the system is calculating.</div>
+        </div>
+        <div style="padding: 28px; background: var(--paper-100); border-radius: 6px;">
+          <div style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--saffron-600); margin-bottom: 14px;">02</div>
+          <div class="h3" style="margin-bottom: 10px;">High digits lock</div>
+          <div style="font-size: 13px; color: var(--ink-700); line-height: 1.5;">Leftmost digits settle first, decelerating from 1200ms onward. Reading becomes legible top-down.</div>
+        </div>
+        <div style="padding: 28px; background: var(--paper-100); border-radius: 6px;">
+          <div style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--saffron-600); margin-bottom: 14px;">03</div>
+          <div class="h3" style="margin-bottom: 10px;">Precision snaps</div>
+          <div style="font-size: 13px; color: var(--ink-700); line-height: 1.5;">The rightmost digit is last, with a perceptible click into place at ~1800ms.</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--paper-300); font-family: var(--font-mono); font-size: 13px; color: var(--ink-700); line-height: 1.8;">
+        duration · 1800ms · cubic-bezier(0.16, 1, 0.3, 1)<br/>
+        stagger · digit_index × 90ms (right-to-left settle)<br/>
+        snap · final 80ms uses cubic-bezier(0.6, 0, 0.4, 1.4) for overshoot
+      </div>
+    </section>
+
+    <!-- SCREENS -->
+    <section id="screens" class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">08 · Sample screens</div>
+          <h2 class="h2">The system applied.</h2>
+        </div>
+      </div>
+      <p class="lede" style="margin-bottom: 56px;">
+        Three of the moments that matter most in a daily shift — the totalizer reading, the shift summary at handover, and the parchi that closes the books.
+      </p>
+
+      <div class="phone-row">
+
+        <!-- Phone 1 — Shift summary -->
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>9:41</span>
+              <span style="font-family: var(--font-mono); font-size: 12px;">·· · · ·</span>
+            </div>
+            <div class="app-header">
+              <div class="app-mark"><div class="app-mark-square"></div><span><span class="ink">pump</span><span class="saff">vision</span></span></div>
+              <div style="font-family: var(--font-mono); font-size: 10px; color: var(--paper-500); letter-spacing: 0.06em;">ALIBAUG · 04217</div>
+            </div>
+            <div class="rule" style="margin: 0 20px;"></div>
+
+            <div style="padding: 18px 20px 14px;">
+              <div class="eyebrow" style="font-size: 10px; margin-bottom: 6px;">Shift · A · 06:00 — 14:00</div>
+              <div class="h3" style="font-family: Newsreader; font-size: 26px; font-weight: 300;">Tuesday's <em style="font-style: italic;">handover.</em></div>
+              <div style="font-size: 13px; color: var(--ink-700); margin-top: 4px;">R. Mehta · attendant</div>
+            </div>
+
+            <div style="margin: 0 20px; padding: 18px 16px; background: var(--paper-100); border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span class="eyebrow" style="font-size: 10px;">Gross sales · ₹</span>
+                <span style="font-family: var(--font-mono); font-size: 10px; color: var(--ok-600);">● live</span>
+              </div>
+              <div id="phone1-tot" class="row-cells"></div>
+              <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 12px; color: var(--ink-700);">
+                <span>Volume · <span style="font-family: var(--font-mono); color: var(--ink-900); font-weight: 600;">1,247.218 L</span></span>
+                <span>Tickets · <span style="font-family: var(--font-mono); color: var(--ink-900); font-weight: 600;">312</span></span>
+              </div>
+            </div>
+
+            <div class="eyebrow" style="font-size: 10px; padding: 18px 20px 4px;">By product</div>
+            <div style="padding: 0 20px;" id="phone1-products"></div>
+
+            <div style="margin-top: auto; padding: 14px 20px 24px; border-top: 1px solid var(--paper-300); display: flex; gap: 10px;">
+              <button class="btn btn-primary" style="flex: 1; justify-content: center;">Close shift</button>
+              <button class="btn btn-ghost">Reconcile</button>
+            </div>
+          </div>
+          <div class="phone-home"></div>
+        </div>
+
+        <!-- Phone 2 — Totalizer -->
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>14:08</span>
+              <span style="font-family: var(--font-mono); font-size: 12px;">·· · · ·</span>
+            </div>
+            <div class="app-header">
+              <div class="app-mark"><div class="app-mark-square"></div><span><span class="ink">pump</span><span class="saff">vision</span></span></div>
+              <div style="font-family: var(--font-mono); font-size: 10px; color: var(--paper-500); letter-spacing: 0.06em;">NOZZLE · 03 · MS</div>
+            </div>
+            <div class="rule" style="margin: 0 20px;"></div>
+
+            <div style="padding: 14px 20px 8px; display: flex; align-items: center; gap: 10px;">
+              <span style="color: var(--ink-700); font-size: 18px;">←</span>
+              <div class="eyebrow" style="font-size: 10px;">Reading · opening → closing</div>
+            </div>
+
+            <div style="padding: 0 20px 8px;">
+              <div class="h3" style="font-size: 26px; font-weight: 300; margin-bottom: 6px;">Nozzle <em style="font-style: italic;">03</em></div>
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-700);">
+                <span class="chip" style="background: var(--ms-100); color: var(--ms-600); font-size: 10px; letter-spacing: 0.08em;"><span class="chip-dot" style="background: var(--ms-600);"></span>MS · Petrol</span>
+                <span>· DU 02 · pump 03</span>
+              </div>
+            </div>
+
+            <div style="margin: 14px 20px; padding: 24px 18px 16px; background: var(--ink-900); border-radius: 10px; position: relative;">
+              <div style="position: absolute; top: 12px; left: 18px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; color: var(--paper-400); text-transform: uppercase;">Closing · totalizer</div>
+              <div style="position: absolute; top: 12px; right: 18px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: var(--saffron-400);">● rolling</div>
+              <div style="margin-top: 16px; display: flex; justify-content: center;" id="phone2-tot"></div>
+              <div style="margin-top: 12px; display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--paper-400); letter-spacing: 0.06em;"><span>LITRES</span><span>14:08:22</span></div>
+            </div>
+
+            <div style="padding: 0 20px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="padding: 12px; background: var(--paper-100); border-radius: 6px;">
+                  <div class="eyebrow" style="font-size: 9px; margin-bottom: 8px;">Opening</div>
+                  <div id="phone2-open" class="row-cells"></div>
+                </div>
+                <div style="padding: 12px; background: var(--paper-100); border-radius: 6px;">
+                  <div class="eyebrow" style="font-size: 9px; margin-bottom: 8px;">Dispensed</div>
+                  <div id="phone2-disp" class="row-cells"></div>
+                </div>
+              </div>
+              <div style="margin-top: 14px; padding: 12px; background: var(--saffron-100); border: 1px solid var(--saffron-200); border-radius: 6px; display: flex; gap: 10px; align-items: flex-start;">
+                <span style="width: 6px; height: 6px; background: var(--saffron-600); border-radius: 1px; margin-top: 7px; flex: none;"></span>
+                <div style="font-size: 12.5px; line-height: 1.5; color: var(--ink-800);"><strong style="font-weight: 600;">Variance · +0.18 L</strong> against meter check at 13:42. Within tolerance.</div>
+              </div>
+            </div>
+
+            <div style="margin-top: auto; padding: 14px 20px 24px; display: flex; gap: 10px;">
+              <button class="btn btn-saffron" style="flex: 1; justify-content: center;">Lock reading</button>
+              <button class="btn btn-ghost">Re-take</button>
+            </div>
+          </div>
+          <div class="phone-home"></div>
+        </div>
+
+        <!-- Phone 3 — Receipt -->
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>14:12</span>
+              <span style="font-family: var(--font-mono); font-size: 12px;">·· · · ·</span>
+            </div>
+            <div class="app-header">
+              <div class="app-mark"><div class="app-mark-square"></div><span><span class="ink">pump</span><span class="saff">vision</span></span></div>
+              <div style="font-family: var(--font-mono); font-size: 10px; color: var(--paper-500); letter-spacing: 0.06em;">SHIFT · A · 04217</div>
+            </div>
+            <div class="rule" style="margin: 0 20px;"></div>
+
+            <div style="padding: 14px 20px 8px; display: flex; align-items: center; gap: 10px;">
+              <span style="color: var(--ink-700); font-size: 18px;">←</span>
+              <div class="eyebrow" style="font-size: 10px;">Shift parchi · 12 May</div>
+            </div>
+
+            <div style="margin: 8px 20px 0; background: var(--paper-100); border-radius: 4px; padding: 18px 20px 16px; box-shadow: var(--shadow-1); flex: 1; overflow: auto;">
+              <div style="text-align: center; margin-bottom: 14px;">
+                <div class="mech-mark" style="font-size: 18px;"><span class="ink">pump</span><span class="saff">vision</span></div>
+                <div class="eyebrow" style="font-size: 9px; margin-top: 4px;">Outlet 04217 · Alibaug</div>
+              </div>
+              <div class="rule-dotted"></div>
+              <div style="padding: 10px 0;">
+                <div class="row"><span class="row-k">Shift</span><span>A · 06:00 — 14:00</span></div>
+                <div class="row"><span class="row-k">Attendant</span><span>R. Mehta</span></div>
+                <div class="row"><span class="row-k">Date</span><span>12 May 2026</span></div>
+                <div class="row"><span class="row-k">Closed at</span><span>14:08:22</span></div>
+              </div>
+              <div class="rule-dotted"></div>
+              <div style="padding: 10px 0;">
+                <div class="eyebrow" style="font-size: 9px; margin-bottom: 6px;">Sales by product</div>
+                <div style="display: grid; grid-template-columns: 36px 1fr auto; row-gap: 5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px;">
+                  <span style="color: var(--paper-500);">MS</span><span>612.450 L</span><span style="font-weight: 600;">₹ 41,634.60</span>
+                  <span style="color: var(--paper-500);">HSD</span><span>480.218 L</span><span style="font-weight: 600;">₹ 32,654.82</span>
+                  <span style="color: var(--paper-500);">X2</span><span>118.000 L</span><span style="font-weight: 600;">₹ 8,840.00</span>
+                  <span style="color: var(--paper-500);">XG</span><span>36.550 L</span><span style="font-weight: 600;">₹ 1,199.98</span>
+                </div>
+              </div>
+              <div class="rule-dotted"></div>
+              <div style="padding: 10px 0;">
+                <div class="eyebrow" style="font-size: 9px; margin-bottom: 6px;">Tender</div>
+                <div class="row"><span>Cash</span><span>₹ 52,113.00</span></div>
+                <div class="row"><span>UPI</span><span>₹ 21,440.40</span></div>
+                <div class="row"><span>Card</span><span>₹ 6,776.00</span></div>
+                <div class="row"><span>Credit · 4 cust</span><span>₹ 4,000.00</span></div>
+              </div>
+              <div style="border-top: 1.5px solid var(--ink-900); margin: 8px 0 10px;"></div>
+              <div class="eyebrow" style="font-size: 10px; margin-bottom: 8px;">Net total</div>
+              <div style="display: flex; justify-content: center;" id="phone3-tot"></div>
+              <div style="text-align: center; font-family: var(--font-mono); font-size: 9px; color: var(--paper-500); margin-top: 8px; letter-spacing: 0.06em;">₹ EIGHTY-FOUR THOUSAND THREE HUNDRED TWENTY-NINE · 40</div>
+              <div class="rule-dotted" style="margin-top: 10px;"></div>
+              <div style="padding: 10px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-family: var(--font-mono); font-size: 9px; color: var(--paper-500); letter-spacing: 0.06em;">
+                <div><div style="border-bottom: 1px solid var(--paper-400); height: 24px;"></div><div style="margin-top: 4px;">ATTENDANT</div></div>
+                <div><div style="border-bottom: 1px solid var(--paper-400); height: 24px;"></div><div style="margin-top: 4px;">MANAGER</div></div>
+              </div>
+            </div>
+
+            <div style="padding: 12px 20px 24px; display: flex; gap: 10px;">
+              <button class="btn btn-primary" style="flex: 1; justify-content: center;">Print parchi</button>
+              <button class="btn btn-ghost">Share</button>
+            </div>
+          </div>
+          <div class="phone-home"></div>
+        </div>
+      </div>
+    </section>
+
+    <footer style="padding: 60px 0 20px; border-top: 1px solid var(--paper-300); margin-top: 80px;">
+      <div style="display: flex; justify-content: space-between;" class="eyebrow">
+        <span>End of system · Pumpvision v0.1</span>
+        <span>Accuracy · Efficiency · Trust</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Tweaks panel + toggle -->
+  <button class="tw-toggle" id="tw-toggle" aria-label="Open tweaks"><span class="dot"></span>Tweaks</button>
+  <aside class="tw" id="tw-panel" data-open="false" aria-hidden="true">
+    <div class="tw-hd">
+      <span>Tweaks · feel</span>
+      <button class="tw-x" id="tw-close" aria-label="Close">×</button>
+    </div>
+    <div class="tw-body">
+      <div class="tw-grp">
+        <div class="tw-grp-h"><b>Era</b><span data-era-label>Balanced</span></div>
+        <p>Carry tradition forward, or step fully into the modern. Reshapes corners, density, paper texture, and the cells themselves.</p>
+        <div class="tw-seg" data-tweak="era">
+          <button data-val="mechanical">Mechanical</button>
+          <button data-val="balanced" data-on="true">Balanced</button>
+          <button data-val="modern">Modern</button>
+        </div>
+      </div>
+
+      <div class="tw-grp">
+        <div class="tw-grp-h"><b>Voice</b><span data-voice-label>Editorial</span></div>
+        <p>Headlines as warm editorial prose, or as instrument labels stamped onto the page.</p>
+        <div class="tw-seg" data-tweak="voice">
+          <button data-val="editorial" data-on="true">Editorial</button>
+          <button data-val="stencil">Stencil</button>
+        </div>
+      </div>
+
+      <div class="tw-grp">
+        <div class="tw-grp-h"><b>Saffron presence</b><span data-saff-label>Confident</span></div>
+        <p>How loudly the energy pole speaks — from a single status LED, to a category color worn confidently across the surface.</p>
+        <div class="tw-seg" data-tweak="saff">
+          <button data-val="reserved">Reserved</button>
+          <button data-val="confident" data-on="true">Confident</button>
+          <button data-val="loud">Loud</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    // ─── Tweaks (vanilla) ──────────────────────────────────────
+    (function tweaks() {
+      const panel = document.getElementById('tw-panel');
+      const toggle = document.getElementById('tw-toggle');
+      const closeBtn = document.getElementById('tw-close');
+      const body = document.body;
+
+      const labels = {
+        era:   { mechanical: 'Mechanical', balanced: 'Balanced', modern: 'Modern' },
+        voice: { editorial: 'Editorial', stencil: 'Stencil' },
+        saff:  { reserved: 'Reserved', confident: 'Confident', loud: 'Loud' },
+      };
+
+      // initial state
+      body.dataset.era = 'balanced';
+      body.dataset.voice = 'editorial';
+      body.dataset.saff = 'confident';
+
+      function setOpen(o) {
+        panel.dataset.open = String(o);
+        panel.setAttribute('aria-hidden', String(!o));
+        toggle.dataset.hide = String(o);
+      }
+      toggle.addEventListener('click', () => setOpen(true));
+      closeBtn.addEventListener('click', () => {
+        setOpen(false);
+        try { window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*'); } catch(e) {}
+      });
+
+      // Host protocol
+      window.addEventListener('message', (e) => {
+        const t = e.data && e.data.type;
+        if (t === '__activate_edit_mode') setOpen(true);
+        if (t === '__deactivate_edit_mode') setOpen(false);
+      });
+      try { window.parent.postMessage({ type: '__edit_mode_available' }, '*'); } catch(e) {}
+
+      // Segmented controls
+      panel.querySelectorAll('.tw-seg').forEach(seg => {
+        const key = seg.dataset.tweak;
+        seg.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-val]');
+          if (!btn) return;
+          const val = btn.dataset.val;
+          [...seg.children].forEach(c => c.dataset.on = String(c === btn));
+          body.dataset[key] = val;
+          const labelEl = panel.querySelector('[data-' + key + '-label]');
+          if (labelEl) labelEl.textContent = labels[key][val];
+        });
+      });
+    })();
+
+    // ─── Build helpers (no React, no babel) ────────────────────
+    function makeCell(ch, w, h, accent) {
+      const isPunct = /[.,:\s\-]/.test(ch);
+      const el = document.createElement('span');
+      el.className = 'cell' + (accent ? ' accent' : '') + (isPunct ? ' punct' : '');
+      el.style.width = w + 'px';
+      el.style.height = h + 'px';
+      el.style.fontSize = (h * 0.55) + 'px';
+      el.textContent = ch;
+      return el;
+    }
+    function makeRow(value, w, h, accentLast) {
+      const wrap = document.createElement('span');
+      wrap.className = 'row-cells';
+      const chars = String(value).split('');
+      chars.forEach((c, i) => {
+        wrap.appendChild(makeCell(c, w, h, !!accentLast && i === chars.length - 1));
+      });
+      return wrap;
+    }
+    function fillRow(id, value, w, h, accentLast) {
+      const target = document.getElementById(id);
+      if (!target) return;
+      target.innerHTML = '';
+      const row = makeRow(value, w, h, accentLast);
+      // Move children directly so the wrapping row-cells class doesn't double up
+      while (row.firstChild) target.appendChild(row.firstChild);
+    }
+
+    // Logotype B — letters in cells
+    (function logoB() {
+      const target = document.getElementById('logo-b');
+      if (!target) return;
+      const letters = 'PUMPVISION'.split('');
+      const cell = 38;
+      letters.forEach((l, i) => {
+        const el = document.createElement('span');
+        el.className = 'cell' + (i === 4 ? ' accent' : '');
+        el.style.width = cell + 'px';
+        el.style.height = (cell * 1.3) + 'px';
+        el.style.fontSize = (cell * 0.7) + 'px';
+        el.style.fontFamily = 'var(--font-mech)';
+        el.textContent = l;
+        target.appendChild(el);
+      });
+    })();
+
+    // Color swatches
+    function makeSwatchSet(targetId, items) {
+      const t = document.getElementById(targetId);
+      if (!t) return;
+      items.forEach(([token, name, hex]) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'swatch';
+        const chip = document.createElement('div');
+        chip.className = 'swatch-chip';
+        chip.style.background = 'var(' + token + ')';
+        const meta = document.createElement('div');
+        meta.style.display = 'flex';
+        meta.style.flexDirection = 'column';
+        meta.style.gap = '2px';
+        const n = document.createElement('span');
+        n.className = 'swatch-name';
+        n.textContent = name;
+        const h = document.createElement('span');
+        h.className = 'swatch-hex';
+        h.textContent = hex;
+        meta.appendChild(n); meta.appendChild(h);
+        wrap.appendChild(chip); wrap.appendChild(meta);
+        t.appendChild(wrap);
+      });
+    }
+
+    makeSwatchSet('paper-row', [
+      ['--paper-50',  'paper/50',  '#FAF6ED'],
+      ['--paper-100', 'paper/100', '#F5EFE1'],
+      ['--paper-200', 'paper/200', '#ECE4D2'],
+      ['--paper-300', 'paper/300', '#DDD2BB'],
+      ['--paper-400', 'paper/400', '#B8AA8E'],
+      ['--paper-500', 'paper/500', '#8A7D63'],
+    ]);
+    makeSwatchSet('ink-row', [
+      ['--ink-900', 'ink/900', '#16202E'],
+      ['--ink-800', 'ink/800', '#1F2C3F'],
+      ['--ink-700', 'ink/700', '#324154'],
+      ['--ink-600', 'ink/600', '#4A5870'],
+      ['--ink-500', 'ink/500', '#6B7891'],
+    ]);
+    makeSwatchSet('saffron-row', [
+      ['--saffron-700', 'saffron/700', '#B8421A'],
+      ['--saffron-600', 'saffron/600', '#D4541F'],
+      ['--saffron-500', 'saffron/500', '#E96821'],
+      ['--saffron-400', 'saffron/400', '#F08A4D'],
+      ['--saffron-200', 'saffron/200', '#F7C9A8'],
+      ['--saffron-100', 'saffron/100', '#FBE5D3'],
+    ]);
+
+    // Product layer (richer cards)
+    (function products() {
+      const t = document.getElementById('product-row');
+      if (!t) return;
+      const prods = [
+        ['--hsd-600', '#4A6B3A', 'HSD', 'Diesel'],
+        ['--ms-600',  '#C43D2A', 'MS',  'Petrol'],
+        ['--x2-600',  '#6B3A86', 'X2',  'Premium Petrol'],
+        ['--xg-600',  '#1F6B6B', 'XG',  'Bio Diesel'],
+      ];
+      prods.forEach(([token, hex, code, name]) => {
+        const card = document.createElement('div');
+        card.style.cssText = 'background: var(--paper-100); padding: 18px; border-radius: 6px; display: flex; align-items: center; gap: 14px;';
+        card.innerHTML = '<div style="width: 44px; height: 44px; background: var(' + token + '); border-radius: 4px;"></div>'
+          + '<div style="display: flex; flex-direction: column; gap: 2px;">'
+          + '<span style="font-family: var(--font-mono); font-size: 11px; color: var(--paper-500); letter-spacing: 0.12em;">' + code + '</span>'
+          + '<span style="font-family: var(--font-serif); font-size: 20px;">' + name + '</span>'
+          + '<span style="font-family: var(--font-mono); font-size: 10px; color: var(--paper-500);">' + hex + '</span>'
+          + '</div>';
+        t.appendChild(card);
+      });
+    })();
+
+    // Totalizer demos
+    fillRow('tot-xl', '084329.40',   42, 64, true);
+    fillRow('tot-l',  '01247.218',   28, 44, true);
+    fillRow('tot-m',  '00482.6',     20, 32, false);
+    fillRow('tot-s',  '0034.50',     14, 22, false);
+
+    // Field totalizer
+    fillRow('field-totalizer', '01247.218', 18, 28, true);
+
+    // Phone totalizers
+    fillRow('phone1-tot', '084329.40', 24, 38, true);
+    fillRow('phone2-tot', '01247.218', 24, 40, true);
+    fillRow('phone2-open', '00635.000', 14, 22, false);
+    fillRow('phone2-disp', '00612.218', 14, 22, true);
+    fillRow('phone3-tot', '084329.40', 20, 32, true);
+
+    // Phone 1 product list
+    (function phone1Products() {
+      const t = document.getElementById('phone1-products');
+      if (!t) return;
+      const items = [
+        ['MS',  'Petrol',         '0612.450', '41,634.60', '--ms-600'],
+        ['HSD', 'Diesel',         '0480.218', '32,654.82', '--hsd-600'],
+        ['X2',  'Premium Petrol', '0118.000', '8,840.00',  '--x2-600'],
+        ['XG',  'Bio Diesel',     '0036.550', '1,199.98',  '--xg-600'],
+      ];
+      items.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; padding: 10px 0; gap: 12px;';
+        row.innerHTML = '<span style="width: 4px; height: 26px; background: var(' + p[4] + '); border-radius: 1px;"></span>'
+          + '<div style="flex: 1;">'
+          +   '<div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; color: var(--paper-500);">' + p[0] + '</div>'
+          +   '<div style="font-family: var(--font-serif); font-size: 16px;">' + p[1] + '</div>'
+          + '</div>'
+          + '<div style="text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums;">'
+          +   '<div style="font-size: 13px; font-weight: 600;">₹ ' + p[3] + '</div>'
+          +   '<div style="font-size: 11px; color: var(--paper-500);">' + p[2] + ' L</div>'
+          + '</div>';
+        t.appendChild(row);
+        if (i < items.length - 1) {
+          const rule = document.createElement('div');
+          rule.className = 'rule-dotted';
+          t.appendChild(rule);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

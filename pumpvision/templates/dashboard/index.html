@@ -1,36 +1,227 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — PumpVision{% endblock %}
+{% block title %}Dashboard — Pumpvision{% endblock %}
 
-{% block content %}
-<h1 class="text-xl font-bold text-gray-800 mb-4">Dashboard</h1>
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>
+  body { margin: 0; background: #faf6ee; }
+</style>
+{% endblock %}
 
-<div class="space-y-3">
-  <a href="{{ url_for('credit.dashboard') }}"
-     class="flex items-center justify-between bg-white rounded-xl shadow p-4 hover:bg-gray-50">
-    <div>
-      <p class="font-semibold text-gray-800">Credit Management</p>
-      <p class="text-xs text-gray-400 mt-0.5">Customer ledger, invoices, balances</p>
+{% block page %}
+<div class="dash" style="display:flex;flex-direction:column;height:100vh;height:100dvh;background:#faf6ee;">
+
+  <!-- Scrollable body -->
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+
+    <!-- HERO ZONE -->
+    <div class="dash-hero">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:14px 22px 0;position:relative;z-index:2;">
+        <span style="font-family:var(--font-sans);font-size:13px;font-weight:500;color:#5a3a00;">
+          Morning, <strong style="color:#2a1a00;font-weight:600;">{{ first_name }}</strong> · Shree Petroleum
+        </span>
+      </div>
+
+      <!-- Price ticker -->
+      <div class="dash-ticker2">
+        {% for code in ['HS', 'MS', 'X2', 'XG'] %}
+        <span class="t">
+          <span class="code">{{ code }}</span>
+          <span class="px">{{ "%.2f"|format(prices[code]) }}</span>
+        </span>
+        {% if not loop.last %}<span class="sep"></span>{% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- Cash hero -->
+      <div class="dash-cash">
+        <div class="amount">
+          <span class="rs">₹</span>{{ derived_cash | inr }}
+        </div>
+        {% if trend is not none %}
+        <div class="trend {{ 'up' if trend >= 0 else 'down' }}">
+          {{ '▲' if trend >= 0 else '▼' }} ₹ {{ trend | abs | inr }}
+          <span class="vs">vs yesterday</span>
+        </div>
+        {% endif %}
+        <div class="label">cash</div>
+      </div>
+
+    </div><!-- /dash-hero -->
+
+    <!-- Category switcher -->
+    <div class="dash-seg" role="tablist">
+      <button type="button" data-cat="petrol" class="active">Petrol</button>
+      <button type="button" data-cat="diesel">Diesel</button>
+      <button type="button" data-cat="cng">CNG + Lube</button>
     </div>
-    <span class="text-indigo-500 text-xl">›</span>
-  </a>
 
-  <a href="{{ url_for('paytm.index') }}"
-     class="flex items-center justify-between bg-white rounded-xl shadow p-4 hover:bg-gray-50">
-    <div>
-      <p class="font-semibold text-gray-800">Paytm Collections</p>
-      <p class="text-xs text-gray-400 mt-0.5">Upload CSV, view daily UPI & card totals</p>
+    <!-- PETROL panel: MS + X2 -->
+    <div class="dash-cat active" data-cat-panel="petrol">
+      <div class="dash-products">
+
+        <div class="pcard" data-p="MS">
+          <div class="stripe"></div>
+          <div class="code-row"><span class="code">MS · Petrol</span></div>
+          <div class="litres">
+            {{ products.MS.litres | thousands }}
+            <span class="u">L</span>
+          </div>
+          <div class="revenue">₹ {{ products.MS.revenue | inr }}</div>
+        </div>
+
+        <div class="pcard" data-p="X2">
+          <div class="stripe"></div>
+          <div class="code-row"><span class="code">XP · Premium</span></div>
+          <div class="litres">
+            {{ products.X2.litres | thousands }}
+            <span class="u">L</span>
+          </div>
+          <div class="revenue">₹ {{ products.X2.revenue | inr }}</div>
+        </div>
+
+      </div>
     </div>
-    <span class="text-indigo-500 text-xl">›</span>
-  </a>
 
-  <div class="bg-white rounded-xl shadow p-4 opacity-50">
-    <p class="font-semibold text-gray-500">Daily Reconciliation</p>
-    <p class="text-xs text-gray-400 mt-0.5">Coming soon</p>
-  </div>
+    <!-- DIESEL panel: HS + XG -->
+    <div class="dash-cat" data-cat-panel="diesel">
+      <div class="dash-products">
 
-  <div class="bg-white rounded-xl shadow p-4 opacity-50">
-    <p class="font-semibold text-gray-500">Stock & Deliveries</p>
-    <p class="text-xs text-gray-400 mt-0.5">Coming soon</p>
-  </div>
-</div>
+        <div class="pcard" data-p="HS">
+          <div class="stripe"></div>
+          <div class="code-row"><span class="code">HS · Diesel</span></div>
+          <div class="litres">
+            {{ products.HS.litres | thousands }}
+            <span class="u">L</span>
+          </div>
+          <div class="revenue">₹ {{ products.HS.revenue | inr }}</div>
+        </div>
+
+        <div class="pcard" data-p="XG">
+          <div class="stripe"></div>
+          <div class="code-row"><span class="code">XG · XtraGreen</span></div>
+          <div class="litres">
+            {{ products.XG.litres | thousands }}
+            <span class="u">L</span>
+          </div>
+          <div class="revenue">₹ {{ products.XG.revenue | inr }}</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CNG + LUBE panel -->
+    <div class="dash-cat" data-cat-panel="cng">
+      <div class="dash-products">
+
+        <div class="pcard" data-p="CNG">
+          <div class="stripe"></div>
+          <div class="code-row"><span class="code">CNG</span></div>
+          {% if cng %}
+          <div class="litres">{{ cng.kg_sold | int }}<span class="u">kg</span></div>
+          <div class="revenue">₹ {{ cng.revenue | inr }}</div>
+          {% else %}
+          <div class="litres" style="font-size:20px;color:var(--ink-3);">—</div>
+          <div class="revenue" style="color:var(--ink-3);">No reading</div>
+          {% endif %}
+        </div>
+
+        <div class="pcard" data-p="LUBE">
+          <div class="stripe"></div>
+          <div class="code-row"><span class="code">Lubricants</span></div>
+          {% if lube_units > 0 %}
+          <div class="litres">{{ lube_units }}<span class="u">U</span></div>
+          <div class="revenue">₹ {{ lube_cash | inr }}</div>
+          {% else %}
+          <div class="litres" style="font-size:20px;color:var(--ink-3);">—</div>
+          <div class="revenue" style="color:var(--ink-3);">Not active</div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Stock watch — only shown when ≤ 7 days remaining for any product -->
+    {% if stock_alerts %}
+    <div class="dash-stock">
+      <div class="head">
+        <span class="eb">Stock watch</span>
+        <span class="meta">{{ stock_alerts | length }} product{{ 's' if stock_alerts | length > 1 }}</span>
+      </div>
+      {% for alert in stock_alerts %}
+      <div class="alert {{ 'urgent' if alert.urgent }}">
+        <span class="pcode">{{ alert.product }}</span>
+        <span class="body">
+          {% if alert.urgent %}
+            <b>{{ alert.days_int }} day{{ 's' if alert.days_int != 1 }}</b> of cover — order today.
+          {% else %}
+            <b>{{ alert.days_int }} days</b> left — order by {{ alert.order_by }}.
+          {% endif %}
+        </span>
+        <span class="cta">{{ 'Order' if alert.urgent else 'Plan' }} →</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="height:18px;"></div>
+
+  </div><!-- /scrollbody -->
+
+  <!-- Bottom nav -->
+  <nav class="owner-nav">
+    <a href="{{ url_for('dashboard.index') }}" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-3v-7H8v7H5a2 2 0 0 1-2-2v-9z"/>
+      </svg>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="5" y="4" width="14" height="17" rx="2"/>
+        <line x1="9" y1="9" x2="15" y2="9"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+      </svg>
+      <span class="nav-label">Tanks</span>
+    </a>
+    <a href="{{ url_for('credit.dashboard') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="6" width="18" height="13" rx="2"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span class="nav-label">Credit</span>
+    </a>
+    <a href="{{ url_for('dashboard.summary') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
+      </svg>
+      <span class="nav-label">Summary</span>
+    </a>
+    <a href="{{ url_for('auth.logout') }}">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="5" cy="12" r="1.6"/>
+        <circle cx="12" cy="12" r="1.6"/>
+        <circle cx="19" cy="12" r="1.6"/>
+      </svg>
+      <span class="nav-label">More</span>
+    </a>
+  </nav>
+
+</div><!-- /dash wrapper -->
+
+<script>
+  document.querySelectorAll('.dash-seg').forEach(seg => {
+    seg.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-cat]');
+      if (!btn) return;
+      const cat = btn.dataset.cat;
+      seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.dash-cat').forEach(p =>
+        p.classList.toggle('active', p.dataset.catPanel === cat)
+      );
+    });
+  });
+</script>
 {% endblock %}

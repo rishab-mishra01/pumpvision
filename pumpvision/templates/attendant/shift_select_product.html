@@ -83,58 +83,77 @@
   {% endif %}
 
   <!-- Product grid -->
-  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
-              gap:10px;padding:0 20px 20px;min-height:0;">
+  <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:0 20px 20px;min-height:0;">
 
-    {% set products = [
-      ('HS', 'hsd', 'High Speed\nDiesel'),
-      ('MS', 'ms',  'Motor Spirit'),
-      ('X2', 'x2',  'Xtra Premium 95'),
-      ('XG', 'xg',  'Xtra Green'),
-    ] %}
+    <!-- Liquid fuel: 2×2 grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;flex:1;gap:10px;min-height:0;">
 
-    {% for code, cls, label in products %}
-    {% set done = product_done.get(code, False) %}
-    {% if code in ('HS', 'MS') %}
-      {% set href = url_for('attendant.shift_du_selection', product=code) %}
-    {% else %}
-      {% set href = url_for('attendant.shift_numpad', nozzle=code) %}
-    {% endif %}
+      {% set liquid_products = [
+        ('HS', 'hsd', 'High Speed Diesel'),
+        ('MS', 'ms',  'Motor Spirit'),
+        ('X2', 'x2',  'Xtra Premium 95'),
+        ('XG', 'xg',  'Xtra Green'),
+      ] %}
 
-    <a href="{{ href if not all_submitted else '#' }}"
-       class="prod-tile">
+      {% for code, cls, label in liquid_products %}
+      {% set done = product_done.get(code, False) %}
+      {% if code in ('HS', 'MS') %}
+        {% set href = url_for('attendant.shift_du_selection', product=code) %}
+      {% else %}
+        {% set href = url_for('attendant.shift_numpad', nozzle=code) %}
+      {% endif %}
 
-      <!-- Top: icon + DONE badge -->
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-        <div style="width:32px;height:32px;border-radius:var(--r-card);
-                    background:var(--{{ cls }}-100);
-                    display:flex;align-items:center;justify-content:center;">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-               stroke="var(--{{ cls }}-600)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 22V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/>
-            <path d="M3 22h11"/>
-            <path d="M7 9h4"/>
-            <path d="M15 8.5 17 10"/>
-            <path d="M17 10v4a2 2 0 0 1-2 2"/>
-          </svg>
+      <a href="{{ href if not all_submitted else '#' }}"
+         class="prod-tile">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:32px;height:32px;border-radius:var(--r-card);
+                      background:var(--{{ cls }}-100);
+                      display:flex;align-items:center;justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+                 stroke="var(--{{ cls }}-600)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 22V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/>
+              <path d="M3 22h11"/>
+              <path d="M7 9h4"/>
+              <path d="M15 8.5 17 10"/>
+              <path d="M17 10v4a2 2 0 0 1-2 2"/>
+            </svg>
+          </div>
+          {% if done %}<span class="chip chip-ok">Done</span>{% endif %}
         </div>
-        {% if done %}
-        <span class="chip chip-ok">Done</span>
-        {% endif %}
-      </div>
+        <div>
+          <div style="font-family:var(--font-mono);font-weight:700;font-size:1.75rem;
+                      color:var(--{{ cls }}-600);letter-spacing:-0.02em;line-height:1;
+                      font-variant-numeric:tabular-nums;">{{ code }}</div>
+          <div style="font-family:var(--font-sans);font-size:11px;font-weight:500;
+                      color:var(--ink-500);margin-top:4px;line-height:1.3;">{{ label }}</div>
+        </div>
+      </a>
+      {% endfor %}
 
-      <!-- Bottom: code + name -->
-      <div>
-        <div style="font-family:var(--font-mono);font-weight:700;font-size:1.75rem;
-                    color:var(--{{ cls }}-600);letter-spacing:-0.02em;line-height:1;
-                    font-variant-numeric:tabular-nums;">{{ code }}</div>
+    </div>
+
+    <!-- CNG tile — full width row -->
+    {% set cng_done = product_done.get('CNG', False) %}
+    <a href="{{ url_for('attendant.shift_cng_numpad') if not all_submitted else '#' }}"
+       class="prod-tile"
+       style="min-height:72px;flex-direction:row;align-items:center;gap:14px;padding:14px 16px;">
+      <div style="width:32px;height:32px;border-radius:var(--r-card);
+                  background:#dbeafe;flex-shrink:0;
+                  display:flex;align-items:center;justify-content:center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+             stroke="#1d4ed8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      </div>
+      <div style="flex:1;">
+        <div style="font-family:var(--font-mono);font-weight:700;font-size:1.4rem;
+                    color:#1d4ed8;letter-spacing:-0.02em;line-height:1;">CNG</div>
         <div style="font-family:var(--font-sans);font-size:11px;font-weight:500;
-                    color:var(--ink-500);margin-top:4px;line-height:1.3;">
-          {{ label.replace('\n', ' ') }}
-        </div>
+                    color:var(--ink-500);margin-top:2px;">Compressed Natural Gas · kg</div>
       </div>
+      {% if cng_done %}<span class="chip chip-ok">Done</span>{% endif %}
     </a>
-    {% endfor %}
 
   </div>
 </div>
