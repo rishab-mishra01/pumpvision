@@ -17,6 +17,7 @@ Jobs run in this fixed order per day:
   3. ISS boundary     — finds 6AM totalizer readings for all 6 nozzles using
                         the ST file already on disk, then writes to NozzleTotalizer DB.
   4. SDMS PAD         — fleet card posting summary from SDMS portal (own browser context).
+  5. ATG snapshot     — current tank levels from FCC > Stock (same IRAS session as 1-3).
 
 Delivery jobs (RDB Invoice, SAP Invoice, TT Receipt, density records) are
 event-driven — they fire when a tanker arrives, not on a daily schedule.
@@ -102,6 +103,7 @@ _iss  = _load_scraper("iras_iss_exporter")
 _prm  = _load_scraper("iras_price_exporter")
 _ptm  = _load_scraper("paytm_exporter")
 _sdms = _load_scraper("sdms_pad_exporter")
+_atg  = _load_scraper("iras_atg_exporter")
 
 # Both scraper modules wrap sys.stdout at import time, leaving two wrappers on
 # the same fd and causing the original buffer to be closed. Reset stdout by
@@ -294,6 +296,22 @@ async def _job_paytm():
     success = await _ptm.run()
     if not success:
         print("  [WARN] Paytm download failed — continuing with IRAS jobs")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 5 — ATG STOCK SNAPSHOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _job_atg(page):
+    """
+    Scrape the current ATG tank level snapshot from FCC Data > Stock.
+
+    Runs inside the existing IRAS browser session (after ISS, before close)
+    so no additional CAPTCHA solve is needed.
+    Writes one TankReading row per tank to the database.
+    """
+    atg_dir = _data_root / "ATG"
+    await _atg.run_atg(page, output_dir=atg_dir)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -514,6 +532,9 @@ async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
 
         # ── Job 3: ISS boundary → DB ──────────────────────────────────────────
         await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
+
+        # ── Job 5: ATG snapshot — reuses existing IRAS session, no re-login ──
+        await _job_atg(page)
 
         await browser.close()
 
