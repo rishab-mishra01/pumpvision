@@ -22,6 +22,7 @@ Integrated use:
 """
 
 import asyncio
+import base64
 import io
 import os
 import sys
@@ -204,25 +205,28 @@ def _parse_row(row: dict) -> dict | None:
 
     tank_info = PRODUCT_TANK_MAP[product]
 
-    level_mm      = _safe_float(_find_col(row, "level"))
-    volume_litres = _safe_float(_find_col(row, "volume"))
-    capacity_str  = _find_col(row, "capacity")
-    capacity_litres = _safe_float(capacity_str) if capacity_str else tank_info["capacity_litres"]
+    # IRAS Stock tab column names (confirmed from live portal):
+    #   product dip  → level in mm
+    #   net qty      → net volume in litres (product qty minus water qty)
+    #   stock date   → DD-MM-YYYY
+    #   stock time   → HH:MM:SS
+    level_mm      = _safe_float(_find_col(row, "product dip") or _find_col(row, "dip"))
+    volume_litres = _safe_float(
+        _find_col(row, "net qty") or _find_col(row, "product qty") or _find_col(row, "volume")
+    )
+    capacity_litres = tank_info["capacity_litres"]  # no capacity column in grid
 
-    # pct_full: prefer computed from volume/capacity for consistency
+    # pct_full computed from volume/capacity
     pct_full = None
-    if volume_litres is not None and capacity_litres and capacity_litres > 0:
+    if volume_litres is not None and capacity_litres > 0:
         pct_full = round(volume_litres / capacity_litres * 100, 2)
 
-    # scraped_at: look for a timestamp column; fall back to utcnow
-    ts_raw = (
-        _find_col(row, "date", "time")
-        or _find_col(row, "timestamp")
-        or _find_col(row, "reading", "time")
-        or _find_col(row, "time")
-    )
+    # scraped_at: combine stock date + stock time columns
+    date_raw = _find_col(row, "stock date") or _find_col(row, "date")
+    time_raw = _find_col(row, "stock time") or _find_col(row, "time")
     scraped_at = None
-    if ts_raw:
+    if date_raw and time_raw:
+        ts_raw = f"{date_raw.strip()} {time_raw.strip()}"
         for fmt in ("%d-%m-%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S",
                     "%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M"):
             try:
@@ -262,6 +266,10 @@ def save_readings_to_db(readings: list[dict]) -> int:
         return 0
 
     try:
+        import sys as _sys
+        _project_root = str(Path(__file__).parent.parent)
+        if _project_root not in _sys.path:
+            _sys.path.insert(0, _project_root)
         from pumpvision import create_app
         from pumpvision.models import db, TankReading
 
@@ -380,6 +388,8 @@ async def run_atg(page, output_dir: Path | None = None) -> list[dict]:
             product_hint = _find_col(row, "product") or "?"
             print(f"  [ATG] Skipped row (product={product_hint!r}): {list(row.keys())[:6]}")
 
+    if raw_rows:
+        print(f"  [ATG] Column names: {list(raw_rows[0].keys())}")
     print(f"  [ATG] Parsed {len(readings)}/{len(raw_rows)} rows → products: "
           f"{[r['product'] for r in readings]}")
 
@@ -397,11 +407,192 @@ async def run_atg(page, output_dir: Path | None = None) -> list[dict]:
 
 
 # ─────────────────────────────────────────────
-# STANDALONE ENTRY POINT (manual login)
+# AUTONOMOUS LOGIN (standalone use)
+# ─────────────────────────────────────────────
+
+_CAPTCHA_PROMPT = (
+    "Read the characters in this CAPTCHA image exactly as they appear. "
+    "Reply with only the characters, no spaces, no punctuation, nothing else. "
+    "Ignore any strikethrough or diagonal lines across the text."
+)
+
+_MAX_LOGIN_ATTEMPTS = 3
+
+
+def _solve_captcha(image_bytes: bytes, api_key: str) -> str:
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+    msg = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=64,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                {"type": "text", "text": _CAPTCHA_PROMPT},
+            ],
+        }],
+    )
+    return msg.content[0].text.strip()
+
+
+async def _autonomous_login(page, username: str, password: str, api_key: str) -> bool:
+    login_url = IRAS_URL
+    print(f"\n[login] Autonomous login — up to {_MAX_LOGIN_ATTEMPTS} attempts")
+
+    for attempt in range(1, _MAX_LOGIN_ATTEMPTS + 1):
+        print(f"  [login] Attempt {attempt}/{_MAX_LOGIN_ATTEMPTS}")
+
+        if attempt > 1:
+            refresh_selectors = [
+                "img[src*='refresh']", "img[src*='reload']",
+                "a[onclick*='captcha']", ".captcha-refresh", "#captchaRefresh",
+            ]
+            refreshed = False
+            for sel in refresh_selectors:
+                loc = page.locator(sel).first
+                try:
+                    if await loc.count() > 0:
+                        await loc.click()
+                        await page.wait_for_timeout(1000)
+                        refreshed = True
+                        break
+                except Exception:
+                    continue
+            if not refreshed:
+                await page.goto(login_url, wait_until="networkidle", timeout=30_000)
+                await page.wait_for_timeout(800)
+
+        # Screenshot CAPTCHA
+        captcha_img = None
+        for sel in ["img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
+                    "img[id*='captcha']", "img[class*='captcha']", "img[alt*='aptcha']",
+                    "form img"]:
+            loc = page.locator(sel).first
+            try:
+                if await loc.count() > 0 and await loc.is_visible(timeout=1500):
+                    captcha_img = loc
+                    break
+            except Exception:
+                continue
+
+        if captcha_img is None:
+            print("  [login] CAPTCHA image not found")
+            continue
+
+        img_bytes = await captcha_img.screenshot()
+        captcha_text = _solve_captcha(img_bytes, api_key)
+        print(f"  [login] CAPTCHA solved: {captcha_text}")
+
+        await page.wait_for_timeout(800)
+
+        # Role dropdown — try native select first, then MUI combobox
+        try:
+            native = page.locator("select").first
+            if await native.count() > 0 and await native.is_visible(timeout=2000):
+                await native.select_option(label="Dealer")
+            else:
+                combo = page.locator("div[role='combobox'], .MuiSelect-select").first
+                if await combo.count() > 0 and await combo.is_visible(timeout=2000):
+                    await combo.click()
+                    await page.wait_for_timeout(500)
+                    dealer = page.locator("li[role='option']:has-text('Dealer')").first
+                    await dealer.wait_for(state="visible", timeout=3000)
+                    await dealer.click()
+        except Exception:
+            pass
+
+        await page.wait_for_timeout(600)
+
+        # Username
+        for sel in ["input[name='username']", "input[name='userId']",
+                    "input[placeholder*='Username']", "input[placeholder*='User']"]:
+            loc = page.locator(sel).first
+            try:
+                if await loc.count() > 0 and await loc.is_visible(timeout=1000):
+                    await loc.fill(username)
+                    break
+            except Exception:
+                continue
+
+        # Password
+        try:
+            pw = page.locator("input[type='password']").first
+            if await pw.count() > 0 and await pw.is_visible(timeout=2000):
+                await pw.fill(password)
+        except Exception:
+            pass
+
+        # CAPTCHA input
+        cap_input = None
+        for sel in ["input[name*='captcha']", "input[name*='Captcha']",
+                    "input[id*='captcha']", "input[placeholder*='aptcha']"]:
+            loc = page.locator(sel).first
+            try:
+                if await loc.count() > 0 and await loc.is_visible(timeout=1000):
+                    cap_input = loc
+                    break
+            except Exception:
+                continue
+        if cap_input is None:
+            inputs = page.locator("input[type='text']:visible")
+            count = await inputs.count()
+            if count > 0:
+                cap_input = inputs.nth(count - 1)
+        if cap_input:
+            await cap_input.fill(captcha_text)
+
+        # Submit
+        submitted = False
+        for sel in ["button[type='submit']", "input[type='submit']",
+                    "button:has-text('Login')", "button:has-text('Sign In')"]:
+            loc = page.locator(sel).first
+            try:
+                if await loc.count() > 0 and await loc.is_visible(timeout=1000):
+                    await loc.click()
+                    submitted = True
+                    break
+            except Exception:
+                continue
+        if not submitted:
+            await page.keyboard.press("Enter")
+
+        await page.wait_for_timeout(3000)
+
+        try:
+            await page.wait_for_function(
+                "() => !window.location.href.includes('/login')", timeout=5000)
+            print("  [login] SUCCESS")
+            await page.wait_for_timeout(2000)
+            return True
+        except PlaywrightTimeout:
+            pass
+
+        if "/login" not in page.url:
+            print("  [login] SUCCESS")
+            await page.wait_for_timeout(2000)
+            return True
+
+        print(f"  [login] Failed — CAPTCHA was: {captcha_text}")
+
+    print(f"[login] FAILED after {_MAX_LOGIN_ATTEMPTS} attempts")
+    return False
+
+
+# ─────────────────────────────────────────────
+# STANDALONE ENTRY POINT
 # ─────────────────────────────────────────────
 
 async def _main_standalone():
-    """Run ATG scraper standalone with manual IRAS login."""
+    """Run ATG scraper standalone with autonomous CAPTCHA login."""
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+
+    username  = os.environ.get("IRAS_USERNAME", "")
+    password  = os.environ.get("IRAS_PASSWORD", "")
+    api_key   = os.environ.get("ANTHROPIC_API_KEY", "")
     output_dir = Path(os.environ.get("OUTPUT_FOLDER", r"C:\IRAS_Data")) / "ATG"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -410,46 +601,37 @@ async def _main_standalone():
     print(f"Output: {output_dir}")
     print()
 
+    if not all([username, password, api_key]):
+        missing = [k for k, v in [("IRAS_USERNAME", username),
+                                   ("IRAS_PASSWORD", password),
+                                   ("ANTHROPIC_API_KEY", api_key)] if not v]
+        print(f"ERROR: missing env vars: {missing}")
+        return
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, args=["--start-maximized"])
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         context = await browser.new_context(
             accept_downloads=True,
             viewport={"width": 1400, "height": 900},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
         )
         page = await context.new_page()
 
-        await page.goto(IRAS_URL, wait_until="networkidle")
-        await page.wait_for_timeout(1500)
+        print(f"[step 0] Loading: {IRAS_URL}")
+        await page.goto(IRAS_URL, wait_until="networkidle", timeout=30_000)
+        await page.wait_for_timeout(1000)
 
-        # Pre-fill credentials from env
-        username = os.environ.get("IRAS_USERNAME", "")
-        password = os.environ.get("IRAS_PASSWORD", "")
-        if username and password:
-            try:
-                for sel in ["input[name='username']", "input[name='userId']",
-                            "input[placeholder*='User']", "input[type='text']"]:
-                    un = page.locator(sel).first
-                    if await un.count() > 0 and await un.is_visible(timeout=1000):
-                        await un.fill(username)
-                        break
-                await page.locator("input[type='password']").fill(password)
-                print("[OK] Credentials pre-filled — solve CAPTCHA and click Login")
-            except Exception:
-                pass
-
-        # Wait for manual login
-        print()
-        print("=" * 55)
-        print("  Solve the CAPTCHA and log in.")
-        print("  Script continues automatically after login.")
-        print("  (waits up to 5 minutes)")
-        print("=" * 55)
-        await page.wait_for_function(
-            "() => !window.location.href.includes('/login')",
-            timeout=300_000,
-        )
-        print("[OK] Login detected")
-        await page.wait_for_timeout(2000)
+        if not await _autonomous_login(page, username, password, api_key):
+            print("\nABORTED — login failed.")
+            await browser.close()
+            return
 
         await run_atg(page, output_dir)
 
