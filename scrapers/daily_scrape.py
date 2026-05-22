@@ -23,15 +23,33 @@ Delivery jobs (RDB Invoice, SAP Invoice, TT Receipt, density records) are
 event-driven — they fire when a tanker arrives, not on a daily schedule.
 They are not part of this orchestrator.
 
+Date semantics (three distinct systems — do not mix):
+  --boundary-only  --date D  →  captures 06:00 boundary on D; writes NozzleTotalizer row
+                                for op_date D.  To see fuel data for accounting op_date D,
+                                run --boundary-only twice: --date D (opening) and
+                                --date D+1 (closing).
+  --accounting-only --date D →  Paytm, Price (PRM) + SDMS for accounting op_date D.
+                                Shift window: D 06:00 → D+1 05:59.
+                                IRAS login required (for Price only).
+  --atg-only                 →  current snapshot; --date ignored.
+  (default/all)   --date D  →  all jobs; same boundary semantics as --boundary-only.
+
 Usage:
-    # Daily cron (yesterday's shift — the most recent completed operational day):
+    # Daily cron (all jobs, today as boundary date):
     python -X utf8 scrapers/daily_scrape.py
 
-    # Single backfill date:
-    python -X utf8 scrapers/daily_scrape.py --date 2026-04-23
+    # Backfill accounting data for op_date 2026-05-21 (Paytm, Price, SDMS):
+    #   shift window: 2026-05-21 06:00 → 2026-05-22 05:59
+    python -X utf8 scrapers/daily_scrape.py --accounting-only --date 2026-05-21
 
-    # Batch backfill:
-    python -X utf8 scrapers/daily_scrape.py --dates 2026-04-20 2026-04-21 2026-04-22
+    # Boundary jobs only (writes one NozzleTotalizer row for 2026-05-21 06:00):
+    python -X utf8 scrapers/daily_scrape.py --boundary-only --date 2026-05-21
+
+    # Current ATG snapshot only (no date required):
+    python -X utf8 scrapers/daily_scrape.py --atg-only
+
+    # Batch boundary backfill:
+    python -X utf8 scrapers/daily_scrape.py --boundary-only --dates 2026-04-20 2026-04-21
 """
 
 import argparse
@@ -285,24 +303,26 @@ async def _autonomous_login(page) -> bool:
 # JOB 0 — PAYTM PAYMENT REPORT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_paytm(dry_run: bool = False):
+async def _job_paytm(dry_run: bool = False, target_date: str | None = None):
     """
-    Download yesterday's Paytm payment transaction CSV.
+    Download Paytm payment transaction CSV.
 
     Runs in its own browser context (independent of the IRAS session).
     Skipped silently when PAYTM_EMAIL / PAYTM_PASSWORD are not configured.
+    target_date: YYYY-MM-DD accounting op_date. If None, uses implicit yesterday.
     """
+    label = f" for {target_date}" if target_date else " (yesterday)"
     print(f"\n{'='*55}")
-    print(f"  JOB 0 — Paytm Payment Report")
+    print(f"  JOB 0 — Paytm Payment Report{label}")
     print(f"{'='*55}")
 
     if not PAYTM_EMAIL or not PAYTM_PASSWORD:
         print("  [SKIP] PAYTM_EMAIL or PAYTM_PASSWORD not set in .env")
         return
 
-    success = await _ptm.run()
+    success = await _ptm.run(target_date=target_date)
     if not success:
-        print("  [WARN] Paytm download failed — continuing with IRAS jobs")
+        print("  [WARN] Paytm download failed — continuing with remaining jobs")
         return
 
     if dry_run:
@@ -315,7 +335,10 @@ async def _job_paytm(dry_run: bool = False):
         from pumpvision.models import db as _db, PaytmTransaction as _PT
         from pumpvision.blueprints.paytm.routes import _parse_paytm_csv
 
-        op_date, _, _ = _ptm.get_op_day_range()
+        if target_date is not None:
+            op_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        else:
+            op_date, _, _ = _ptm.get_op_day_range()
         csv_path = _ptm.OUTPUT_DIR / f"paytm_{op_date.strftime('%Y-%m-%d')}.csv"
         if not csv_path.exists():
             print("  [WARN] Paytm CSV not found after download — skipping DB import")
@@ -360,24 +383,26 @@ async def _job_atg(page, dry_run: bool = False):
 # JOB 4 — SDMS PAD STATEMENT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_sdms(dry_run: bool = False):
+async def _job_sdms(dry_run: bool = False, target_date: str | None = None):
     """
-    Download yesterday's SDMS PAD Statement and compute fleet card posting total.
+    Download SDMS PAD Statement and compute fleet card posting total.
 
     Runs in its own persistent browser context (independent of the IRAS session).
     Skipped silently when SDMS_USERNAME / SDMS_PASSWORD are not configured.
     Outputs: data/sdms/sdms_pad_YYYY-MM-DD.csv + _summary.json
+    target_date: YYYY-MM-DD accounting op_date. If None, uses implicit yesterday.
     dry_run=True: download and parse, but skip DB write.
     """
+    label = f" for {target_date}" if target_date else " (yesterday)"
     print(f"\n{'='*55}")
-    print(f"  JOB 4 — SDMS PAD Statement")
+    print(f"  JOB 4 — SDMS PAD Statement{label}")
     print(f"{'='*55}")
 
     if not SDMS_USERNAME or not SDMS_PASSWORD:
         print("  [SKIP] SDMS_USERNAME or SDMS_PASSWORD not set in .env")
         return
 
-    success = await _sdms.run(dry_run=dry_run)
+    success = await _sdms.run(dry_run=dry_run, target_date=target_date)
     if not success:
         print("  [WARN] SDMS download failed — daily scrape continues")
 
@@ -445,16 +470,17 @@ def _save_prices_to_db(records: list[dict]):
 # JOB 1 — PRICE (PRM)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_price(page, shift_dates: list[str], price_dir: Path, dry_run: bool = False):
+async def _job_price(page, shift_dates: list[str], price_dir: Path, dry_run: bool = False,
+                     acct_dates: list[str] | None = None):
     """
     Download Price (PRM) for exactly the op day(s) being reconciled.
 
-    A single Price Excel file covers the entire date range — no per-date loop needed.
-    RSP is pushed by IOC at 06:00 each day. The RSP for an operational day sits on
-    shift_date - 1 in the Price table (pushed the morning before the shift closes at
-    06:00 on shift_date). We download only those exact op dates — one record per day,
-    never a rolling lookback, because RSP only changes at 06:00 and reconciliation
-    always crosses with the RSP for that specific op day.
+    boundary/all mode (acct_dates=None): op_date = shift_date - 1 for each shift_date.
+    accounting mode (acct_dates provided): op_dates used directly — these are shift start
+    dates so no -1 derivation is needed.
+
+    RSP is pushed by IOC at 06:00 each day. A single Price Excel covers the full range;
+    we download only the exact op dates needed.
     """
     print(f"\n{'='*55}")
     print(f"  JOB 1 — Price (PRM)")
@@ -462,11 +488,15 @@ async def _job_price(page, shift_dates: list[str], price_dir: Path, dry_run: boo
 
     price_dir.mkdir(parents=True, exist_ok=True)
 
-    # op_dates = shift_date - 1 for each shift_date
-    op_dates_for_price = [
-        (datetime.strptime(d, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        for d in shift_dates
-    ]
+    if acct_dates is not None:
+        # accounting mode: supplied dates ARE the op_dates (shift start dates)
+        op_dates_for_price = acct_dates
+    else:
+        # boundary/all mode: op_date = shift_date - 1
+        op_dates_for_price = [
+            (datetime.strptime(d, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            for d in shift_dates
+        ]
     from_date = min(op_dates_for_price)
     to_date   = max(op_dates_for_price)
 
@@ -536,92 +566,162 @@ async def _job_iss_boundary(page, shift_dates: list[str], iss_dir: Path, dry_run
 # ORCHESTRATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
+async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> bool:
     """
-    Main orchestration loop — one browser session, one login, all three jobs.
+    Main orchestration entry point.
 
-    shift_dates: list of shift boundary dates in YYYY-MM-DD format.
-    The shift for date D ran from 06:00 on D-1 to 06:00 on D.
+    mode='all'         Daily run — all jobs, existing behavior preserved.
+                       dates = shift/boundary dates (boundary at 06:00 on each date).
+    mode='boundary'    IRAS boundary jobs only (Price, ST, ISS). No Paytm/SDMS/ATG.
+                       dates = shift/boundary dates.
+    mode='accounting'  Paytm, Price (PRM), SDMS. IRAS login required for Price.
+                       dates = accounting op_dates (shift start dates).
+    mode='atg'         Current ATG snapshot only. dates ignored.
+
+    Date semantics:
+      shift/boundary date D → totalizer boundary captured at 06:00 on D.
+      accounting op_date D  → shift window D 06:00 → D+1 05:59.
+                              Paytm, Price, and SDMS are all scraped for this window.
     """
-    # Derive op_dates (the calendar days the shifts ran on) for ST downloads
+    shift_dates = dates  # clear alias — only meaningful for boundary/all modes
+
+    # Derive op_dates (shift_date − 1) for Shift Totalizer downloads
     op_dates = [
         (datetime.strptime(d, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
         for d in shift_dates
-    ]
+    ] if mode in ('all', 'boundary') else []
 
-    # In dry-run mode, redirect all output to a temporary directory so that
-    # skip-if-exists checks never trigger — every download runs fresh.
-    # The module-level path constants in the imported scrapers are re-patched
-    # to match, so the XG/OOO pre-checks find the freshly-downloaded ST files.
+    # Output directories for IRAS file downloads
     iss_dir   = ISS_DIR
     st_dir    = ST_DIR
     price_dir = PRICE_DIR
 
+    # In dry-run mode, redirect IRAS output to a temp dir so skip-if-exists
+    # checks don't trigger and every download runs fresh.
+    # Price runs in all, boundary, and accounting modes — always redirect it.
     if dry_run:
         _dry_root = _data_root / "_dry_run"
-        iss_dir   = _dry_root / "ISS"
-        st_dir    = _dry_root / "ShiftTotalizer"
         price_dir = _dry_root / "Price"
-        _iss.OUTPUT_FOLDER          = str(iss_dir)
-        _iss.SHIFT_TOTALIZER_FOLDER = str(st_dir)
+        if mode in ('all', 'boundary'):
+            iss_dir   = _dry_root / "ISS"
+            st_dir    = _dry_root / "ShiftTotalizer"
+            _iss.OUTPUT_FOLDER          = str(iss_dir)
+            _iss.SHIFT_TOTALIZER_FOLDER = str(st_dir)
 
     print()
     print("=" * 55)
     print("  IRAS Daily Scrape Orchestrator")
     if dry_run:
         print("  *** DRY RUN — fresh downloads, no DB writes ***")
-    print(f"  Shift dates  : {shift_dates}")
-    print(f"  Op dates (ST): {op_dates}")
-    print(f"  ISS output   : {iss_dir}")
-    print(f"  ST output    : {st_dir}")
-    print(f"  Price output : {price_dir}")
+    if mode == 'all':
+        print(f"  Mode          : all (daily)")
+        print(f"  Shift dates   : {shift_dates}  ← boundary at 06:00 each date")
+        print(f"  Op dates (ST) : {op_dates}")
+        print(f"  ISS output    : {iss_dir}")
+        print(f"  ST output     : {st_dir}")
+        print(f"  Price output  : {price_dir}")
+    elif mode == 'boundary':
+        print(f"  Mode          : boundary-only  (Price, ST, ISS — no Paytm/SDMS/ATG)")
+        print(f"  Boundary dates: {shift_dates}  ← captures 06:00 totalizer rows")
+        print(f"  Op dates (ST) : {op_dates}")
+    elif mode == 'accounting':
+        print(f"  Mode              : accounting-only  (Paytm, Price, SDMS)")
+        for _d in dates:
+            _next = (datetime.strptime(_d, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            print(f"  Accounting op_date: {_d}  (shift window: {_d} 06:00 → {_next} 05:59)")
+    elif mode == 'atg':
+        print(f"  Mode: atg-only  (current snapshot — not date-specific, dates ignored)")
     print("=" * 55)
 
-    # ── Job 0: Paytm — runs its own browser context before the IRAS session ──
-    await _job_paytm(dry_run=dry_run)
+    # ── Job 0: Paytm ─────────────────────────────────────────────────────────
+    # all mode: implicit yesterday (preserves existing daily behavior)
+    # accounting mode: explicit target_date per date in list
+    if mode in ('all', 'accounting'):
+        if mode == 'accounting':
+            for acct_date in dates:
+                await _job_paytm(dry_run=dry_run, target_date=acct_date)
+        else:
+            await _job_paytm(dry_run=dry_run)
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
-        context = await browser.new_context(
-            accept_downloads=True,
-            viewport={"width": 1400, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-        )
-        page = await context.new_page()
+    # ── IRAS browser session (boundary, atg, all modes) ──────────────────────
+    if mode in ('all', 'boundary', 'atg'):
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = await browser.new_context(
+                accept_downloads=True,
+                viewport={"width": 1400, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            )
+            page = await context.new_page()
 
-        print(f"\n[step 0] Loading: {LOGIN_URL}")
-        await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-        await page.wait_for_timeout(1000)
+            print(f"\n[step 0] Loading: {LOGIN_URL}")
+            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            await page.wait_for_timeout(1000)
 
-        # ── One login for all three jobs ─────────────────────────────────────
-        if not await _autonomous_login(page):
-            print("\nABORTED — login failed after all attempts.")
+            if not await _autonomous_login(page):
+                print("\nABORTED — login failed after all attempts.")
+                await browser.close()
+                return False
+
+            # ── Jobs 1–3: Price, ST, ISS boundary ────────────────────────────
+            if mode in ('all', 'boundary'):
+                # Job 1: Price (PRM) — RSP for the op day(s) being reconciled
+                await _job_price(page, shift_dates, price_dir, dry_run=dry_run)
+                # Job 2: Shift Totalizer — must precede ISS (ISS reads ST from disk)
+                await _job_shift_totalizer(page, op_dates, st_dir)
+                # Job 3: ISS boundary → NozzleTotalizer DB rows
+                await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
+
+            # ── Job 5: ATG snapshot ───────────────────────────────────────────
+            if mode in ('all', 'atg'):
+                await _job_atg(page, dry_run=dry_run)
+
             await browser.close()
-            return False
 
-        # ── Job 1: Price (PRM) — RSP for the exact op day(s) ─────────────────
-        await _job_price(page, shift_dates, price_dir, dry_run=dry_run)
+    # ── Accounting mode: IRAS Price for the accounting op_date(s) ───────────
+    # Runs its own browser session — no ST or ISS boundary work, Price only.
+    if mode == 'accounting':
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = await browser.new_context(
+                accept_downloads=True,
+                viewport={"width": 1400, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            )
+            page = await context.new_page()
+            print(f"\n[step 0] Loading: {LOGIN_URL}")
+            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            await page.wait_for_timeout(1000)
+            if not await _autonomous_login(page):
+                print("\nABORTED — IRAS login failed (needed for Price download).")
+                await browser.close()
+                return False
+            await _job_price(page, [], price_dir, dry_run=dry_run, acct_dates=dates)
+            await browser.close()
 
-        # ── Job 2: Shift Totalizer — must precede ISS (ISS reads ST from disk) ─
-        await _job_shift_totalizer(page, op_dates, st_dir)
-
-        # ── Job 3: ISS boundary → DB ──────────────────────────────────────────
-        await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
-
-        # ── Job 5: ATG snapshot — reuses existing IRAS session, no re-login ──
-        await _job_atg(page, dry_run=dry_run)
-
-        await browser.close()
-
-    # ── Job 4: SDMS PAD — own browser context, runs after IRAS session ───────
-    await _job_sdms(dry_run=dry_run)
+    # ── Job 4: SDMS PAD ──────────────────────────────────────────────────────
+    # all mode: implicit yesterday (preserves existing daily behavior)
+    # accounting mode: explicit target_date per date in list
+    if mode in ('all', 'accounting'):
+        if mode == 'accounting':
+            for acct_date in dates:
+                await _job_sdms(dry_run=dry_run, target_date=acct_date)
+        else:
+            await _job_sdms(dry_run=dry_run)
 
     print("\n[DONE] All jobs complete.")
     return True
@@ -635,14 +735,36 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description="Daily IRAS orchestrator — one login, Shift Totalizer + Price + ISS."
     )
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument(
+    date_group = parser.add_mutually_exclusive_group()
+    date_group.add_argument(
         "--date", metavar="YYYY-MM-DD",
-        help="Single shift date. Default: today (for the shift that closed at 06:00 today).",
+        help=(
+            "Single date. Semantics depend on mode: "
+            "--boundary-only = shift boundary date (06:00 on this date captured); "
+            "--accounting-only = accounting op_date (completed shift for this calendar day); "
+            "default (all) = shift boundary date. Default: today."
+        ),
     )
-    group.add_argument(
+    date_group.add_argument(
         "--dates", nargs="+", metavar="YYYY-MM-DD",
-        help="Multiple shift dates for batch backfill.",
+        help="Multiple dates for batch backfill. Same semantics as --date per mode.",
+    )
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--boundary-only", action="store_true", dest="boundary_only",
+        help="IRAS boundary jobs only (Price, ST, ISS). --date = shift boundary date.",
+    )
+    mode_group.add_argument(
+        "--accounting-only", action="store_true", dest="accounting_only",
+        help=(
+            "Accounting jobs: Paytm, Price (PRM), SDMS. IRAS login required for Price. "
+            "--date = accounting op_date (shift start date). "
+            "E.g. --date 2026-05-21 covers shift window 2026-05-21 06:00 → 2026-05-22 05:59."
+        ),
+    )
+    mode_group.add_argument(
+        "--atg-only", action="store_true", dest="atg_only",
+        help="Current ATG snapshot only. --date is ignored.",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -652,13 +774,28 @@ def _parse_args():
 
 
 if __name__ == "__main__":
-    missing = [v for v in ("IRAS_URL", "IRAS_USERNAME", "IRAS_PASSWORD", "ANTHROPIC_API_KEY")
-               if not os.environ.get(v)]
-    if missing:
-        print(f"ERROR: missing environment variable(s): {', '.join(missing)}")
-        sys.exit(1)
-
     args = _parse_args()
+
+    if args.accounting_only:
+        mode = 'accounting'
+        iras_required = True  # Price download requires IRAS login
+    elif args.boundary_only:
+        mode = 'boundary'
+        iras_required = True
+    elif args.atg_only:
+        mode = 'atg'
+        iras_required = True
+    else:
+        mode = 'all'
+        iras_required = True
+
+    if iras_required:
+        missing = [v for v in ("IRAS_URL", "IRAS_USERNAME", "IRAS_PASSWORD", "ANTHROPIC_API_KEY")
+                   if not os.environ.get(v)]
+        if missing:
+            print(f"ERROR: missing environment variable(s): {', '.join(missing)}")
+            sys.exit(1)
+
     if args.dates:
         dates = args.dates
     elif args.date:
@@ -669,5 +806,5 @@ if __name__ == "__main__":
         # so today is the correct shift_date for the shift that just completed.
         dates = [datetime.now().strftime("%Y-%m-%d")]
 
-    success = asyncio.run(run(dates, dry_run=args.dry_run))
+    success = asyncio.run(run(dates, dry_run=args.dry_run, mode=mode))
     sys.exit(0 if success else 1)

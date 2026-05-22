@@ -766,12 +766,18 @@ def save_summary_to_db(date_iso: str, metadata: dict,
 # MAIN FLOW
 # ─────────────────────────────────────────────
 
-async def run(dry_run: bool = False) -> bool:
+async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
     """
     Full SDMS PAD export flow. Returns True on success, False on any failure.
+    target_date: YYYY-MM-DD accounting op_date to scrape. If None, uses yesterday.
     dry_run=True: download and parse as normal, but skip DB write.
     """
-    _, date_ddmmyyyy, date_iso = get_yesterday()
+    if target_date is not None:
+        _d = date.fromisoformat(target_date)
+        date_ddmmyyyy = _d.strftime("%d-%m-%Y")
+        date_iso = target_date
+    else:
+        _, date_ddmmyyyy, date_iso = get_yesterday()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print()
