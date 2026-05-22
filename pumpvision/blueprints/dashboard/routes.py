@@ -11,7 +11,7 @@ from sqlalchemy import and_, func, or_
 from pumpvision.decorators import owner_required
 from pumpvision.models import (
     AppSetting, CreditTransaction, Expense,
-    LubeTransaction, NozzleTotalizer, PaytmTransaction, TankReading, db,
+    LubeTransaction, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db,
 )
 from pumpvision.services.prices import get_rsp
 
@@ -47,7 +47,13 @@ def _product_sales(op_date):
 
 
 def _fleet_total(op_date):
-    """Returns (amount, available). available=False means scraper hasn't run for this date."""
+    """Returns (amount, available). available=False means scraper hasn't run for this date.
+    Reads from SdmsSummary DB first; falls back to local JSON for dev/debug compatibility."""
+    row = SdmsSummary.query.filter_by(op_date=op_date).first()
+    if row is not None:
+        return row.fleet_card_total or 0.0, True
+
+    # JSON fallback (local dev or pre-migration data)
     path = _PROJECT_ROOT / 'data' / 'sdms' / f'sdms_pad_{op_date:%Y-%m-%d}_summary.json'
     if not path.exists():
         return 0.0, False
@@ -60,10 +66,21 @@ def _fleet_total(op_date):
 
 def _cng_sdms(op_date):
     """
-    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue) from the SDMS summary JSON,
-    or None if the scraper hasn't run or the date had no CGD billing row.
+    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue) or None if no SDMS data.
+    Reads from SdmsSummary DB first; falls back to local JSON for dev/debug compatibility.
     Attendant CngShiftReading entries are preserved separately and not used for display.
     """
+    row = SdmsSummary.query.filter_by(op_date=op_date).first()
+    if row is not None:
+        if (row.cng_kg_total or 0.0) > 0:
+            return SimpleNamespace(
+                kg_sold=row.cng_kg_total,
+                rsp_per_kg=row.cng_rsp_per_kg or 93.40,
+                revenue=row.cng_revenue or 0.0,
+            )
+        return None
+
+    # JSON fallback (local dev or pre-migration data)
     path = _PROJECT_ROOT / 'data' / 'sdms' / f'sdms_pad_{op_date:%Y-%m-%d}_summary.json'
     if not path.exists():
         return None
@@ -262,7 +279,7 @@ def index():
 
     prices = {p: get_rsp(p, op_date) or 0.0 for p in ('HS', 'MS', 'X2', 'XG')}
     s = db.session.get(AppSetting, 'cng_rsp_per_kg')
-    prices['CNG'] = float(s.value) if s else 87.0
+    prices['CNG'] = float(s.value) if s else 93.40
 
     has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
 
