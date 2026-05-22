@@ -257,6 +257,15 @@ Selectors `a[download]` find nothing until it is expanded. The scraper expands i
 (`a[href*="s3.amazonaws.com"]`, `a[href*="s3-ap-southeast"]`, `a[href*="s3-us-east"]`) in addition
 to `a[download]` to detect the download link.
 
+**Paytm download is not fully reliable.** Report generation or download can fail silently.
+If the CSV already exists on disk, import it directly without re-downloading:
+```
+python -X utf8 scrapers/import_paytm_csv.py data/paytm/paytm_YYYY-MM-DD.csv
+```
+`scrapers/import_paytm_csv.py` reuses the existing parser (`_parse_paytm_csv`), skips rows with
+duplicate `paytm_txn_id`, and is idempotent — safe to run multiple times on the same file.
+Does not attempt any Paytm login or download.
+
 ### SDMS PAD Portal
 `scrapers/sdms_pad_exporter.py` — headless Playwright, Claude Vision CAPTCHA. Job 4.
 Fleet card posting totals + CSV. Session: `scrapers/sdms_state.json`.
@@ -271,6 +280,69 @@ RSP used: `CNG_RSP_PER_KG` env var (default `93.40`).
 row (idempotent by `op_date`). DB write is skipped if `DATABASE_URL` is not set or `--dry-run`
 is active. SDMS JSON files are local/debug artifacts — `sdms_summaries` is the Railway
 production source. `_fleet_total()` and `_cng_sdms()` in `dashboard/routes.py` read DB first.
+
+---
+
+## Scraper Orchestration Modes
+
+### `--completed-shift` (production daily use)
+
+```
+python -X utf8 scrapers/daily_scrape.py --completed-shift --date YYYY-MM-DD
+```
+
+`--date` means **accounting op_date** (shift start date).
+Example: `--date 2026-05-20` covers the completed shift `2026-05-20 06:00 → 2026-05-21 05:59`.
+
+What it coordinates:
+1. Opening boundary date = `--date` (e.g. 2026-05-20)
+2. Closing boundary date = `--date + 1` (e.g. 2026-05-21)
+3. Paytm for the shift window `--date 06:00 → (--date + 1) 05:59`
+4. Price (PRM) for `op_date = --date`
+5. SDMS PAD for `op_date = --date`
+6. ATG: **not run** — see ATG rule below
+
+One IRAS login covers Price + any needed boundary scrapes (no second CAPTCHA solve).
+Add `--dry-run` to preview what would run/skip without writing to DB.
+
+### Boundary Completeness Check
+
+Before scraping each boundary, `--completed-shift` checks `nozzle_totalizers`.
+A boundary is **complete** only if all six expected nozzle numbers are present:
+`{7, 11, 15, 16, 17, 18}` — all liquid-fuel nozzles per hardware spec.
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| COMPLETE | All 6 nozzles present | Skip — do not re-scrape |
+| INCOMPLETE | Some nozzles present, some missing | Scrape — partial is not sufficient |
+| MISSING | No rows for this date | Scrape |
+
+The check uses SQLAlchemy Core directly (`create_engine` + `select`). It does **not** call
+`create_app()`, so it never triggers `db.create_all()`, Alembic migrations, or seed logic.
+Safe to call with `--dry-run`.
+
+### ATG Rule
+
+ATG/tank stock is a **live/current snapshot** of what is in the tanks right now.
+It is not historical completed-shift accounting data.
+
+- `--completed-shift` intentionally excludes ATG.
+- Run ATG on its own schedule:
+  ```
+  python -X utf8 scrapers/daily_scrape.py --atg-only
+  ```
+- Ideal: every 30 minutes, or another multiple of 30 minutes, depending on operational need.
+- Automated scheduling is not live on Railway — runs are currently manual.
+
+### Mode Summary
+
+| Mode | Flag | `--date` meaning | Jobs |
+|------|------|-----------------|------|
+| Completed-shift | `--completed-shift` | Accounting op_date | Paytm + Price + missing boundaries + SDMS. ATG excluded. |
+| Boundary only | `--boundary-only` | Shift boundary date | Price + ST + ISS. No Paytm/SDMS/ATG. |
+| Accounting only | `--accounting-only` | Accounting op_date | Paytm + Price + SDMS. IRAS for Price only. |
+| ATG snapshot | `--atg-only` | Ignored | Current tank levels only. |
+| All (default) | _(none)_ | Shift boundary date | All 6 jobs in order (0 → 5). |
 
 ---
 
@@ -463,23 +535,52 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ## Production Data Status (Railway PostgreSQL)
 
-As of 22 May 2026, the Railway PostgreSQL has no operational scraped data.
-All scraper tables start empty on a fresh deployment. The owner dashboard will show
-zeros until the following tables are populated via a manual backfill run.
+Last updated: 22 May 2026.
 
-| Table | Rows needed | How to populate |
-|-------|-------------|-----------------|
-| `nozzle_totalizers` | ≥ 2 consecutive `operational_date` rows | `daily_scrape.py --date D` and `--date D+1` |
-| `iras_prices` | ≥ 1 row covering the target date | `daily_scrape.py` Job 1 (Price) |
-| `paytm_transactions` | ≥ 1 row for the target date | `daily_scrape.py` Job 0 (Paytm) |
-| `tank_readings` | ≥ 1 row per tank | `daily_scrape.py` Job 5 (ATG) |
-| `sdms_summaries` | ≥ 1 row for the target date | `daily_scrape.py` Job 4 (SDMS) |
+### op_date 2026-05-21 — fully verified
 
-**Backfill approach:** Run `daily_scrape.py` locally with `DATABASE_URL` pointing to the Railway
-PostgreSQL connection string. The CNG/fleet dashboard figures (from `sdms_summaries`) and Paytm
-deduction will only appear after their respective scraper jobs have run and persisted to DB.
+Owner dashboard proof-of-life succeeded for accounting op_date **2026-05-21**
+(shift window 2026-05-21 06:00 → 2026-05-22 06:00). All major data streams verified:
 
-**Important:** Automated scheduled scraping is not live on Railway. Scraper runs are currently
+| Table | Status |
+|-------|--------|
+| `nozzle_totalizers` | ✓ Opening boundary 2026-05-21 + closing boundary 2026-05-22 present |
+| `iras_prices` | ✓ Price rows covering 2026-05-21 present |
+| `paytm_transactions` | ✓ Rows for 2026-05-21 present |
+| `tank_readings` | ✓ ATG snapshot populated |
+| `sdms_summaries` | ✓ CNG + fleet data for 2026-05-21 present |
+
+### op_date 2026-05-20 — Paytm outstanding
+
+Completed-shift live test for op_date **2026-05-20** (shift window 2026-05-20 06:00 → 2026-05-21 05:59):
+
+| Item | Status |
+|------|--------|
+| Opening boundary 2026-05-20 | ✓ Scraped and saved |
+| Closing boundary 2026-05-21 | ✓ Already present (COMPLETE) — skipped |
+| Price for 2026-05-20 | ✓ Downloaded and saved |
+| SDMS PAD for 2026-05-20 | ✓ Downloaded and saved |
+| Paytm for 2026-05-20 | **Open — download failed during live test** |
+
+The 2026-05-20 accounting day is **not complete** until Paytm data is imported.
+If the CSV already exists locally, import it with:
+```
+python -X utf8 scrapers/import_paytm_csv.py data/paytm/paytm_2026-05-20.csv
+```
+
+### Backfill command reference
+
+To populate any op_date from scratch (boundaries + Price + Paytm + SDMS):
+```
+python -X utf8 scrapers/daily_scrape.py --completed-shift --date YYYY-MM-DD
+```
+
+To populate ATG (run separately — tank stock is a live snapshot, not historical):
+```
+python -X utf8 scrapers/daily_scrape.py --atg-only
+```
+
+**Automated scheduled scraping is not live on Railway.** All scraper runs are currently
 manual (local machine → Railway DB via `DATABASE_URL` env var).
 
 ---
@@ -492,17 +593,22 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 
 | Task | Status |
 |------|--------|
-| ATG scraper (`iras_atg_exporter.py`, `tank_readings` table, Job 5) | ✓ Built — production backfill pending |
+| ATG scraper (`iras_atg_exporter.py`, `tank_readings` table, Job 5) | ✓ Built + data populated for 2026-05-21; run `--atg-only` on separate schedule |
+| `--completed-shift` orchestration mode (`daily_scrape.py`) | ✓ Built — boundary completeness check, single IRAS session for Price + boundaries |
+| `import_paytm_csv.py` — Paytm CSV import fallback | ✓ Built |
 | Owner dashboard (screen 10, wire to real data) | ✓ Done |
 | Owner daily summary (screen 15, wire to real data) | ✓ Done |
 | Tanks screen (screen 11, wire to `tank_readings`) | ✓ Done |
 | SDMS DB persistence (`sdms_summaries`, DB-first reads) | ✓ Done |
 | CNG shift close (`cng_shift_readings` table, attendant flow) | ✓ Done |
 | Credit screens polish (12, 13, 14) | ✓ Substantially done |
+| Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
+| Production data — op_date 2026-05-20 boundaries + Price + SDMS | ✓ Scraped and saved |
+| Production data — op_date 2026-05-20 Paytm | **Open — download failed; import via `import_paytm_csv.py` if CSV exists** |
+| Decide scraper schedule (completed-shift once daily after 06:00; ATG every 30 min) | Pending — not automated yet |
 | Manager home checklist | Pending |
 | Manager log expense | Pending |
-| Manager record payment | **Next priority after data backfill** |
-| Production data backfill (Railway — 2 consecutive NozzleTotalizer dates + prices + Paytm + ATG + SDMS) | Pending |
+| Manager record payment | **Next priority after Paytm 2026-05-20 is resolved** |
 
 ### Stage 2 — Complete Operational Layer
 
@@ -864,6 +970,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `scrapers/paytm_exporter.py`
 - `scrapers/sdms_pad_exporter.py`
 - `scrapers/daily_scrape.py` — Job 0: Paytm · Job 1: Price · Job 2: ST · Job 3: ISS · Job 4: SDMS · Job 5: ATG
+- `scrapers/import_paytm_csv.py` — manual import of existing Paytm CSV into DB (fallback when download fails)
 - `scrapers/captcha_test.py`
 
 ### Documentation
@@ -890,7 +997,9 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Three-user foundation | ✓ Complete |
 | Paytm scraper | ✓ Complete — Gmail IMAP OTP, auto-import to DB, OTP not logged |
 | SDMS PAD scraper | ✓ Complete — fleet + CNG extraction + DB persistence (`sdms_summaries`) |
-| ATG scraper | ✓ Built — production data backfill pending |
+| ATG scraper | ✓ Built — data populated for 2026-05-21; run `--atg-only` separately (not in completed-shift) |
+| `--completed-shift` orchestration mode | ✓ Built — boundary completeness check, single IRAS session |
+| `import_paytm_csv.py` Paytm CSV import fallback | ✓ Built |
 | Owner dashboard (screen 10) | ✓ Complete |
 | Owner daily summary (screen 15) | ✓ Complete |
 | Owner tanks screen (screen 11) | ✓ Complete |
@@ -900,8 +1009,10 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | CNG RSP default/fallback consistently 93.40 | ✓ Done |
 | dry-run DB-skip for all scraper jobs (Paytm, Price, ATG, SDMS) | ✓ Done |
 | Production debug traceback handler removed | ✓ Done |
-| Manager core (checklist, expenses, payments) | Stage 1 — pending; **payment recording next after backfill** |
-| Production data backfill (Railway) | Pending |
+| Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
+| Production data — op_date 2026-05-20 Paytm | Open — download failed; import pending |
+| Scraper scheduling (completed-shift daily + ATG 30-min) | Pending — not automated yet |
+| Manager core (checklist, expenses, payments) | Stage 1 — pending; **next after Paytm 2026-05-20 resolved** |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
 | Manager lube sales + invoicing | Stage 2 |
 | Bank transfer verification UI | Stage 2 |
