@@ -17,12 +17,17 @@ Credentials required in .env:
 """
 
 import asyncio
+import email
+import imaplib
 import io
 import json
 import os
+import re
 import sys
+import time
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -43,6 +48,8 @@ PAYTM_LOGIN_URL  = "https://dashboard.paytm.com/login/"
 PAYTM_DASHBOARD  = "https://dashboard.paytm.com"
 PAYTM_EMAIL      = os.environ.get("PAYTM_EMAIL", "")
 PAYTM_PASSWORD   = os.environ.get("PAYTM_PASSWORD", "")
+GMAIL_ADDRESS    = os.environ.get("GMAIL_ADDRESS", "")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 
 _state_path_raw = os.environ.get("PAYTM_STATE_PATH", "scrapers/paytm_state.json")
 STATE_PATH  = (_PROJECT_ROOT / _state_path_raw).resolve()
@@ -50,6 +57,93 @@ OUTPUT_DIR  = _PROJECT_ROOT / "data" / "paytm"
 
 POLL_INTERVAL    = 2    # seconds between polling attempts
 POLL_TIMEOUT     = 120  # max seconds to wait for async file generation
+
+
+# ─────────────────────────────────────────────
+# GMAIL OTP READER
+# ─────────────────────────────────────────────
+
+def fetch_paytm_otp_from_gmail(timeout: int = 90) -> str | None:
+    """
+    Poll Gmail IMAP for a new Paytm OTP email and return the 6-digit code.
+
+    Requires GMAIL_ADDRESS and GMAIL_APP_PASSWORD in .env.
+    GMAIL_APP_PASSWORD must be a Google App Password (not the account password) —
+    generate one at myaccount.google.com/apppasswords with IMAP enabled.
+
+    Returns the OTP string on success, None if credentials are missing or the
+    OTP is not found within the timeout. Caller falls back to input() if None.
+    """
+    if not GMAIL_ADDRESS or not GMAIL_APP_PASSWORD:
+        return None
+
+    deadline = time.time() + timeout
+    print(f"  [otp] Polling Gmail ({GMAIL_ADDRESS}) for Paytm OTP — up to {timeout}s...")
+
+    while time.time() < deadline:
+        try:
+            with imaplib.IMAP4_SSL("imap.gmail.com") as mail:
+                mail.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
+                mail.select("INBOX")
+
+                # Search for unseen Paytm OTP emails (exact sender + subject)
+                _, data = mail.search(
+                    None,
+                    '(UNSEEN FROM "care@paytm.com" SUBJECT "One Time Password")',
+                )
+                ids = data[0].split() if data[0] else []
+
+                for mid in reversed(ids):
+                    _, msg_data = mail.fetch(mid, "(RFC822)")
+                    raw = msg_data[0][1]
+                    msg = email.message_from_bytes(raw)
+
+                    # Recency check — skip OTPs older than 10 minutes (they're expired)
+                    try:
+                        email_dt = parsedate_to_datetime(msg.get("Date", ""))
+                        age = (datetime.now(timezone.utc) - email_dt).total_seconds()
+                        if age > 600:
+                            print(f"  [otp] Skipping stale OTP email ({int(age)}s old)")
+                            continue
+                    except Exception:
+                        pass  # unparseable date — proceed and try anyway
+
+                    # Extract plain-text body
+                    body = ""
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            if part.get_content_type() == "text/plain":
+                                body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                break
+                    else:
+                        payload = msg.get_payload(decode=True)
+                        if payload:
+                            body = payload.decode("utf-8", errors="ignore")
+
+                    # Find a 6-digit OTP — try near "OTP" keyword first, then any 6-digit run
+                    match = re.search(r'(?:OTP|otp|code|Code)[^\d]{0,20}(\d{6})', body)
+                    if not match:
+                        match = re.search(r'\b(\d{6})\b', body)
+                    if match:
+                        otp = match.group(1)
+                        # Mark as read so it isn't re-used on a subsequent poll
+                        mail.store(mid, "+FLAGS", "\\Seen")
+                        print("  [otp] OTP found — proceeding")
+                        return otp
+
+        except imaplib.IMAP4.error as e:
+            print(f"  [otp] IMAP auth error: {e}")
+            return None          # wrong credentials — don't keep retrying
+        except Exception as e:
+            print(f"  [otp] Gmail check error: {e}")
+
+        remaining = int(deadline - time.time())
+        if remaining > 0:
+            print(f"  [otp] OTP not yet in inbox — retrying in 5s ({remaining}s left)...")
+            time.sleep(5)
+
+    print(f"  [otp] OTP not found within {timeout}s")
+    return None
 
 
 # ─────────────────────────────────────────────
@@ -251,7 +345,13 @@ async def do_login(page, context) -> bool:
             print("  After this the session is saved and future runs are")
             print("  fully automated — no OTP needed.")
             print("=" * 55)
-            otp_code = input("  Enter the OTP you received: ").strip()
+            otp_code = fetch_paytm_otp_from_gmail()
+            if otp_code is None:
+                # Gmail not configured or OTP not found — fall back to manual entry
+                try:
+                    otp_code = input("  Enter the OTP you received: ").strip()
+                except EOFError:
+                    otp_code = ""
             if otp_code:
                 await otp_input.fill(otp_code)
                 await page.wait_for_timeout(300)
@@ -563,9 +663,18 @@ async def run() -> bool:
             # Files to Download panel so step 7 can detect the NEW file.
             print("[step 6] Triggering Download Report...")
             try:
+                # Snapshot all download-style links before triggering so we can detect new ones
                 pre_hrefs = await page.evaluate('''() => {
-                    const links = document.querySelectorAll('a[download]');
-                    return Array.from(links).map(a => a.getAttribute('href')).filter(Boolean);
+                    const sels = ['a[download]', 'a[href*="s3.amazonaws.com"]',
+                                  'a[href*="s3-ap-southeast"]', 'a[href*="s3-us-east"]'];
+                    const hrefs = new Set();
+                    for (const sel of sels) {
+                        for (const a of document.querySelectorAll(sel)) {
+                            const h = a.getAttribute('href') || a.href;
+                            if (h && h.startsWith('http')) hrefs.add(h);
+                        }
+                    }
+                    return [...hrefs];
                 }''')
                 pre_count = len(pre_hrefs)
                 pre_href_set = set(pre_hrefs)
@@ -589,22 +698,61 @@ async def run() -> bool:
 
             await page.wait_for_timeout(1_000)
 
+            # ── Step 6b: Expand "Files to Download" panel ─────────────────────
+            # Paytm shows a collapsed panel at the bottom — clicking it reveals
+            # the ready-to-download file links in the DOM.
+            for _attempt in range(3):
+                try:
+                    panel = page.locator(
+                        "text=Files to Download, "
+                        "[class*='fileDownload'], [class*='file-download'], "
+                        "[class*='downloadPanel'], [class*='download-panel']"
+                    ).first
+                    if await panel.count() > 0 and await panel.is_visible(timeout=4_000):
+                        await panel.click()
+                        await page.wait_for_timeout(600)
+                        print("  [step 6b] Opened 'Files to Download' panel")
+                        break
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
+
             # ── Step 7: Poll for the NEW download link ─────────────────────────
-            # Paytm either appends a new <a download> entry OR replaces the existing
-            # one. Detect both: new link count OR first link href changed.
+            # Paytm appends a new entry to the Files to Download panel when ready.
+            # Re-open the panel every 10s in case it collapsed, and look for any
+            # S3 / CSV href that wasn't present before the Download Report click.
             print(f"[step 7] Polling up to {POLL_TIMEOUT}s for new S3 download link...")
             download_href = None
             for elapsed in range(0, POLL_TIMEOUT, POLL_INTERVAL):
+                # Re-expand panel every 10s in case it auto-collapsed
+                if elapsed > 0 and elapsed % 10 == 0:
+                    try:
+                        panel = page.locator(
+                            "text=Files to Download, "
+                            "[class*='fileDownload'], [class*='file-download'], "
+                            "[class*='downloadPanel'], [class*='download-panel']"
+                        ).first
+                        if await panel.count() > 0:
+                            await panel.click()
+                            await page.wait_for_timeout(300)
+                    except Exception:
+                        pass
+
                 try:
                     result = await page.evaluate(f'''() => {{
-                        // Return the first link whose href wasn't in the panel before
-                        // the Download Report click. Works whether Paytm appends a new
-                        // link or replaces an existing one.
                         const known = new Set({list(pre_href_set)!r});
-                        const allLinks = document.querySelectorAll('a[download]');
-                        for (const a of allLinks) {{
-                            const href = a.getAttribute('href');
-                            if (href && !known.has(href)) return href;
+                        const sels = [
+                            'a[download]',
+                            'a[href*="s3.amazonaws.com"]',
+                            'a[href*="s3-ap-southeast"]',
+                            'a[href*="s3-us-east"]',
+                            'a[href*=".csv"]',
+                        ];
+                        for (const sel of sels) {{
+                            for (const a of document.querySelectorAll(sel)) {{
+                                const href = a.getAttribute('href') || a.href;
+                                if (href && href.startsWith('http') && !known.has(href)) return href;
+                            }}
                         }}
                         return null;
                     }}''')
@@ -618,11 +766,9 @@ async def run() -> bool:
                 await asyncio.sleep(POLL_INTERVAL)
 
             if not download_href:
-                # Paytm sometimes reuses an existing link rather than generating a new one.
-                # Only fall back to a pre-existing link if there was exactly one (safe to
-                # assume it's still for the correct date range when re-running same day).
+                # Last resort: if Paytm reused the one pre-existing link, use it
                 if len(pre_hrefs) == 1:
-                    print(f"  [WARN] No new link appeared — using pre-existing link (Paytm reused it)")
+                    print(f"  [WARN] No new link — using pre-existing link (Paytm may have reused it)")
                     download_href = pre_hrefs[0]
                 else:
                     try:

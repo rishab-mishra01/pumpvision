@@ -65,6 +65,9 @@ CAPTCHA_PROMPT = (
 )
 
 FLEET_CARD_DOC_TYPE = "Fleet- Card Posting"
+CNG_PLANT_PREFIX   = "CGD"            # plant column starts with this
+CNG_UNIT           = "KG"
+CNG_RSP_PER_KG     = float(os.environ.get("CNG_RSP_PER_KG", "93.40"))
 
 CUSTOMER_LABEL = "SHREE PETROLEUM (206858)"
 
@@ -651,6 +654,24 @@ def compute_fleet_card_summary(rows: list[dict]) -> tuple[float, int]:
     return total, count
 
 
+def compute_cng_summary(rows: list[dict]) -> tuple[float, float, int]:
+    """
+    Sum quantity (KG) for CGD supply rows (plant starts with 'CGD', unit == 'KG').
+    Returns (kg_total, revenue, count).
+    Revenue = kg_total × CNG_RSP_PER_KG.
+    """
+    kg_total = 0.0
+    count = 0
+    for row in rows:
+        plant = row.get("plant", "").strip().upper()
+        unit  = row.get("unit",  "").strip().upper()
+        if plant.startswith(CNG_PLANT_PREFIX) and unit == CNG_UNIT:
+            kg_total += _parse_amount(row.get("quantity", "0"))
+            count += 1
+    revenue = round(kg_total * CNG_RSP_PER_KG, 2)
+    return round(kg_total, 3), revenue, count
+
+
 # ─────────────────────────────────────────────
 # SAVE OUTPUTS
 # ─────────────────────────────────────────────
@@ -661,6 +682,9 @@ def save_outputs(
     rows: list[dict],
     fleet_total: float,
     fleet_count: int,
+    cng_kg: float,
+    cng_revenue: float,
+    cng_count: int,
 ) -> tuple[Path, Path]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -684,6 +708,10 @@ def save_outputs(
         "closing_balance":  metadata["closing_balance"],
         "fleet_card_total": fleet_total,
         "fleet_card_count": fleet_count,
+        "cng_kg_total":     cng_kg,
+        "cng_revenue":      cng_revenue,
+        "cng_rsp_per_kg":   CNG_RSP_PER_KG,
+        "cng_count":        cng_count,
         "generated_at":     metadata["generated_at"],
         "customer":         CUSTOMER_LABEL,
     }
@@ -792,13 +820,16 @@ async def run() -> bool:
             if not rows:
                 print("[step 4] WARN: No rows extracted — the report may be empty for this date")
 
-            # ── Step 5: Compute fleet card summary ─────────────────────────
+            # ── Step 5: Compute fleet card + CNG summaries ─────────────────
             fleet_total, fleet_count = compute_fleet_card_summary(rows)
+            cng_kg, cng_revenue, cng_count = compute_cng_summary(rows)
 
             # ── Step 6: Save outputs ───────────────────────────────────────
             print("[step 6] Saving outputs...")
             csv_path, json_path = save_outputs(
-                date_iso, metadata, rows, fleet_total, fleet_count
+                date_iso, metadata, rows,
+                fleet_total, fleet_count,
+                cng_kg, cng_revenue, cng_count,
             )
 
             print()
@@ -808,6 +839,10 @@ async def run() -> bool:
             print(f"  Opening balance   : Rs. {metadata['opening_balance']:,.2f}")
             print(f"  Closing balance   : Rs. {metadata['closing_balance']:,.2f}")
             print(f"  Fleet card total  : Rs. {fleet_total:,.2f} ({fleet_count} txns)")
+            if cng_count:
+                print(f"  CNG supply        : {cng_kg:.3f} KG × Rs.{CNG_RSP_PER_KG} = Rs. {cng_revenue:,.2f}")
+            else:
+                print(f"  CNG supply        : no CGD billing row for this date")
             print(f"  Table rows        : {len(rows)}")
             print(f"  CSV               : {csv_path.name}")
             print(f"  Summary JSON      : {json_path.name}")

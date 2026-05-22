@@ -311,7 +311,7 @@ def save_readings_to_db(readings: list[dict]) -> int:
 # MAIN ENTRY (called from daily_scrape.py)
 # ─────────────────────────────────────────────
 
-async def run_atg(page, output_dir: Path | None = None) -> list[dict]:
+async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -> list[dict]:
     """
     Navigate to the Stock tab, scrape the current ATG snapshot, and write to DB.
 
@@ -401,7 +401,10 @@ async def run_atg(page, output_dir: Path | None = None) -> list[dict]:
             print(f"    Tank {r['tank_id']} ({r['product']}){rel}: {vol}  {pct}  "
                   f"@ {r['scraped_at'].strftime('%H:%M')}")
 
-        save_readings_to_db(readings)
+        if dry_run:
+            print(f"  [dry-run] DB write skipped — would have saved {len(readings)} ATG reading(s)")
+        else:
+            save_readings_to_db(readings)
 
     return readings
 
