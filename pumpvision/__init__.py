@@ -24,6 +24,13 @@ def create_app():
     db_url = app.config["SQLALCHEMY_DATABASE_URI"]
     if db_url.startswith("postgres://"):
         app.config["SQLALCHEMY_DATABASE_URI"] = db_url.replace("postgres://", "postgresql://", 1)
+        db_url = app.config["SQLALCHEMY_DATABASE_URI"]
+
+    if db_url.startswith("postgresql"):
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,   # discard stale connections before use
+            "pool_recycle": 300,     # retire connections after 5 min (< Railway idle timeout)
+        }
 
     from .extensions import db, login_manager, migrate
 
