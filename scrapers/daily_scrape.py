@@ -23,20 +23,33 @@ Delivery jobs (RDB Invoice, SAP Invoice, TT Receipt, density records) are
 event-driven — they fire when a tanker arrives, not on a daily schedule.
 They are not part of this orchestrator.
 
-Date semantics (three distinct systems — do not mix):
-  --boundary-only  --date D  →  captures 06:00 boundary on D; writes NozzleTotalizer row
+Date semantics (four distinct systems — do not mix):
+  --completed-shift --date D →  Full completed-shift run: checks opening boundary D and
+                                closing boundary D+1 in DB; scrapes only the ones missing.
+                                Then Paytm, Price, SDMS for accounting op_date D.
+                                ATG is excluded — tank stock is live/current, not historical.
+                                Shift window: D 06:00 → D+1 05:59.
+  --boundary-only   --date D →  captures 06:00 boundary on D; writes NozzleTotalizer row
                                 for op_date D.  To see fuel data for accounting op_date D,
-                                run --boundary-only twice: --date D (opening) and
-                                --date D+1 (closing).
+                                run twice: --date D (opening) and --date D+1 (closing).
   --accounting-only --date D →  Paytm, Price (PRM) + SDMS for accounting op_date D.
                                 Shift window: D 06:00 → D+1 05:59.
                                 IRAS login required (for Price only).
-  --atg-only                 →  current snapshot; --date ignored.
-  (default/all)   --date D  →  all jobs; same boundary semantics as --boundary-only.
+  --atg-only                 →  current tank stock snapshot; --date ignored.
+                                Run independently every 30 min — do not include in
+                                completed-shift because tank stock is live, not historical.
+  (default/all)   --date D   →  all jobs; same boundary semantics as --boundary-only.
 
 Usage:
     # Daily cron (all jobs, today as boundary date):
     python -X utf8 scrapers/daily_scrape.py
+
+    # Completed-shift for op_date 2026-05-20 — skips existing boundaries, runs all accounting:
+    #   shift window: 2026-05-20 06:00 → 2026-05-21 05:59
+    python -X utf8 scrapers/daily_scrape.py --completed-shift --date 2026-05-20
+
+    # Completed-shift dry-run (shows what would run/skip, no DB writes):
+    python -X utf8 scrapers/daily_scrape.py --completed-shift --date 2026-05-20 --dry-run
 
     # Backfill accounting data for op_date 2026-05-21 (Paytm, Price, SDMS):
     #   shift window: 2026-05-21 06:00 → 2026-05-22 05:59
@@ -45,7 +58,7 @@ Usage:
     # Boundary jobs only (writes one NozzleTotalizer row for 2026-05-21 06:00):
     python -X utf8 scrapers/daily_scrape.py --boundary-only --date 2026-05-21
 
-    # Current ATG snapshot only (no date required):
+    # Current ATG snapshot only — run independently, not part of completed-shift:
     python -X utf8 scrapers/daily_scrape.py --atg-only
 
     # Batch boundary backfill:
@@ -467,6 +480,72 @@ def _save_prices_to_db(records: list[dict]):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# BOUNDARY COMPLETENESS CHECK  (used by completed-shift mode)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# All six liquid-fuel nozzle numbers that must be present for a boundary to be
+# considered complete.  Matches the CLAUDE.md hardware spec exactly.
+_EXPECTED_NOZZLES: frozenset[int] = frozenset({7, 11, 15, 16, 17, 18})
+
+
+def _boundary_status(shift_date: str) -> tuple[str, frozenset, frozenset]:
+    """
+    Check completeness of the 06:00 boundary for shift_date in nozzle_totalizers.
+
+    Returns (status, present_nozzles, missing_nozzles) where status is one of:
+      'COMPLETE'   — all expected nozzles (7, 11, 15, 16, 17, 18) have rows.
+      'INCOMPLETE' — at least one nozzle row exists but at least one is missing.
+      'MISSING'    — no rows at all for this operational_date.
+
+    Uses a direct read-only SQLAlchemy Core connection — does NOT call create_app(),
+    so it never triggers db.create_all(), Alembic upgrade(), or seed logic.
+    Safe to call in --dry-run.  postgres:// → postgresql:// normalisation applied
+    to match the app factory behaviour.  Falls back to the absolute SQLite instance
+    path when DATABASE_URL is not set.
+    """
+    import sqlalchemy as _sa
+
+    _instance_db = (_PROJECT_ROOT / "instance" / "pumpvision.db").as_posix()
+    db_url = os.environ.get("DATABASE_URL", f"sqlite:///{_instance_db}")
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    try:
+        _d   = datetime.strptime(shift_date, "%Y-%m-%d").date()
+        eng  = _sa.create_engine(db_url, pool_pre_ping=False)
+        meta = _sa.MetaData()
+        nt   = _sa.Table(
+            "nozzle_totalizers", meta,
+            _sa.Column("operational_date", _sa.Date),
+            _sa.Column("nozzle_no",        _sa.Integer),
+        )
+        with eng.connect() as conn:
+            rows = conn.execute(
+                _sa.select(nt.c.nozzle_no).where(nt.c.operational_date == _d)
+            ).fetchall()
+        present = frozenset(r.nozzle_no for r in rows)
+        missing = _EXPECTED_NOZZLES - present
+        if not present:
+            return ('MISSING',    frozenset(),  _EXPECTED_NOZZLES)
+        if not missing:
+            return ('COMPLETE',   present,      frozenset())
+        return     ('INCOMPLETE', present,      missing)
+    except Exception as e:
+        print(f"  [db] WARNING: could not check nozzle_totalizers for {shift_date}: {e}")
+        # Treat as MISSING so the boundary scrape is attempted rather than silently skipped.
+        return ('MISSING', frozenset(), _EXPECTED_NOZZLES)
+
+
+def _status_label(stat: str, missing: frozenset) -> str:
+    """Format a boundary completeness status for log output."""
+    if stat == 'COMPLETE':
+        return "[COMPLETE — will skip]"
+    if stat == 'INCOMPLETE':
+        return f"[INCOMPLETE — missing nozzles {sorted(missing)} — will scrape]"
+    return "[MISSING — will scrape]"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — PRICE (PRM)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -570,13 +649,17 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
     """
     Main orchestration entry point.
 
-    mode='all'         Daily run — all jobs, existing behavior preserved.
-                       dates = shift/boundary dates (boundary at 06:00 on each date).
-    mode='boundary'    IRAS boundary jobs only (Price, ST, ISS). No Paytm/SDMS/ATG.
-                       dates = shift/boundary dates.
-    mode='accounting'  Paytm, Price (PRM), SDMS. IRAS login required for Price.
-                       dates = accounting op_dates (shift start dates).
-    mode='atg'         Current ATG snapshot only. dates ignored.
+    mode='all'              Daily run — all jobs, existing behavior preserved.
+                            dates = shift/boundary dates (boundary at 06:00 on each date).
+    mode='boundary'         IRAS boundary jobs only (Price, ST, ISS). No Paytm/SDMS/ATG.
+                            dates = shift/boundary dates.
+    mode='accounting'       Paytm, Price (PRM), SDMS. IRAS login required for Price.
+                            dates = accounting op_dates (shift start dates).
+    mode='atg'              Current ATG snapshot only. dates ignored.
+    mode='completed_shift'  Full completed-shift: checks opening (D) and closing (D+1)
+                            boundaries in DB; scrapes only the missing ones. Then
+                            Paytm, Price, SDMS for accounting op_date D. No ATG.
+                            dates = accounting op_dates (shift start dates).
 
     Date semantics:
       shift/boundary date D → totalizer boundary captured at 06:00 on D.
@@ -598,15 +681,26 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
 
     # In dry-run mode, redirect IRAS output to a temp dir so skip-if-exists
     # checks don't trigger and every download runs fresh.
-    # Price runs in all, boundary, and accounting modes — always redirect it.
+    # Price runs in all, boundary, accounting, and completed_shift modes — always redirect it.
+    # ISS/ST dirs also needed for completed_shift (may scrape missing boundaries).
     if dry_run:
         _dry_root = _data_root / "_dry_run"
         price_dir = _dry_root / "Price"
-        if mode in ('all', 'boundary'):
+        if mode in ('all', 'boundary', 'completed_shift'):
             iss_dir   = _dry_root / "ISS"
             st_dir    = _dry_root / "ShiftTotalizer"
             _iss.OUTPUT_FOLDER          = str(iss_dir)
             _iss.SHIFT_TOTALIZER_FOLDER = str(st_dir)
+
+    # ── Completed-shift: pre-check boundary DB status ────────────────────────
+    # Query once before the header so the same results are used in both logging
+    # and execution without double-querying. Safe in dry-run (read-only).
+    _cs_status: dict[str, tuple] = {}  # shift_date → (status, present, missing)
+    if mode == 'completed_shift':
+        for _d in dates:
+            _cl = (datetime.strptime(_d, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            _cs_status[_d]  = _boundary_status(_d)
+            _cs_status[_cl] = _boundary_status(_cl)
 
     print()
     print("=" * 55)
@@ -629,6 +723,18 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
         for _d in dates:
             _next = (datetime.strptime(_d, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             print(f"  Accounting op_date: {_d}  (shift window: {_d} 06:00 → {_next} 05:59)")
+    elif mode == 'completed_shift':
+        print(f"  Mode               : completed-shift  (boundaries + Paytm + Price + SDMS, no ATG)")
+        for _d in dates:
+            _cl = (datetime.strptime(_d, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            _o_stat, _, _o_miss = _cs_status.get(_d,  ('MISSING', frozenset(), _EXPECTED_NOZZLES))
+            _c_stat, _, _c_miss = _cs_status.get(_cl, ('MISSING', frozenset(), _EXPECTED_NOZZLES))
+            print(f"  Accounting op_date : {_d}  (shift window: {_d} 06:00 → {_cl} 05:59)")
+            print(f"  Opening boundary   : {_d}    {_status_label(_o_stat, _o_miss)}")
+            print(f"  Closing boundary   : {_cl}  {_status_label(_c_stat, _c_miss)}")
+            if len(dates) > 1:
+                print()
+        print(f"  ATG                : SKIPPED — tank stock is live/current, not historical shift data")
     elif mode == 'atg':
         print(f"  Mode: atg-only  (current snapshot — not date-specific, dates ignored)")
     print("=" * 55)
@@ -723,6 +829,77 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
         else:
             await _job_sdms(dry_run=dry_run)
 
+    # ── Completed-shift mode ─────────────────────────────────────────────────
+    # Job order: Paytm (own session) → IRAS [Price + missing boundaries] → SDMS (own session)
+    # One IRAS login covers Price + ST + ISS boundary in a single session — no second CAPTCHA.
+    # ATG is intentionally excluded: tank stock is a live/current snapshot, not historical
+    # accounting data. Use --atg-only on its own schedule (e.g. every 30 minutes).
+    if mode == 'completed_shift':
+        # Job 0: Paytm for each accounting op_date (own browser context)
+        for acct_date in dates:
+            await _job_paytm(dry_run=dry_run, target_date=acct_date)
+
+        # Build the set of boundary dates that still need scraping, ordered ascending.
+        # _cs_status was populated by the pre-check above (before the header log).
+        # Only skip a boundary if it is COMPLETE (all 6 nozzles present).
+        # INCOMPLETE and MISSING both require a scrape run.
+        _complete = frozenset(bd for bd, tup in _cs_status.items() if tup[0] == 'COMPLETE')
+        all_needed = sorted({
+            bd
+            for _d in dates
+            for bd in [
+                _d,
+                (datetime.strptime(_d, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d"),
+            ]
+            if bd not in _complete
+        })
+
+        # IRAS session: Price always runs; ST + ISS run only for missing boundaries.
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = await browser.new_context(
+                accept_downloads=True,
+                viewport={"width": 1400, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            )
+            page = await context.new_page()
+            print(f"\n[step 0] Loading: {LOGIN_URL}")
+            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            await page.wait_for_timeout(1000)
+            if not await _autonomous_login(page):
+                print("\nABORTED — IRAS login failed.")
+                await browser.close()
+                return False
+
+            # Job 1: Price — accounting op_dates passed directly (no shift_date - 1 derivation)
+            await _job_price(page, [], price_dir, dry_run=dry_run, acct_dates=dates)
+
+            # Jobs 2 + 3: ST + ISS boundary — only for dates not already in DB
+            if all_needed:
+                _needed_op_dates = [
+                    (datetime.strptime(bd, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                    for bd in all_needed
+                ]
+                await _job_shift_totalizer(page, _needed_op_dates, st_dir)
+                await _job_iss_boundary(page, all_needed, iss_dir, dry_run=dry_run)
+            else:
+                print(f"\n{'='*55}")
+                print(f"  Boundaries — all already in DB, ISS/ST scrape skipped")
+                print(f"{'='*55}")
+
+            await browser.close()
+
+        # Job 4: SDMS for each accounting op_date (own browser context)
+        for acct_date in dates:
+            await _job_sdms(dry_run=dry_run, target_date=acct_date)
+
     print("\n[DONE] All jobs complete.")
     return True
 
@@ -751,6 +928,17 @@ def _parse_args():
     )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
+        "--completed-shift", action="store_true", dest="completed_shift",
+        help=(
+            "Full completed-shift run: checks opening boundary (--date) and closing "
+            "boundary (--date + 1 day) in DB; scrapes only the missing ones. "
+            "Then runs Paytm, Price (PRM), SDMS for the accounting op_date. "
+            "ATG is excluded — tank stock is live/current; run --atg-only separately. "
+            "--date = accounting op_date (shift start date, e.g. 2026-05-20 = "
+            "shift window 2026-05-20 06:00 → 2026-05-21 05:59)."
+        ),
+    )
+    mode_group.add_argument(
         "--boundary-only", action="store_true", dest="boundary_only",
         help="IRAS boundary jobs only (Price, ST, ISS). --date = shift boundary date.",
     )
@@ -776,7 +964,10 @@ def _parse_args():
 if __name__ == "__main__":
     args = _parse_args()
 
-    if args.accounting_only:
+    if args.completed_shift:
+        mode = 'completed_shift'
+        iras_required = True  # IRAS login needed for Price + potential boundary scrapes
+    elif args.accounting_only:
         mode = 'accounting'
         iras_required = True  # Price download requires IRAS login
     elif args.boundary_only:
