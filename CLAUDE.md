@@ -68,7 +68,9 @@ git push
 | CNG | Compressed Natural Gas | Gas | SDMS PAD scraper (CGD Rewa billing row, kg) — display source |
 
 **CNG is active — not deferred.** CNG does not appear in IRAS nozzle or ISS tables.
-**Display source:** SDMS PAD summary JSON (`cng_kg_total` field). See `_cng_sdms()` in dashboard routes.
+**Display source:** `_cng_sdms()` in dashboard routes — reads `sdms_summaries` DB table first (Railway
+production source of truth); falls back to local `data/sdms/sdms_pad_{date}_summary.json` for
+local/debug compatibility. SDMS JSON files are local/debug artifacts only, not the production source.
 **Attendant entries** (`cng_shift_readings`) are still collected at shift close and stored — kept for
 future cross-checks — but are NOT used for dashboard or summary display.
 
@@ -159,10 +161,11 @@ No pump test deduction for CNG.
 ### Data Sources (two separate streams)
 
 **Display (dashboard + summary):** `_cng_sdms(op_date)` in `blueprints/dashboard/routes.py`.
-Reads `data/sdms/sdms_pad_{date}_summary.json` → `cng_kg_total`, `cng_rsp_per_kg`, `cng_revenue`.
+Queries `sdms_summaries` DB table first (Railway production source of truth).
+Falls back to `data/sdms/sdms_pad_{date}_summary.json` for local/debug compatibility.
 Returns a `SimpleNamespace(kg_sold, rsp_per_kg, revenue)` so templates need no changes.
-Returns `None` if SDMS file absent or `cng_kg_total ≤ 0`.
-RSP source: `CNG_RSP_PER_KG` env var (default `93.40`) — stored in JSON at scrape time.
+Returns `None` if no SDMS data for the date or `cng_kg_total ≤ 0`.
+RSP source: `CNG_RSP_PER_KG` env var (default `93.40`) — stored in `sdms_summaries` row at scrape time.
 
 **Attendant entry (stored, not displayed):** `cng_shift_readings` table. Collected at shift close.
 Kept for future cross-checks and variance analysis. Not used by any dashboard route.
@@ -227,11 +230,12 @@ Full 48-window scrape deferred to Stage 3.
 | FCC > Receipt Density | Receipt Density Records | Hydrometer per chamber | Per delivery |
 | FCC > Density Records | Density Records | Post-decant ATG density | Per delivery |
 
-### ATG Scraper — Stage 1 (build before launch)
-Scrapes IRAS Stock tab. Stores snapshots in `tank_readings` table every 30 minutes.
-Integrated into `daily_scrape.py` as Job 5.
-Follow the same Playwright pattern as existing scrapers.
-XG data: store but set `is_reliable = False`.
+### ATG Scraper ✓ Built
+`scrapers/iras_atg_exporter.py`. Scrapes IRAS Stock tab. Stores snapshots in `tank_readings`
+table every 30 minutes. Integrated into `daily_scrape.py` as Job 5.
+XG data: stored with `is_reliable = False`.
+**Production data backfill pending** — `tank_readings` has 0 rows on Railway until scraper
+is run locally against the Railway PostgreSQL `DATABASE_URL`.
 
 ### Paytm for Business
 `scrapers/paytm_exporter.py` — headless Playwright, stealth. Job 0 in `daily_scrape.py`.
@@ -263,6 +267,11 @@ Detection: `plant.upper().startswith("CGD")` AND `unit.upper() == "KG"`.
 Output JSON includes: `cng_kg_total`, `cng_revenue`, `cng_rsp_per_kg`, `cng_count`.
 RSP used: `CNG_RSP_PER_KG` env var (default `93.40`).
 
+**DB persistence:** After each successful run, `save_summary_to_db()` upserts a `SdmsSummary`
+row (idempotent by `op_date`). DB write is skipped if `DATABASE_URL` is not set or `--dry-run`
+is active. SDMS JSON files are local/debug artifacts — `sdms_summaries` is the Railway
+production source. `_fleet_total()` and `_cng_sdms()` in `dashboard/routes.py` read DB first.
+
 ---
 
 ## Critical Business Logic
@@ -276,6 +285,13 @@ Boundary mode resolves the mismatch.
 2. ISS backward search 05:30–06:00 for nozzles 7, 15, 16, 17, 18.
 3. Stop when all 5 resolved or 48 windows checked.
 XG threshold: 5L pump test + 2L buffer = 7L.
+
+**`daily_scrape.py --date YYYY-MM-DD` semantics:**
+`--date 2026-05-22` resolves the 06:00 boundary for `operational_date = 2026-05-22`.
+It writes a `NozzleTotalizer` row with `operational_date = 2026-05-22` (the 06:00 reading).
+The first backward ISS search window is 2026-05-22 05:30 → 06:00.
+To display fuel sales for 21 May on the owner dashboard, you need **two consecutive runs**:
+`--date 2026-05-21` (opening boundary) and `--date 2026-05-22` (closing boundary).
 
 ### Price Lookup (liquid fuel only)
 Never hardcode. Join transaction datetime to Price table:
@@ -298,6 +314,34 @@ Alert if depot density vs hydrometer delta ≥ 5%.
 `services/operational.py`. Before 06:00 → yesterday. At/after 06:00 → today.
 Used **only** in attendant home nudge.
 Shift close uses `_shift_op_date() = date.today() − 1` (always yesterday). Do not conflate.
+
+### Owner Dashboard Accounting Date Semantics
+
+**The owner dashboard does not show "today so far." It shows the last completed operational
+shift.** Do not describe it as live intraday accounting.
+
+The outlet operational day runs 06:00 → 05:59/06:00 next calendar day.
+When the owner opens the dashboard on calendar day D, the accounting view is:
+
+> **D−1 06:00 → D 06:00** (i.e., `op_date = D − 1`)
+
+**Example:** If today is 22 May 2026, the dashboard shows accounting data for
+21 May 2026 06:00 → 22 May 2026 06:00. In DB terms: `op_date = 2026-05-21`.
+
+**NozzleTotalizer requirement:** Fuel sales for `op_date = 2026-05-21` require two rows:
+
+| `operational_date` | Role |
+|--------------------|------|
+| 2026-05-21 | Opening boundary (06:00 totalizer reading) |
+| 2026-05-22 | Closing boundary (06:00 totalizer reading) |
+
+Fuel litres = totalizer at 2026-05-22 06:00 − totalizer at 2026-05-21 06:00 − pump tests.
+A single scraper run produces one boundary row. Two consecutive dates must both be scraped
+before any fuel volume can appear on the dashboard.
+
+In code: `dashboard_bp.index()` hardcodes `op_date = date.today() - timedelta(days=1)`.
+`_product_sales(op_date)` queries `NozzleTotalizer` for `op_date` (opening) and `op_date + 1`
+(closing). If either row is missing, that product shows 0 L.
 
 ### Stock Watch Calculation (owner dashboard)
 Rolling 7-day avg daily consumption per product from ISS data.
@@ -342,6 +386,23 @@ source. Table is retained for future cross-checks.
 | is_reliable | Boolean DEFAULT True | False for XG |
 | created_at | DateTime | |
 
+### `sdms_summaries` ✓ built (migration `a1b2c3d4e5f6`)
+One row per operational date. Upserted by `save_summary_to_db()` in `sdms_pad_exporter.py`.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | |
+| op_date | Date UNIQUE NOT NULL | Calendar date scraped (yesterday) |
+| fleet_card_total | Float | Sum of Fleet-Card Posting amounts |
+| fleet_card_count | Integer | Number of fleet card transactions |
+| cng_kg_total | Float | CNG kg from CGD Rewa billing rows |
+| cng_revenue | Float | cng_kg_total × cng_rsp_per_kg |
+| cng_rsp_per_kg | Float | `CNG_RSP_PER_KG` env var snapshot at scrape time |
+| cng_count | Integer | Number of CGD billing rows |
+| opening_balance | Float | PAD statement opening balance |
+| closing_balance | Float | PAD statement closing balance |
+| created_at | DateTime | |
+| updated_at | DateTime | |
+
 ### `lube_products` (seeded)
 name · pack_size · unit · sale_rate · is_active
 
@@ -367,7 +428,7 @@ Cash/cheque → confirmed immediately. Bank transfer → pending_verification �
 
 ## Manager Workflows
 
-### Stage 1 — Build Now
+### Stage 1 — Pending (not yet built)
 
 **Manager home (daily checklist):**
 Resets every operational day. Prescriptive — not a nav menu.
@@ -400,6 +461,29 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ---
 
+## Production Data Status (Railway PostgreSQL)
+
+As of 22 May 2026, the Railway PostgreSQL has no operational scraped data.
+All scraper tables start empty on a fresh deployment. The owner dashboard will show
+zeros until the following tables are populated via a manual backfill run.
+
+| Table | Rows needed | How to populate |
+|-------|-------------|-----------------|
+| `nozzle_totalizers` | ≥ 2 consecutive `operational_date` rows | `daily_scrape.py --date D` and `--date D+1` |
+| `iras_prices` | ≥ 1 row covering the target date | `daily_scrape.py` Job 1 (Price) |
+| `paytm_transactions` | ≥ 1 row for the target date | `daily_scrape.py` Job 0 (Paytm) |
+| `tank_readings` | ≥ 1 row per tank | `daily_scrape.py` Job 5 (ATG) |
+| `sdms_summaries` | ≥ 1 row for the target date | `daily_scrape.py` Job 4 (SDMS) |
+
+**Backfill approach:** Run `daily_scrape.py` locally with `DATABASE_URL` pointing to the Railway
+PostgreSQL connection string. The CNG/fleet dashboard figures (from `sdms_summaries`) and Paytm
+deduction will only appear after their respective scraper jobs have run and persisted to DB.
+
+**Important:** Automated scheduled scraping is not live on Railway. Scraper runs are currently
+manual (local machine → Railway DB via `DATABASE_URL` env var).
+
+---
+
 ## Build Stages
 
 Sprint 1/2/3 naming retired. Use Stage 1/2/3.
@@ -408,15 +492,17 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 
 | Task | Status |
 |------|--------|
-| ATG scraper (`iras_atg_exporter.py`, `tank_readings` table, Job 5) | Build now |
+| ATG scraper (`iras_atg_exporter.py`, `tank_readings` table, Job 5) | ✓ Built — production backfill pending |
 | Owner dashboard (screen 10, wire to real data) | ✓ Done |
 | Owner daily summary (screen 15, wire to real data) | ✓ Done |
-| Tanks screen (screen 11, wire to `tank_readings`) | Build now |
-| Manager home checklist | Build now |
-| Manager log expense | Build now |
-| Manager record payment | Build now |
+| Tanks screen (screen 11, wire to `tank_readings`) | ✓ Done |
+| SDMS DB persistence (`sdms_summaries`, DB-first reads) | ✓ Done |
 | CNG shift close (`cng_shift_readings` table, attendant flow) | ✓ Done |
-| Credit screens polish (12, 13, 14) | Build now |
+| Credit screens polish (12, 13, 14) | ✓ Substantially done |
+| Manager home checklist | Pending |
+| Manager log expense | Pending |
+| Manager record payment | **Next priority after data backfill** |
+| Production data backfill (Railway — 2 consecutive NozzleTotalizer dates + prices + Paytm + ATG + SDMS) | Pending |
 
 ### Stage 2 — Complete Operational Layer
 
@@ -471,6 +557,11 @@ visible terminal so you can kill it cleanly.
 ### Database
 SQLAlchemy ORM only — no raw SQL. `DATABASE_URL` env var switches SQLite ↔ PostgreSQL.
 Flask-Migrate / Alembic for all schema changes.
+
+**Connection pool hardening (Railway PostgreSQL):** `SQLALCHEMY_ENGINE_OPTIONS` is set in
+`create_app()` for PostgreSQL only (`pool_pre_ping=True`, `pool_recycle=300`). This prevents
+`SSL error: decryption failed or bad record mac` errors caused by stale pooled connections
+after Railway idle-connection timeouts. SQLite is unaffected.
 
 ---
 
@@ -654,7 +745,7 @@ Nav: Home · Tanks · Credit · Summary · More
 Data wiring:
 - Revenue: ISS (litres × RSP per product) + SDMS CNG (`_cng_sdms()`, kg × rsp/kg)
 - Cash in hand: Revenue − Paytm − Credit − Fleet card (derived)
-- Per-product breakdown: ISS per product code + CNG from SDMS JSON
+- Per-product breakdown: ISS per product code + CNG from SDMS DB via `_cng_sdms()` (JSON fallback)
 - Stock watch: rolling 7-day consumption from ISS → days remaining → order-by date.
   Card only appears when any product ≤ 7 days. Hidden otherwise.
 - Price ticker: RSP from Price table (liquid) + `cng_rsp_per_kg` (CNG)
@@ -667,7 +758,11 @@ Days left: > 7 default · 3–7 warn-600 · ≤ 2 error-600.
 No data state: "No ATG reading" shown per card.
 Note: "Order soon" chip and XG probe warning are deferred — not currently shown.
 
-#### `12_credit_customer_list.png` — Build now
+#### Credit home ✓ Done
+**Route:** `GET /credit/home`
+Cross-customer credit activity view. Recent transactions across all accounts.
+
+#### `12_credit_customer_list.png` ✓ Done
 **Route:** `GET /credit/customers`
 Summary: Total Outstanding + Overdue. Filter chips: All / Over 80% / Overdue / Suspended.
 Customer cards: avatar · name · vehicles · utilisation bar · balance.
@@ -679,7 +774,7 @@ Header: name · balance · utilisation pill. Tabs: Activity · Invoices · Recei
 Owner view is read-only. Payment recording is manager-side (manager branch, Stage 1).
 Activity feed: fuel + payments (chronological). Invoices and receipts shown in separate tabs.
 
-#### `14_credit_customer_add.png` — Build now
+#### `14_credit_customer_add.png` ✓ Done
 **Route:** `GET/POST /credit/customers/new` and `/<id>/edit`
 Company name · account ID + GST · fleet manager · contact · credit limit · payment terms (15/30/45).
 Vehicles: "+ Add vehicle" dashed button. "Suspend account" destructive: hidden in New, visible in Edit.
@@ -692,7 +787,7 @@ Data wiring (full calculation chain):
 
 1. **FUEL SALES** — one row per product (HS / MS / X2 / XG / CNG):
    Liquid: ISS litres × RSP from Price table.
-   CNG: kg_sold × rsp_per_kg from SDMS JSON via `_cng_sdms(op_date)`.
+   CNG: kg_sold × rsp_per_kg from `_cng_sdms(op_date)` — reads SDMS DB first, JSON fallback.
    → Subtotal: GROSS FUEL SALES
 
 2. **LUBE SALES** — cash lube from `lube_transactions` for the day.
@@ -765,7 +860,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode
 - `scrapers/iras_price_exporter.py` — Price (PRM)
-- `scrapers/iras_atg_exporter.py` — ATG Stock tab (Stage 1 — build now)
+- `scrapers/iras_atg_exporter.py` — ATG Stock tab (✓ built, Job 5)
 - `scrapers/paytm_exporter.py`
 - `scrapers/sdms_pad_exporter.py`
 - `scrapers/daily_scrape.py` — Job 0: Paytm · Job 1: Price · Job 2: ST · Job 3: ISS · Job 4: SDMS · Job 5: ATG
@@ -793,15 +888,21 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Deployment | ✓ Live — Railway, PostgreSQL, PWA |
 | Attendant branch | ✓ Complete — 9 screens, live data, reskinned |
 | Three-user foundation | ✓ Complete |
-| Paytm scraper | ✓ Complete — Gmail IMAP OTP, auto-import to DB |
-| SDMS PAD scraper | ✓ Complete — fleet + CNG extraction |
-| ATG scraper | Stage 1 — build now |
+| Paytm scraper | ✓ Complete — Gmail IMAP OTP, auto-import to DB, OTP not logged |
+| SDMS PAD scraper | ✓ Complete — fleet + CNG extraction + DB persistence (`sdms_summaries`) |
+| ATG scraper | ✓ Built — production data backfill pending |
 | Owner dashboard (screen 10) | ✓ Complete |
 | Owner daily summary (screen 15) | ✓ Complete |
-| Owner tanks screen (screen 11) | Stage 1 — wires to ATG |
-| Manager core (checklist, expenses, payments) | Stage 1 — build now |
+| Owner tanks screen (screen 11) | ✓ Complete |
+| Credit screens (12, 13, 14 + `/credit/home`) | ✓ Substantially done |
+| SDMS DB persistence + dashboard DB-first reads | ✓ Done |
+| Railway PostgreSQL connection pool hardening | ✓ Done — `pool_pre_ping=True`, `pool_recycle=300` |
+| CNG RSP default/fallback consistently 93.40 | ✓ Done |
+| dry-run DB-skip for all scraper jobs (Paytm, Price, ATG, SDMS) | ✓ Done |
+| Production debug traceback handler removed | ✓ Done |
+| Manager core (checklist, expenses, payments) | Stage 1 — pending; **payment recording next after backfill** |
+| Production data backfill (Railway) | Pending |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
-| Credit screens polish (12, 13, 14) | Stage 1 |
 | Manager lube sales + invoicing | Stage 2 |
 | Bank transfer verification UI | Stage 2 |
 | Automated Paytm ingestion | Stage 2 |
