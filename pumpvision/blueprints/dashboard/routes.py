@@ -2,6 +2,7 @@ import json
 from collections import defaultdict
 from datetime import date, time, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
@@ -9,7 +10,7 @@ from sqlalchemy import and_, func, or_
 
 from pumpvision.decorators import owner_required
 from pumpvision.models import (
-    AppSetting, CngShiftReading, CreditTransaction, Expense,
+    AppSetting, CreditTransaction, Expense,
     LubeTransaction, NozzleTotalizer, PaytmTransaction, TankReading, db,
 )
 from pumpvision.services.prices import get_rsp
@@ -46,13 +47,36 @@ def _product_sales(op_date):
 
 
 def _fleet_total(op_date):
+    """Returns (amount, available). available=False means scraper hasn't run for this date."""
     path = _PROJECT_ROOT / 'data' / 'sdms' / f'sdms_pad_{op_date:%Y-%m-%d}_summary.json'
-    if path.exists():
-        try:
-            return float(json.loads(path.read_text(encoding='utf-8')).get('fleet_card_total', 0))
-        except (json.JSONDecodeError, ValueError, KeyError):
-            pass
-    return 0.0
+    if not path.exists():
+        return 0.0, False
+    try:
+        val = float(json.loads(path.read_text(encoding='utf-8')).get('fleet_card_total', 0))
+        return val, True
+    except (json.JSONDecodeError, ValueError, KeyError):
+        return 0.0, False
+
+
+def _cng_sdms(op_date):
+    """
+    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue) from the SDMS summary JSON,
+    or None if the scraper hasn't run or the date had no CGD billing row.
+    Attendant CngShiftReading entries are preserved separately and not used for display.
+    """
+    path = _PROJECT_ROOT / 'data' / 'sdms' / f'sdms_pad_{op_date:%Y-%m-%d}_summary.json'
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        kg  = float(data.get('cng_kg_total', 0))
+        rsp = float(data.get('cng_rsp_per_kg', 93.40))
+        rev = float(data.get('cng_revenue', 0))
+        if kg <= 0:
+            return None
+        return SimpleNamespace(kg_sold=kg, rsp_per_kg=rsp, revenue=rev)
+    except (json.JSONDecodeError, ValueError, KeyError):
+        return None
 
 
 def _credit_total(op_date):
@@ -70,7 +94,7 @@ def _credit_total(op_date):
 def _cash_for_date(op_date):
     """Derived cash for op_date. Returns None if no fuel data at all."""
     products = _product_sales(op_date)
-    cng = CngShiftReading.query.filter_by(op_date=op_date).first()
+    cng = _cng_sdms(op_date)
     if not any(p['litres'] > 0 for p in products.values()) and not cng:
         return None
     fuel_rev = sum(p['revenue'] for p in products.values()) + (cng.revenue if cng else 0.0)
@@ -80,7 +104,8 @@ def _cash_for_date(op_date):
         operational_date=op_date).scalar() or 0.0
     expenses = db.session.query(func.sum(Expense.amount)).filter_by(
         op_date=op_date).scalar() or 0.0
-    return round(fuel_rev + lube - paytm - _credit_total(op_date) - _fleet_total(op_date) - expenses, 2)
+    fleet, _ = _fleet_total(op_date)
+    return round(fuel_rev + lube - paytm - _credit_total(op_date) - fleet - expenses, 2)
 
 
 def _stock_watch(op_date):
@@ -149,7 +174,7 @@ def summary(date_str=None):
     next_date = (op_date + timedelta(days=1)).isoformat() if op_date < yesterday else None
 
     products = _product_sales(op_date)
-    cng = CngShiftReading.query.filter_by(op_date=op_date).first()
+    cng = _cng_sdms(op_date)
     has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
 
     lube_cash = db.session.query(func.sum(LubeTransaction.amount)).filter_by(
@@ -160,10 +185,17 @@ def summary(date_str=None):
 
     paytm = db.session.query(func.sum(PaytmTransaction.amount)).filter_by(
         operational_date=op_date).scalar() or 0.0
+    paytm_available = db.session.query(func.count(PaytmTransaction.id)).filter_by(
+        operational_date=op_date).scalar() > 0
+
     credit = _credit_total(op_date)
-    fleet = _fleet_total(op_date)
+    fleet_raw, fleet_available = _fleet_total(op_date)
+    fleet = fleet_raw
+
     expenses = db.session.query(func.sum(Expense.amount)).filter_by(
         op_date=op_date).scalar() or 0.0
+    expenses_available = db.session.query(func.count(Expense.id)).filter_by(
+        op_date=op_date).scalar() > 0
 
     derived_cash = round(total_rev - paytm - credit - fleet - expenses, 2)
     cash_paise = f'{round((abs(derived_cash) - int(abs(derived_cash))) * 100):02d}'
@@ -183,9 +215,12 @@ def summary(date_str=None):
         fuel_rev=round(fuel_rev, 2),
         total_rev=total_rev,
         paytm=round(paytm, 2),
+        paytm_available=paytm_available,
         credit=round(credit, 2),
         fleet=round(fleet, 2),
+        fleet_available=fleet_available,
         expenses=round(expenses, 2),
+        expenses_available=expenses_available,
         derived_cash=derived_cash,
         cash_paise=cash_paise,
         date_display=date_display,
@@ -200,7 +235,7 @@ def index():
     op_date = date.today() - timedelta(days=1)
 
     products = _product_sales(op_date)
-    cng = CngShiftReading.query.filter_by(op_date=op_date).first()
+    cng = _cng_sdms(op_date)
 
     lube_cash = db.session.query(func.sum(LubeTransaction.amount)).filter_by(
         op_date=op_date, payment_mode='cash').scalar() or 0.0
@@ -213,9 +248,12 @@ def index():
     paytm = db.session.query(func.sum(PaytmTransaction.amount)).filter_by(
         operational_date=op_date).scalar() or 0.0
     credit = _credit_total(op_date)
-    fleet = _fleet_total(op_date)
+    fleet_raw, fleet_available = _fleet_total(op_date)
+    fleet = fleet_raw
     expenses = db.session.query(func.sum(Expense.amount)).filter_by(
         op_date=op_date).scalar() or 0.0
+    expenses_available = db.session.query(func.count(Expense.id)).filter_by(
+        op_date=op_date).scalar() > 0
 
     derived_cash = round(total_rev - paytm - credit - fleet - expenses, 2)
 
@@ -240,7 +278,9 @@ def index():
         paytm=round(paytm, 2),
         credit=round(credit, 2),
         fleet=round(fleet, 2),
+        fleet_available=fleet_available,
         expenses=round(expenses, 2),
+        expenses_available=expenses_available,
         derived_cash=derived_cash,
         trend=trend,
         prices=prices,

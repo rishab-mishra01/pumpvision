@@ -4,12 +4,12 @@
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
 <style>
-  body { margin: 0; background: #faf6ee; }
+  body { margin: 0; background: #050505; }
 </style>
 {% endblock %}
 
 {% block page %}
-<div class="dash" style="display:flex;flex-direction:column;height:100vh;height:100dvh;background:#faf6ee;">
+<div class="dash dash-dark" style="display:flex;flex-direction:column;height:100vh;height:100dvh;background:#050505;">
 
   <!-- Scrollable body -->
   <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
@@ -17,11 +17,8 @@
     <!-- HERO ZONE -->
     <div class="dash-hero">
 
-      <div style="display:flex;justify-content:space-between;align-items:center;
-                  padding:14px 22px 0;position:relative;z-index:2;">
-        <span style="font-family:var(--font-sans);font-size:13px;font-weight:500;color:#5a3a00;">
-          Morning, <strong style="color:#2a1a00;font-weight:600;">{{ first_name }}</strong> · Shree Petroleum
-        </span>
+      <div class="dash-topbar">
+        <span class="hi">Morning, <b>{{ first_name }}</b> · Shree Petroleum</span>
       </div>
 
       <!-- Price ticker -->
@@ -171,35 +168,33 @@
   </div><!-- /scrollbody -->
 
   <!-- Bottom nav -->
-  <nav class="owner-nav">
-    <a href="{{ url_for('dashboard.index') }}" class="active">
+  <nav class="nav">
+    <a href="{{ url_for('dashboard.index') }}" class="nav-tab active">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-3v-7H8v7H5a2 2 0 0 1-2-2v-9z"/>
       </svg>
       <span class="nav-label">Home</span>
     </a>
-    <a href="#">
+    <a href="{{ url_for('owner.tanks') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="5" y="4" width="14" height="17" rx="2"/>
-        <line x1="9" y1="9" x2="15" y2="9"/>
-        <line x1="9" y1="13" x2="15" y2="13"/>
+        <ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/>
       </svg>
-      <span class="nav-label">Tanks</span>
+      <span class="nav-label">Stock</span>
     </a>
-    <a href="{{ url_for('credit.dashboard') }}">
+    <a href="{{ url_for('credit.credit_home') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="6" width="18" height="13" rx="2"/>
         <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
       <span class="nav-label">Credit</span>
     </a>
-    <a href="{{ url_for('dashboard.summary') }}">
+    <a href="{{ url_for('dashboard.summary') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
       </svg>
       <span class="nav-label">Summary</span>
     </a>
-    <a href="{{ url_for('auth.logout') }}">
+    <a href="{{ url_for('auth.logout') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <circle cx="5" cy="12" r="1.6"/>
         <circle cx="12" cy="12" r="1.6"/>
