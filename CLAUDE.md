@@ -65,10 +65,12 @@ git push
 | MS | Motor Spirit | Petrol | IRAS ISS + nozzle map |
 | X2 | Xtra Premium 95 (XP95) | Premium Petrol | IRAS ISS + nozzle map |
 | XG | Xtra Green | Bio Diesel | IRAS ISS + nozzle map |
-| CNG | Compressed Natural Gas | Gas | Attendant manual totalizer reading (kg) |
+| CNG | Compressed Natural Gas | Gas | SDMS PAD scraper (CGD Rewa billing row, kg) — display source |
 
 **CNG is active — not deferred.** CNG does not appear in IRAS nozzle or ISS tables.
-Its data comes entirely from attendant shift close meter readings.
+**Display source:** SDMS PAD summary JSON (`cng_kg_total` field). See `_cng_sdms()` in dashboard routes.
+**Attendant entries** (`cng_shift_readings`) are still collected at shift close and stored — kept for
+future cross-checks — but are NOT used for dashboard or summary display.
 
 ---
 
@@ -130,7 +132,7 @@ Credit sale flow · Shift close flow (including CNG totalizer reading).
 | 4 | XG | 20,000 L |
 
 All tanks: GVR MAG PLUS ATG probes. ATG refreshes every 30 minutes.
-Tank 4 (XG): probe unreliable — data stored but flagged in UI.
+Tank 4 (XG): probe historically unreliable — data stored; UI warning not currently shown.
 CNG has no underground tank.
 
 ### Liquid Fuel Nozzles
@@ -154,11 +156,22 @@ No pump test deduction for CNG.
 
 ## CNG — Full Implementation Spec
 
-### How it works
+### Data Sources (two separate streams)
+
+**Display (dashboard + summary):** `_cng_sdms(op_date)` in `blueprints/dashboard/routes.py`.
+Reads `data/sdms/sdms_pad_{date}_summary.json` → `cng_kg_total`, `cng_rsp_per_kg`, `cng_revenue`.
+Returns a `SimpleNamespace(kg_sold, rsp_per_kg, revenue)` so templates need no changes.
+Returns `None` if SDMS file absent or `cng_kg_total ≤ 0`.
+RSP source: `CNG_RSP_PER_KG` env var (default `93.40`) — stored in JSON at scrape time.
+
+**Attendant entry (stored, not displayed):** `cng_shift_readings` table. Collected at shift close.
+Kept for future cross-checks and variance analysis. Not used by any dashboard route.
+
+### How attendant entry works
 The attendant enters the CNG meter reading (in kg) at shift close, exactly like liquid fuel.
 Opening reading for day N = closing reading from day N−1. First-ever entry: manual opening.
 
-### Schema: `cng_shift_readings` ← NEW (Stage 1)
+### Schema: `cng_shift_readings` ✓ built (migration `2fc50a7d52a6`)
 | Column | Type | Notes |
 |--------|------|-------|
 | id | Integer PK | |
@@ -172,7 +185,8 @@ Opening reading for day N = closing reading from day N−1. First-ever entry: ma
 | created_at | DateTime | |
 
 ### RSP
-`app_settings` table, key: `cng_rsp_per_kg`. Parse as float. Updated manually when price changes.
+Static value: `CNG_RSP_PER_KG` env var (default `93.40`). Stored in SDMS JSON at scrape time.
+Also mirrored to `app_settings` key `cng_rsp_per_kg` for attendant shift close RSP snapshot.
 No IRAS price lookup. CNG RSP does not appear in the Price (PRM) table.
 
 ### Shift Close Flow
@@ -224,9 +238,30 @@ XG data: store but set `is_reliable = False`.
 Downloads previous operational day's transaction CSV from `dashboard.paytm.com`.
 Session: `scrapers/paytm_state.json`.
 
+**OTP handling:** Paytm sends login OTP via SMS and email. The scraper reads it automatically
+from Gmail using IMAP (`imaplib.IMAP4_SSL`, `GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD` env vars).
+Searches for `UNSEEN FROM "care@paytm.com" SUBJECT "One Time Password"`, skips emails > 600s old,
+marks as Seen after extraction. If the saved session is still valid, OTP step is skipped entirely.
+
+**Auto-import to DB:** After a successful CSV download, `_job_paytm()` in `daily_scrape.py`
+automatically imports the CSV into the `paytm_transactions` table (insert-or-skip by `paytm_txn_id`).
+No manual upload step needed.
+
+**"Files to Download" panel:** The panel on the Paytm dashboard is collapsed by default.
+Selectors `a[download]` find nothing until it is expanded. The scraper expands it via click
+(step 6b), re-expands every 10 s during the download poll, and uses broad fallback selectors
+(`a[href*="s3.amazonaws.com"]`, `a[href*="s3-ap-southeast"]`, `a[href*="s3-us-east"]`) in addition
+to `a[download]` to detect the download link.
+
 ### SDMS PAD Portal
 `scrapers/sdms_pad_exporter.py` — headless Playwright, Claude Vision CAPTCHA. Job 4.
 Fleet card posting totals + CSV. Session: `scrapers/sdms_state.json`.
+
+**CNG extraction:** The scraper also extracts CNG sales from CGD Rewa billing rows.
+Detection: `plant.upper().startswith("CGD")` AND `unit.upper() == "KG"`.
+`compute_cng_summary(rows)` returns `(kg_total, revenue, count)`.
+Output JSON includes: `cng_kg_total`, `cng_revenue`, `cng_rsp_per_kg`, `cng_count`.
+RSP used: `CNG_RSP_PER_KG` env var (default `93.40`).
 
 ---
 
@@ -290,7 +325,8 @@ username · password_hash (bcrypt) · role (owner/manager/attendant) · first_na
 is_active · created_at. Seed via upsert at startup from `.env`.
 
 ### `cng_shift_readings` ✓ built (migration `2fc50a7d52a6`)
-Full spec in CNG section above.
+Full spec in CNG section above. **Not used for dashboard/summary display** — SDMS is the display
+source. Table is retained for future cross-checks.
 
 ### `tank_readings` ✓ built (migration `2fc50a7d52a6`)
 | Column | Type | Notes |
@@ -425,6 +461,13 @@ Auto-deploys on push to `main`.
 `start.bat` uses full Python path: `C:\Users\Rishab 2\AppData\Local\Python\bin\python.exe`
 (Windows Store `python` stub does not work.) Local login: `rishab` / `changeme`.
 
+**Stale process warning (Windows):** Flask `--debug` mode spawns a stat-reloader parent + worker
+child. Multiple `start` calls accumulate stale processes, all listening on port 5000. Symptoms:
+intermittent 500 errors or old code being served. Fix: use PowerShell `Stop-Process` to kill all
+Python PIDs before restarting — `taskkill` from Bash silently fails on Windows.
+Never run the Flask dev server via `run_in_background` in a Claude session; always start it in a
+visible terminal so you can kill it cleanly.
+
 ### Database
 SQLAlchemy ORM only — no raw SQL. `DATABASE_URL` env var switches SQLite ↔ PostgreSQL.
 Flask-Migrate / Alembic for all schema changes.
@@ -460,10 +503,15 @@ PAYTM_EMAIL=<see .env>
 PAYTM_PASSWORD=<see .env>
 PAYTM_STATE_PATH=scrapers/paytm_state.json
 PAYTM_HEADLESS=false
+GMAIL_ADDRESS=<see .env>
+GMAIL_APP_PASSWORD=<Google App Password — see .env>
 SDMS_USERNAME=<see .env>
 SDMS_PASSWORD=<see .env>
 SDMS_STATE_PATH=scrapers/sdms_state.json
+CNG_RSP_PER_KG=93.40
 ```
+
+**Railway env vars to add:** `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `CNG_RSP_PER_KG`
 
 ---
 
@@ -604,21 +652,20 @@ Nav: Home · Tanks · Credit · Summary · More
 **Design ref: `docs/design/Owner_Screens.html` screen 10 — implemented.**
 
 Data wiring:
-- Revenue: ISS (litres × RSP per product) + `cng_shift_readings` (kg × rsp/kg)
+- Revenue: ISS (litres × RSP per product) + SDMS CNG (`_cng_sdms()`, kg × rsp/kg)
 - Cash in hand: Revenue − Paytm − Credit − Fleet card (derived)
-- Per-product breakdown: ISS per product code + CNG from `cng_shift_readings`
+- Per-product breakdown: ISS per product code + CNG from SDMS JSON
 - Stock watch: rolling 7-day consumption from ISS → days remaining → order-by date.
   Card only appears when any product ≤ 7 days. Hidden otherwise.
 - Price ticker: RSP from Price table (liquid) + `cng_rsp_per_kg` (CNG)
 
-#### `11_owner_tanks.png` — Build now
+#### `11_owner_tanks.png` — ✓ Done
 **Route:** `GET /tanks`
 Latest `tank_readings` per tank. "AS OF HH:MM" timestamp.
 Fill bar (product color) · % · volume · capacity · days left.
 Days left: > 7 default · 3–7 warn-600 · ≤ 2 error-600.
-≤ 25% → card border error-600 + "Order soon" chip.
-XG: always show warn-100 "Probe unreliable — reading approximate".
-No data state: "Data unavailable" empty state with last-known timestamp.
+No data state: "No ATG reading" shown per card.
+Note: "Order soon" chip and XG probe warning are deferred — not currently shown.
 
 #### `12_credit_customer_list.png` — Build now
 **Route:** `GET /credit/customers`
@@ -626,10 +673,11 @@ Summary: Total Outstanding + Overdue. Filter chips: All / Over 80% / Overdue / S
 Customer cards: avatar · name · vehicles · utilisation bar · balance.
 Border: < 70% default · 70–80% warn-600 · > 80% error-600. Sticky "+ Add customer".
 
-#### `13_credit_customer_detail.png` — Build now
+#### `13_credit_customer_detail.png` — ✓ Done
 **Route:** `GET /credit/customers/<id>`
-Header: name · balance · utilisation pill. Action row: "Record payment" + "Generate invoice" (both ghost).
-Activity feed: fuel + lube + payments (chronological, dotted rules). Invoices at bottom.
+Header: name · balance · utilisation pill. Tabs: Activity · Invoices · Receipts.
+Owner view is read-only. Payment recording is manager-side (manager branch, Stage 1).
+Activity feed: fuel + payments (chronological). Invoices and receipts shown in separate tabs.
 
 #### `14_credit_customer_add.png` — Build now
 **Route:** `GET/POST /credit/customers/new` and `/<id>/edit`
@@ -644,7 +692,7 @@ Data wiring (full calculation chain):
 
 1. **FUEL SALES** — one row per product (HS / MS / X2 / XG / CNG):
    Liquid: ISS litres × RSP from Price table.
-   CNG: kg_sold × rsp_per_kg from `cng_shift_readings`.
+   CNG: kg_sold × rsp_per_kg from SDMS JSON via `_cng_sdms(op_date)`.
    → Subtotal: GROSS FUEL SALES
 
 2. **LUBE SALES** — cash lube from `lube_transactions` for the day.
@@ -745,8 +793,8 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Deployment | ✓ Live — Railway, PostgreSQL, PWA |
 | Attendant branch | ✓ Complete — 9 screens, live data, reskinned |
 | Three-user foundation | ✓ Complete |
-| Paytm scraper | ✓ Complete |
-| SDMS PAD scraper | ✓ Complete |
+| Paytm scraper | ✓ Complete — Gmail IMAP OTP, auto-import to DB |
+| SDMS PAD scraper | ✓ Complete — fleet + CNG extraction |
 | ATG scraper | Stage 1 — build now |
 | Owner dashboard (screen 10) | ✓ Complete |
 | Owner daily summary (screen 15) | ✓ Complete |
