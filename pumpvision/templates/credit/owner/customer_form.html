@@ -1,114 +1,238 @@
 {% extends "base.html" %}
-{% block title %}{% if customer %}Edit{% else %}New{% endif %} Customer — PumpVision{% endblock %}
+{% block title %}{% if customer %}Edit Customer{% else %}New Customer{% endif %} — Pumpvision{% endblock %}
 
-{% block content %}
-<h1 class="text-xl font-bold text-gray-800 mb-4">
-  {% if customer %}Edit Customer{% else %}New Customer{% endif %}
-</h1>
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>body { margin: 0; background: #050505; }</style>
+{% endblock %}
 
-<form method="POST" class="space-y-4">
-  <div class="bg-white rounded-xl shadow p-4 space-y-4">
-    <h2 class="font-semibold text-gray-700">Company Details</h2>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
-      <input type="text" name="company_name" required
-             value="{{ customer.company_name if customer else '' }}"
-             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="e.g. Sharma Transport Co.">
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
-      <input type="text" name="gst_number"
-             value="{{ customer.gst_number if customer and customer.gst_number else '' }}"
-             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="Optional">
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Fleet Manager Name *</label>
-      <input type="text" name="fleet_manager_name" required
-             value="{{ customer.fleet_manager_name if customer else '' }}"
-             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="Contact person name">
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number *</label>
-      <input type="text" name="whatsapp_number" required
-             value="{{ customer.whatsapp_number if customer else '91' }}"
-             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="917415XXXXXX">
-    </div>
-  </div>
+{% block page %}
+<div class="cform-screen" style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
 
-  <div class="bg-white rounded-xl shadow p-4 space-y-4">
-    <h2 class="font-semibold text-gray-700">Opening Balance</h2>
-    <p class="text-xs text-gray-500">
-      Amount currently owed to the pump by this customer, carried forward from your existing ledger.
-      {% if customer and customer.outstanding_balance %}
-        <span class="text-amber-600 font-medium">This will overwrite the current balance of ₹{{ "{:,.0f}".format(customer.outstanding_balance) }}.</span>
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+
+    <!-- TOP BAR -->
+    <div class="form-bar">
+      <div class="fb-row">
+        <a href="{{ url_for('credit.customers') }}" class="fb-cancel">Cancel</a>
+        <span class="fb-ttl">{% if customer %}Edit customer{% else %}New customer{% endif %}</span>
+        <button type="submit" form="cform" class="fb-save">Save</button>
+      </div>
+    </div>
+
+    <form id="cform" method="POST" class="form-body">
+
+      <!-- BUSINESS -->
+      <div class="form-section">
+        <span class="fsec-head">Business</span>
+
+        <div class="cform-field">
+          <span class="fl">Company name<span class="req">*</span></span>
+          <input type="text" name="company_name" required autocomplete="organization"
+                 value="{{ customer.company_name if customer else '' }}"
+                 placeholder="e.g. Sharma Transport Pvt. Ltd.">
+        </div>
+
+        <div class="cform-field">
+          <span class="fl">GSTIN</span>
+          <input type="text" name="gst_number"
+                 value="{{ customer.gst_number if customer and customer.gst_number else '' }}"
+                 placeholder="27ABCDE1234F1Z5 (optional)" style="font-family:var(--font-mono);font-size:13.5px;">
+        </div>
+      </div>
+
+      <!-- FLEET CONTACT -->
+      <div class="form-section">
+        <span class="fsec-head">Fleet contact</span>
+
+        <div class="cform-field">
+          <span class="fl">Fleet manager name<span class="req">*</span></span>
+          <input type="text" name="fleet_manager_name" required autocomplete="name"
+                 value="{{ customer.fleet_manager_name if customer else '' }}"
+                 placeholder="Full name">
+        </div>
+
+        <div class="cform-field">
+          <span class="fl">Mobile<span class="req">*</span></span>
+          <input type="text" name="whatsapp_number" required inputmode="tel"
+                 value="{{ customer.whatsapp_number if customer else '91' }}"
+                 placeholder="+91 — — — — — — — — — —"
+                 style="font-family:var(--font-mono);font-size:13.5px;">
+        </div>
+      </div>
+
+      <!-- CREDIT TERMS -->
+      <div class="form-section">
+        <span class="fsec-head">Credit terms</span>
+
+        <div class="cform-field">
+          <span class="fl">Credit limit<span class="req">*</span></span>
+          <input type="number" name="credit_limit" required min="0" step="1000" inputmode="numeric"
+                 value="{{ customer.credit_limit | int if customer else '' }}"
+                 placeholder="₹ 0">
+          <span class="fhelper">Outstanding cannot exceed this amount.</span>
+        </div>
+
+        <div class="cform-field" style="border-bottom:0;">
+          <span class="fl">Payment terms<span class="req">*</span></span>
+          <div class="terms-seg" id="terms-seg">
+            {% for days in [15, 30, 45] %}
+            <button type="button" class="{{ 'active' if (customer and customer.payment_terms_days == days) or (not customer and days == 30) }}"
+                    data-days="{{ days }}" onclick="selectTerms(this)">
+              <span class="tsn">{{ days }}</span><span class="tsu">Days</span>
+            </button>
+            {% endfor %}
+          </div>
+          <input type="hidden" name="payment_terms_days" id="payment-terms-val"
+                 value="{{ customer.payment_terms_days if customer else 30 }}">
+        </div>
+      </div>
+
+      <!-- OPENING BALANCE (edit only — or new customer) -->
+      <div class="form-section">
+        <span class="fsec-head">Balance{% if customer and customer.outstanding_balance %} <b>· ₹ {{ customer.outstanding_balance | inr }}</b>{% endif %}</span>
+
+        <div class="cform-field" style="border-bottom:0;">
+          <span class="fl">Opening balance (₹)</span>
+          <input type="number" name="opening_balance" step="1" min="0" inputmode="numeric"
+                 value="{{ customer.outstanding_balance | int if customer and customer.outstanding_balance else 0 }}"
+                 placeholder="0">
+          <span class="fhelper">Amount currently owed, carried from previous records.{% if customer and customer.outstanding_balance %} This overwrites the current balance.{% endif %}</span>
+        </div>
+      </div>
+
+      <!-- AUTHORIZED VEHICLES -->
+      <div class="form-section">
+        <span class="fsec-head">Authorized vehicles <b id="veh-count">· {{ customer.vehicles | selectattr('is_active') | list | length if customer else 0 }}</b></span>
+
+        <div style="font-family:var(--font-sans);font-size:11.5px;color:var(--c-ink-3);line-height:1.4;padding:2px 0 8px;">
+          Fuel sales are authorized only against registered vehicles.
+        </div>
+
+        <div class="veh-list" id="veh-list">
+          {% if customer %}
+          {% for v in customer.vehicles if v.is_active %}
+          <div class="veh-row">
+            <span class="vn">{{ v.vehicle_number }}</span>
+            <button type="button" class="vdel" onclick="removeVeh(this)">×</button>
+          </div>
+          {% endfor %}
+          {% endif %}
+        </div>
+
+        <button type="button" class="add-veh-btn" id="add-veh-btn" onclick="showVehInput()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add vehicle
+        </button>
+
+        <input type="text" id="veh-input" placeholder="e.g. MP04AB1234"
+               autocomplete="off" autocapitalize="characters"
+               style="display:none;font-family:var(--font-mono);font-size:14px;font-weight:600;
+                      background:rgba(244,241,232,0.06);border:1px solid var(--c-amber);border-radius:8px;
+                      color:var(--c-ink);padding:11px 14px;width:100%;outline:none;margin-top:8px;box-sizing:border-box;"
+               onkeydown="vehKeydown(event)">
+
+        <!-- Hidden textarea that gets populated before submit -->
+        <textarea name="vehicle_numbers" id="veh-hidden" style="display:none;"></textarea>
+      </div>
+
+      {% if customer %}
+      <!-- ACCOUNT STATUS -->
+      <div class="form-section">
+        <span class="fsec-head">Account</span>
+
+        <div class="cform-field" style="border-bottom:0;">
+          <div style="display:flex;align-items:center;gap:14px;padding:4px 0;">
+            <input type="checkbox" name="is_active" id="is_active"
+                   {% if customer.is_active %}checked{% endif %}
+                   style="width:20px;height:20px;accent-color:var(--c-amber);flex:none;">
+            <label for="is_active" style="font-family:var(--font-sans);font-size:14px;font-weight:500;color:var(--c-ink);">
+              Account active
+            </label>
+          </div>
+        </div>
+
+        {% if customer.is_active %}
+        <div class="danger-zone">
+          <div>
+            <div class="dz-ttl">Suspend account</div>
+            <div class="dz-sub">Suspending blocks new credit sales. Existing balance is unaffected. You can reactivate at any time.</div>
+          </div>
+          <button type="button" class="suspend-btn" onclick="document.getElementById('is_active').checked=false;this.closest('.danger-zone').style.display='none';">
+            Suspend
+          </button>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <input type="hidden" name="is_active" value="on">
       {% endif %}
-    </p>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Balance as of (₹)</label>
-      <input type="number" name="opening_balance" step="1"
-             value="{{ customer.outstanding_balance | int if customer and customer.outstanding_balance else 0 }}"
-             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="0">
-    </div>
+
+    </form>
+
+    <div style="height:40px;"></div>
   </div>
 
-  <div class="bg-white rounded-xl shadow p-4 space-y-4">
-    <h2 class="font-semibold text-gray-700">Credit Terms</h2>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Credit Limit (₹) *</label>
-      <input type="number" name="credit_limit" required min="0" step="1000"
-             value="{{ customer.credit_limit if customer else '' }}"
-             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="e.g. 50000">
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Payment Terms (days) *</label>
-      <select name="payment_terms_days"
-              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        <option value="15" {% if customer and customer.payment_terms_days == 15 %}selected{% endif %}>15 days</option>
-        <option value="30" {% if not customer or customer.payment_terms_days == 30 %}selected{% endif %}>30 days</option>
-        <option value="45" {% if customer and customer.payment_terms_days == 45 %}selected{% endif %}>45 days</option>
-        <option value="60" {% if customer and customer.payment_terms_days == 60 %}selected{% endif %}>60 days</option>
-      </select>
-    </div>
-  </div>
+</div>
 
-  <div class="bg-white rounded-xl shadow p-4 space-y-4">
-    <h2 class="font-semibold text-gray-700">Authorized Vehicles</h2>
-    <p class="text-xs text-gray-500">One vehicle number per line. UNREGISTERED and CONTAINER are always available.</p>
-    <textarea name="vehicle_numbers" rows="4"
-              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              placeholder="MP04AB1234&#10;MP07CD5678">{% if customer %}{% for v in customer.vehicles if v.is_active %}{{ v.vehicle_number }}
-{% endfor %}{% endif %}</textarea>
-  </div>
+<script>
+function selectTerms(btn) {
+  document.querySelectorAll('#terms-seg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('payment-terms-val').value = btn.dataset.days;
+}
 
-  <div class="bg-white rounded-xl shadow p-4 space-y-4">
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-      <textarea name="notes" rows="3"
-                class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                placeholder="Special instructions, authorised products, etc.">{{ customer.notes if customer and customer.notes else '' }}</textarea>
-    </div>
-    {% if customer %}
-    <div class="flex items-center gap-3">
-      <input type="checkbox" name="is_active" id="is_active" class="w-5 h-5 accent-indigo-600"
-             {% if customer.is_active %}checked{% endif %}>
-      <label for="is_active" class="text-sm font-medium text-gray-700">Account Active</label>
-    </div>
-    {% else %}
-    <input type="hidden" name="is_active" value="on">
-    {% endif %}
-  </div>
+// Vehicle management
+const vehRows = [];
+{% if customer %}
+{% for v in customer.vehicles if v.is_active %}
+vehRows.push('{{ v.vehicle_number }}');
+{% endfor %}
+{% endif %}
 
-  <button type="submit"
-          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl text-base">
-    {% if customer %}Save Changes{% else %}Create Customer{% endif %}
-  </button>
-  <a href="{{ url_for('credit.customers') }}"
-     class="block w-full text-center text-gray-500 py-3 text-sm">Cancel</a>
-</form>
+function updateVehCount() {
+  document.getElementById('veh-count').textContent = '· ' + vehRows.length;
+}
+
+function showVehInput() {
+  const inp = document.getElementById('veh-input');
+  inp.style.display = 'block';
+  inp.value = '';
+  inp.focus();
+}
+
+function addVeh(val) {
+  const v = val.trim().toUpperCase();
+  if (!v || vehRows.includes(v)) return;
+  vehRows.push(v);
+  const list = document.getElementById('veh-list');
+  const row = document.createElement('div');
+  row.className = 'veh-row';
+  row.innerHTML = '<span class="vn">' + v + '</span><button type="button" class="vdel" onclick="removeVeh(this)">×</button>';
+  list.appendChild(row);
+  updateVehCount();
+  document.getElementById('veh-input').style.display = 'none';
+}
+
+function removeVeh(btn) {
+  const row = btn.closest('.veh-row');
+  const name = row.querySelector('.vn').textContent;
+  const idx = vehRows.indexOf(name);
+  if (idx > -1) vehRows.splice(idx, 1);
+  row.remove();
+  updateVehCount();
+}
+
+function vehKeydown(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addVeh(e.target.value); }
+  if (e.key === 'Escape') { e.target.style.display = 'none'; }
+}
+
+document.getElementById('cform').addEventListener('submit', () => {
+  document.getElementById('veh-hidden').value = vehRows.join('\n');
+});
+updateVehCount();
+</script>
 {% endblock %}

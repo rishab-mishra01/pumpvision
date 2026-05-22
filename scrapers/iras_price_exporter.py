@@ -252,26 +252,50 @@ async def set_datetime_field(page, field_label: str, date_str: str, hour: int, m
 async def navigate_to_price(page):
     """
     1. Click FCC Data in the left nav
-    2. Click the Price(PRM) tab — directly visible after a fresh login, but may
-       be in the overflow '...' menu when navigating from another FCC Data tab.
+    2. Wait for the tab bar to actually render (first tab visible = panel is ready)
+    3. Click Price(PRM) directly if visible, otherwise use the '...' overflow menu.
     No archive toggle and no As Per dropdown on this tab.
     """
-    await page.get_by_role("button", name="FCC Data").click()
-    await page.wait_for_timeout(2000)
+    for attempt in range(1, 4):
+        await page.get_by_role("button", name="FCC Data").click()
 
-    price_tab = page.locator("button[role='tab']:has-text('Price(PRM)')")
-    try:
-        await price_tab.wait_for(state="visible", timeout=5_000)
-        await price_tab.click()
-    except Exception:
-        # Price(PRM) is in the overflow menu — same pattern as Issue(ISS)
+        # Wait for the tab bar to render rather than using a fixed sleep.
+        # Any button[role='tab'] appearing means the FCC panel is loaded.
+        try:
+            await page.locator("button[role='tab']").first.wait_for(
+                state="visible", timeout=15_000
+            )
+        except Exception:
+            print(f"  [nav] FCC Data panel did not render (attempt {attempt}/3) — retrying")
+            await page.wait_for_timeout(2000)
+            continue
+
+        await page.wait_for_timeout(500)
+
+        # Try Price(PRM) as a direct tab first
+        price_tab = page.locator("button[role='tab']:has-text('Price(PRM)')")
+        try:
+            await price_tab.wait_for(state="visible", timeout=3_000)
+            await price_tab.click()
+            break
+        except Exception:
+            pass
+
+        # Fall back to the '...' overflow menu
         overflow = page.locator("button[role='tab']:has-text('...')")
-        await overflow.wait_for(state="visible", timeout=10_000)
-        await overflow.click()
-        await page.wait_for_timeout(1000)
-        prm = page.locator("li.app-tab-list:has-text('Price(PRM)')")
-        await prm.wait_for(state="visible", timeout=5_000)
-        await prm.click()
+        try:
+            await overflow.wait_for(state="visible", timeout=8_000)
+            await overflow.click()
+            await page.wait_for_timeout(800)
+            prm = page.locator("li.app-tab-list:has-text('Price(PRM)')")
+            await prm.wait_for(state="visible", timeout=5_000)
+            await prm.click()
+            break
+        except Exception as e:
+            print(f"  [nav] Price(PRM) not found via overflow (attempt {attempt}/3): {e}")
+            if attempt == 3:
+                raise
+            await page.wait_for_timeout(2000)
 
     await page.wait_for_timeout(1500)
     print("[OK] Navigated to FCC Data > Price(PRM)")

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ customer.company_name }} — Pumpvision{% endblock %}
+{% block title %}Credit — Pumpvision{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
@@ -7,80 +7,23 @@
 {% endblock %}
 
 {% block page %}
-{% set util = customer.utilization_pct %}
-{% set state = 'err' if util > 80 else ('warn' if util >= 70 else '') %}
-
-<div class="cd-screen" style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
+<div class="credit-screen" style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
 
   <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
 
     <!-- HEADER -->
-    <div class="cd-top-v2 {{ state }}">
-
-      <div class="cd-bar">
-        <a href="{{ url_for('credit.customers') }}" class="cd-back" aria-label="Back">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </a>
-        <span class="crumb">Customer</span>
-        <a href="{{ url_for('credit.edit_customer', customer_id=customer.customer_id) }}" class="cd-edit">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
-          </svg>
-          Edit
-        </a>
+    <div class="cred-head-bar">
+      <div class="cred-titlerow">
+        <span class="ttl">Credit</span>
+        <span class="sub">{{ customers | length }} customer{{ 's' if customers | length != 1 }}<br>as of {{ today | dshort }}</span>
       </div>
-
-      <div class="cd-head-v2">
-        <div class="cname">{{ customer.company_name }}</div>
-        <div class="clab">{{ customer.payment_terms_days }}-day terms{% if customer.gst_number %} · {{ customer.gst_number }}{% endif %}</div>
-      </div>
-
-      <div class="cd-balance-v2 {{ state }}">
-        <div class="lab">Outstanding</div>
-        <div class="amt"><span class="rs">₹</span>{{ customer.outstanding_balance | inr }}<span class="paise">.00</span></div>
-      </div>
-
-      {% if last_payment %}
-      <div class="cd-lastreceipt">
-        <span class="glyph">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </span>
-        <div class="body">
-          <span class="lab">Last receipt</span>
-          {% set days_ago = (today - last_payment.payment_date).days %}
-          <span class="when">
-            <b>{% if days_ago == 0 %}Today{% elif days_ago == 1 %}Yesterday{% else %}{{ last_payment.payment_date | dshort }}{% endif %}</b>
-            · {{ last_payment.payment_mode or 'Payment' }}{% if last_payment.reference_number %} · {{ last_payment.reference_number }}{% endif %}
-          </span>
-        </div>
-        <span class="amt"><span class="rs">₹</span>{{ last_payment.amount | inr }}</span>
-      </div>
-      {% else %}
-      <div class="cd-lastreceipt none">
-        <span class="glyph">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-        </span>
-        <div class="body">
-          <span class="lab">Last receipt</span>
-          <span class="when">No payments recorded yet</span>
-        </div>
-        <span class="amt" style="color:var(--c-ink-3);font-size:13px;">—</span>
-      </div>
-      {% endif %}
-
     </div>
 
     <!-- TABS -->
-    <div class="cred-tabs detail" id="cred-tabs">
+    <div class="cred-tabs" id="cred-tabs">
       <button class="active" data-tab="activity">Activity</button>
       <button data-tab="invoices">Invoices <span class="ct">{{ invoices | length }}</span></button>
-      <button data-tab="receipts">Receipts <span class="ct">{{ payments | length }}</span></button>
+      <button data-tab="receipts">Receipts</button>
     </div>
 
     <!-- ACTIVITY PANEL -->
@@ -89,13 +32,14 @@
       {% if activity %}
       {% set ns = namespace(last_date=None) %}
       {% for item in activity %}
+      {% set cust = customers.get(item.customer_id) %}
 
       {% if item.date != ns.last_date %}
       {% set ns.last_date = item.date %}
       <div class="cred-day">
         {% if item.date == today %}Today
         {% elif (today - item.date).days == 1 %}Yesterday
-        {% else %}{{ item.date.strftime('%d %b %Y') }}{% endif %}
+        {% else %}{{ item.date | dlong }}{% endif %}
       </div>
       {% endif %}
 
@@ -104,8 +48,8 @@
         <div class="cred-feed-row first">
           <span class="act-glyph fuel {{ item.product | lower }}">{{ item.product }}</span>
           <div class="body">
-            <span class="cname">Fuel sale · {{ "%.0f"|format(item.litres) }} L</span>
-            <span class="desc">{{ item.vehicle or '—' }}</span>
+            <span class="cname">{{ cust.company_name if cust else '—' }}</span>
+            <span class="desc">{{ "%.0f"|format(item.litres) }} L · {{ item.vehicle or '—' }}</span>
           </div>
           <div class="right">
             <span class="amt">₹ {{ item.amount | inr }}</span>
@@ -122,8 +66,8 @@
             </svg>
           </span>
           <div class="body">
-            <span class="cname">{{ item.mode or 'Payment' }}</span>
-            <span class="desc">{% if item.ref %}{{ item.ref }}{% else %}—{% endif %}</span>
+            <span class="cname">{{ cust.company_name if cust else '—' }}</span>
+            <span class="desc">{{ item.mode or 'Payment' }}{% if item.ref %} · {{ item.ref }}{% endif %}</span>
           </div>
           <div class="right">
             <span class="amt credit">₹ {{ item.amount | inr }}</span>
@@ -134,7 +78,9 @@
 
       {% endfor %}
       {% else %}
-      <div class="cred-empty"><span class="ei">No activity yet</span></div>
+      <div style="padding:48px 18px;text-align:center;">
+        <div style="font-family:var(--font-sans);font-size:14px;color:rgba(244,241,232,0.35);">No activity in the last 7 days</div>
+      </div>
       {% endif %}
 
     </div>
@@ -144,11 +90,12 @@
       {% if invoices %}
       <div class="cred-feed">
         {% for inv in invoices %}
+        {% set cust = customers.get(inv.customer_id) %}
         <div class="cred-feed-row {{ 'first' if loop.first }}">
           <span class="act-glyph pay" style="background:rgba(244,241,232,0.06);color:rgba(244,241,232,0.55);font-size:9px;font-family:var(--font-mono);">INV</span>
           <div class="body">
             <span class="cname">{{ inv.invoice_number }}</span>
-            <span class="desc">{{ inv.generated_at | dlong if inv.generated_at else '—' }} · {{ inv.period_from | dshort if inv.period_from else '—' }}–{{ inv.period_to | dshort if inv.period_to else '—' }}</span>
+            <span class="desc">{{ cust.company_name if cust else '—' }} · {{ inv.generated_at.strftime('%d %b') if inv.generated_at else '—' }}</span>
           </div>
           <div class="right">
             <span class="amt">₹ {{ inv.total_amount | inr }}</span>
@@ -158,37 +105,22 @@
         {% endfor %}
       </div>
       {% else %}
-      <div class="cred-empty"><span class="ei">No invoices yet</span></div>
+      <div style="padding:48px 18px;text-align:center;">
+        <div style="font-family:var(--font-sans);font-size:14px;color:rgba(244,241,232,0.35);">No invoices yet</div>
+      </div>
       {% endif %}
     </div>
 
     <!-- RECEIPTS PANEL -->
     <div class="cred-panel" id="tab-receipts">
-      {% if payments %}
-      <div class="cred-feed">
-        {% for p in payments %}
-        <div class="cred-feed-row {{ 'first' if loop.first }}">
-          <span class="act-glyph pay">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </span>
-          <div class="body">
-            <span class="cname">{{ p.payment_mode or 'Payment' }}</span>
-            <span class="desc">{{ p.payment_date | dlong }}{% if p.reference_number %} · {{ p.reference_number }}{% endif %}</span>
-          </div>
-          <div class="right">
-            <span class="amt credit">₹ {{ p.amount | inr }}</span>
-          </div>
-        </div>
-        {% endfor %}
+      <div style="padding:48px 18px;text-align:center;">
+        <div style="font-family:var(--font-sans);font-size:14px;color:rgba(244,241,232,0.35);">Receipts view coming soon</div>
       </div>
-      {% else %}
-      <div class="cred-empty"><span class="ei">No receipts yet</span></div>
-      {% endif %}
     </div>
 
-    <div style="height:80px;"></div>
+    <!-- View full ledger CTA -->
+    <a href="{{ url_for('credit.customers') }}" class="cred-ledger-cta">View full ledger →</a>
+
   </div>
 
   <!-- Bottom nav -->

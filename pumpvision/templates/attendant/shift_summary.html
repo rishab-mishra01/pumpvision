@@ -142,6 +142,43 @@
     {% endfor %}
   </div>
 
+  <!-- CNG card (if entered) -->
+  {% if cng_reading %}
+  <div class="nozzle-summary-card" style="margin:8px 20px 0;border-left:3px solid #1d4ed8;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:var(--font-sans);font-weight:700;font-size:1rem;
+                    color:#1d4ed8;margin-bottom:10px;">CNG</div>
+        <div style="display:grid;grid-template-columns:auto auto;column-gap:20px;row-gap:2px;">
+          <p class="eyebrow" style="margin:0;">Opening</p>
+          <p class="eyebrow" style="margin:0;">Closing</p>
+          <p style="font-family:var(--font-mono);font-weight:600;font-size:14px;
+                    color:var(--ink-700);margin:0;font-variant-numeric:tabular-nums;">
+            {{ "{:,.1f}".format(cng_reading.opening_reading) }} kg
+          </p>
+          <p style="font-family:var(--font-mono);font-weight:600;font-size:14px;
+                    color:var(--ink-700);margin:0;font-variant-numeric:tabular-nums;">
+            {{ "{:,.1f}".format(cng_reading.closing_reading) }} kg
+          </p>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+        <span style="font-family:var(--font-mono);font-weight:700;font-size:1.1rem;
+                     color:var(--ink-900);white-space:nowrap;font-variant-numeric:tabular-nums;">
+          +{{ "{:,.1f}".format(cng_reading.kg_sold) }} kg
+        </span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--ink-500);
+                     font-variant-numeric:tabular-nums;">
+          ₹ {{ "{:,.0f}".format(cng_reading.revenue) }}
+        </span>
+        <a href="{{ url_for('attendant.shift_cng_numpad') }}"
+           style="font-family:var(--font-sans);font-size:13px;font-weight:600;
+                  color:var(--saffron-600);text-decoration:none;">Edit</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Product totals card -->
   <div style="margin:14px 20px 0;
               background:var(--ink-900);border-radius:var(--r-card);padding:16px;">
@@ -162,6 +199,16 @@
         </span>
       </div>
       {% endfor %}
+      {% if cng_reading %}
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <span style="font-family:var(--font-mono);font-weight:700;font-size:1rem;
+                     color:#93c5fd;font-variant-numeric:tabular-nums;">CNG</span>
+        <span style="font-family:var(--font-mono);font-size:13px;
+                     color:var(--paper-200);font-variant-numeric:tabular-nums;">
+          {{ "{:,.1f}".format(cng_reading.kg_sold) }}&thinsp;kg
+        </span>
+      </div>
+      {% endif %}
     </div>
   </div>
 

@@ -9,6 +9,72 @@ from pumpvision.decorators import owner_required
 credit_bp = Blueprint("credit", __name__)
 
 
+@credit_bp.route("/home")
+@login_required
+@owner_required
+def credit_home():
+    from pumpvision.models import CreditTransaction, Customer, Invoice, PaymentReceived
+    from datetime import date, timedelta
+
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+
+    # Recent cross-customer activity (last 7 days)
+    fuel_txns = (
+        CreditTransaction.query
+        .filter(CreditTransaction.transaction_date >= week_ago)
+        .order_by(CreditTransaction.transaction_date.desc(), CreditTransaction.transaction_time.desc())
+        .limit(30).all()
+    )
+    payments = (
+        PaymentReceived.query
+        .filter(PaymentReceived.payment_date >= week_ago)
+        .order_by(PaymentReceived.payment_date.desc())
+        .limit(20).all()
+    )
+
+    # Merge and sort by date desc
+    activity = []
+    for t in fuel_txns:
+        activity.append({
+            "type": "fuel",
+            "date": t.transaction_date,
+            "time": t.transaction_time,
+            "customer_id": t.customer_id,
+            "product": t.product,
+            "litres": t.litres,
+            "amount": t.amount,
+            "vehicle": t.vehicle_number,
+            "obj": t,
+        })
+    for p in payments:
+        activity.append({
+            "type": "payment",
+            "date": p.payment_date,
+            "time": None,
+            "customer_id": p.customer_id,
+            "amount": p.amount,
+            "mode": p.payment_mode,
+            "ref": p.reference_number,
+            "obj": p,
+        })
+    activity.sort(key=lambda x: (x["date"], x["time"] or __import__("datetime").time.min), reverse=True)
+
+    # Customer lookup
+    customers = {c.customer_id: c for c in Customer.query.all()}
+
+    # Invoices (recent)
+    invoices = Invoice.query.order_by(Invoice.generated_at.desc()).limit(20).all()
+
+    return render_template(
+        "credit/owner/credit_home.html",
+        activity=activity,
+        customers=customers,
+        invoices=invoices,
+        today=today,
+    )
+
+
 @credit_bp.route("/")
 @login_required
 @owner_required
@@ -52,9 +118,23 @@ def dashboard():
 @login_required
 @owner_required
 def customers():
-    from pumpvision.models import Customer
-    customers = Customer.query.order_by(Customer.company_name).all()
-    return render_template("credit/owner/customers.html", customers=customers)
+    from pumpvision.models import Customer, PaymentReceived
+    all_customers = Customer.query.order_by(Customer.company_name).all()
+    total_outstanding = sum(c.outstanding_balance or 0 for c in all_customers)
+
+    # Build last payment lookup per customer
+    last_payments = {}
+    for p in PaymentReceived.query.order_by(PaymentReceived.payment_date.desc()).all():
+        if p.customer_id not in last_payments:
+            last_payments[p.customer_id] = p
+
+    return render_template(
+        "credit/owner/customers.html",
+        customers=all_customers,
+        total_outstanding=total_outstanding,
+        last_payments=last_payments,
+        today=date.today(),
+    )
 
 
 @credit_bp.route("/customers/new", methods=["GET", "POST"])
@@ -129,7 +209,8 @@ def edit_customer(customer_id):
         customer.gst_number         = request.form.get("gst_number", "").strip() or None
         customer.fleet_manager_name = request.form.get("fleet_manager_name", "").strip()
         customer.whatsapp_number    = request.form.get("whatsapp_number", "").strip()
-        customer.notes              = request.form.get("notes", "").strip() or None
+        if "notes" in request.form:
+            customer.notes = request.form.get("notes", "").strip() or None
         customer.is_active          = request.form.get("is_active") == "on"
 
         try:
@@ -195,13 +276,42 @@ def ledger(customer_id):
         .order_by(PaymentReceived.payment_date.desc())
         .all()
     )
+    last_payment = payments[0] if payments else None
+
+    # Unified activity feed: fuel txns + payments merged and sorted
+    activity = []
+    for t in transactions:
+        activity.append({
+            "type": "fuel",
+            "date": t.transaction_date,
+            "time": t.transaction_time,
+            "product": t.product,
+            "litres": t.litres,
+            "amount": t.amount,
+            "vehicle": t.vehicle_number,
+        })
+    for p in payments:
+        activity.append({
+            "type": "payment",
+            "date": p.payment_date,
+            "time": None,
+            "amount": p.amount,
+            "mode": p.payment_mode,
+            "ref": p.reference_number,
+        })
+    activity.sort(
+        key=lambda x: (x["date"], x["time"] or __import__("datetime").time.min),
+        reverse=True,
+    )
+
     return render_template(
         "credit/owner/ledger.html",
         customer=customer,
-        transactions=transactions,
+        activity=activity,
         invoices=invoices,
         payments=payments,
-        now_date=date.today().isoformat(),
+        last_payment=last_payment,
+        today=date.today(),
     )
 
 

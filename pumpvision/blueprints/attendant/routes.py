@@ -35,6 +35,14 @@ def _initials(name: str) -> str:
     return ''.join(w[0].upper() for w in words[:2])
 
 
+def _cng_opening_reading(op_date: date):
+    """Opening kg for CNG: closing reading from previous day, or None for first entry."""
+    from pumpvision.models import CngShiftReading
+    prev = op_date - timedelta(days=1)
+    row = CngShiftReading.query.filter_by(op_date=prev).first()
+    return row.closing_reading if row else None
+
+
 def _opening_reading(nozzle_no: int, op_date: date):
     """Opening totalizer for a nozzle: try NozzleTotalizer, fall back to last ManualTotalizerReading."""
     from pumpvision.models import NozzleTotalizer, ManualTotalizerReading
@@ -522,11 +530,70 @@ def transaction_confirmed(transaction_id):
 
 # ─── Shift close (new flow) ───────────────────────────────────────────────────
 
+@attendant_bp.route("/shift/cng", methods=["GET", "POST"])
+@login_required
+@attendant_required
+def shift_cng_numpad():
+    from pumpvision.models import AppSetting, CngShiftReading, db
+
+    op_date = _shift_op_date()
+    opening = _cng_opening_reading(op_date)
+    existing = CngShiftReading.query.filter_by(op_date=op_date).first()
+
+    if request.method == "POST":
+        raw = request.form.get("closing_reading", "").strip()
+        try:
+            closing = float(raw)
+        except (ValueError, TypeError):
+            flash("Please enter a valid number.", "error")
+            return redirect(url_for("attendant.shift_cng_numpad"))
+
+        if opening is not None and closing < opening:
+            flash(f"Closing ({closing:.1f} kg) must be ≥ opening ({opening:.1f} kg).", "error")
+            return redirect(url_for("attendant.shift_cng_numpad"))
+
+        s = db.session.get(AppSetting, "cng_rsp_per_kg")
+        rsp = float(s.value) if s else 87.0
+        eff_opening = opening if opening is not None else closing
+        kg_sold = max(0.0, closing - eff_opening)
+        revenue = round(kg_sold * rsp, 2)
+
+        if existing:
+            existing.opening_reading = eff_opening
+            existing.closing_reading = closing
+            existing.kg_sold = kg_sold
+            existing.rsp_per_kg = rsp
+            existing.revenue = revenue
+        else:
+            db.session.add(CngShiftReading(
+                op_date=op_date,
+                opening_reading=eff_opening,
+                closing_reading=closing,
+                kg_sold=kg_sold,
+                rsp_per_kg=rsp,
+                revenue=revenue,
+                submitted_by=current_user.id,
+            ))
+        db.session.commit()
+        return redirect(url_for("attendant.shift_select_product"))
+
+    return render_template(
+        "attendant/shift_numpad.html",
+        nozzle="CNG",
+        det={"db_label": "CNG", "nozzle_no": None, "db_product": "CNG", "color": "#2a6fa3"},
+        opening=opening,
+        existing_value=existing.closing_reading if existing else None,
+        back_url=url_for("attendant.shift_select_product"),
+        unit="kg",
+        is_cng=True,
+    )
+
+
 @attendant_bp.route("/shift/select-product", strict_slashes=False)
 @login_required
 @attendant_required
 def shift_select_product():
-    from pumpvision.models import ManualTotalizerReading
+    from pumpvision.models import CngShiftReading, ManualTotalizerReading
 
     op_date = _shift_op_date()
 
@@ -548,6 +615,8 @@ def shift_select_product():
             ).first() is not None
             for n in info["nozzles"]
         )
+    product_done['CNG'] = CngShiftReading.query.filter_by(op_date=op_date).first() is not None
+
     return render_template(
         "attendant/shift_select_product.html",
         op_date=op_date,
@@ -664,9 +733,10 @@ def shift_numpad(nozzle):
 @login_required
 @attendant_required
 def shift_summary():
-    from pumpvision.models import ManualTotalizerReading
+    from pumpvision.models import CngShiftReading, ManualTotalizerReading
 
     op_date = _shift_op_date()
+    cng_reading = CngShiftReading.query.filter_by(op_date=op_date).first()
     nozzle_rows = []
     for nozzle_name in _NOZZLE_ORDER:
         det = _SHIFT_NOZZLE[nozzle_name]
@@ -709,6 +779,7 @@ def shift_summary():
         "attendant/shift_summary.html",
         nozzle_rows=nozzle_rows,
         product_totals=product_totals,
+        cng_reading=cng_reading,
         op_date=op_date,
         all_entered=all_entered,
         any_drafts=any_drafts,

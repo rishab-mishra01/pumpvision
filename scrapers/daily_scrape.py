@@ -17,6 +17,7 @@ Jobs run in this fixed order per day:
   3. ISS boundary     — finds 6AM totalizer readings for all 6 nozzles using
                         the ST file already on disk, then writes to NozzleTotalizer DB.
   4. SDMS PAD         — fleet card posting summary from SDMS portal (own browser context).
+  5. ATG snapshot     — current tank levels from FCC > Stock (same IRAS session as 1-3).
 
 Delivery jobs (RDB Invoice, SAP Invoice, TT Receipt, density records) are
 event-driven — they fire when a tanker arrives, not on a daily schedule.
@@ -100,13 +101,21 @@ def _load_scraper(name: str):
 
 _iss  = _load_scraper("iras_iss_exporter")
 _prm  = _load_scraper("iras_price_exporter")
+
+# iras_iss_exporter and iras_price_exporter both wrap sys.stdout at import time,
+# leaving nested TextIOWrappers on the same fd. Reset to a fresh fd before loading
+# paytm/sdms scrapers, which also wrap sys.stdout and fail on a stale inner buffer.
+sys.stdout = open(os.dup(_stdout_fd), "w", encoding="utf-8", errors="replace", closefd=True)
 _ptm  = _load_scraper("paytm_exporter")
+
+sys.stdout = open(os.dup(_stdout_fd), "w", encoding="utf-8", errors="replace", closefd=True)
 _sdms = _load_scraper("sdms_pad_exporter")
 
-# Both scraper modules wrap sys.stdout at import time, leaving two wrappers on
-# the same fd and causing the original buffer to be closed. Reset stdout by
-# opening our pre-duped fd — it can never be closed by the orphaned wrappers.
-sys.stdout = open(_stdout_fd, "w", encoding="utf-8", errors="replace", closefd=True)
+sys.stdout = open(os.dup(_stdout_fd), "w", encoding="utf-8", errors="replace", closefd=True)
+_atg  = _load_scraper("iras_atg_exporter")
+
+# Final reset — clean stdout for the rest of the run.
+sys.stdout = open(os.dup(_stdout_fd), "w", encoding="utf-8", errors="replace", closefd=True)
 
 _iss.OUTPUT_FOLDER          = str(ISS_DIR)
 _iss.SHIFT_TOTALIZER_FOLDER = str(ST_DIR)
@@ -276,7 +285,7 @@ async def _autonomous_login(page) -> bool:
 # JOB 0 — PAYTM PAYMENT REPORT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_paytm():
+async def _job_paytm(dry_run: bool = False):
     """
     Download yesterday's Paytm payment transaction CSV.
 
@@ -294,6 +303,57 @@ async def _job_paytm():
     success = await _ptm.run()
     if not success:
         print("  [WARN] Paytm download failed — continuing with IRAS jobs")
+        return
+
+    if dry_run:
+        print("  [dry-run] DB import skipped — Paytm CSV downloaded but not written to DB")
+        return
+
+    # Import the downloaded CSV into the DB automatically
+    try:
+        from pumpvision import create_app as _create_app
+        from pumpvision.models import db as _db, PaytmTransaction as _PT
+        from pumpvision.blueprints.paytm.routes import _parse_paytm_csv
+
+        op_date, _, _ = _ptm.get_op_day_range()
+        csv_path = _ptm.OUTPUT_DIR / f"paytm_{op_date.strftime('%Y-%m-%d')}.csv"
+        if not csv_path.exists():
+            print("  [WARN] Paytm CSV not found after download — skipping DB import")
+            return
+
+        _app = _create_app()
+        with _app.app_context():
+            with open(csv_path, "rb") as f:
+                records, warnings = _parse_paytm_csv(f)
+            inserted = skipped = 0
+            for rec in records:
+                if _db.session.query(_PT).filter_by(paytm_txn_id=rec["paytm_txn_id"]).first():
+                    skipped += 1
+                else:
+                    _db.session.add(_PT(**rec))
+                    inserted += 1
+            _db.session.commit()
+            print(f"  [db] Paytm import: {inserted} new, {skipped} already in DB")
+            if warnings:
+                print(f"  [db] {len(warnings)} parse warnings")
+    except Exception as e:
+        print(f"  [WARN] Paytm DB import failed: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 5 — ATG STOCK SNAPSHOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _job_atg(page, dry_run: bool = False):
+    """
+    Scrape the current ATG tank level snapshot from FCC Data > Stock.
+
+    Runs inside the existing IRAS browser session (after ISS, before close)
+    so no additional CAPTCHA solve is needed.
+    Writes one TankReading row per tank to the database.
+    """
+    atg_dir = _data_root / "ATG"
+    await _atg.run_atg(page, output_dir=atg_dir, dry_run=dry_run)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -345,11 +405,46 @@ async def _job_shift_totalizer(page, op_dates: list[str], st_dir: Path):
     await _iss.download_all_shift_totalizers(page, st_dir, op_dates)
 
 
+def _save_prices_to_db(records: list[dict]):
+    """Upsert IRAS Price (PRM) records into the iras_prices table."""
+    if not records:
+        print("  [db] No price records to save.")
+        return
+    try:
+        from pumpvision import create_app
+        from pumpvision.models import IrasPrice, db
+
+        app = create_app()
+        with app.app_context():
+            saved = 0
+            for r in records:
+                existing = IrasPrice.query.filter_by(
+                    product=r["product"],
+                    effective_from=r["effective_from"],
+                ).first()
+                if existing:
+                    existing.rate_per_litre = r["rate_per_litre"]
+                    existing.effective_to = r["effective_to"]
+                else:
+                    db.session.add(IrasPrice(
+                        product=r["product"],
+                        rate_per_litre=r["rate_per_litre"],
+                        effective_from=r["effective_from"],
+                        effective_to=r["effective_to"],
+                    ))
+                    saved += 1
+            db.session.commit()
+            print(f"  [db] Saved {saved} new price record(s) to iras_prices "
+                  f"({len(records) - saved} already existed)")
+    except Exception as e:
+        print(f"  [db] ERROR saving prices: {e}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — PRICE (PRM)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_price(page, shift_dates: list[str], price_dir: Path):
+async def _job_price(page, shift_dates: list[str], price_dir: Path, dry_run: bool = False):
     """
     Download Price (PRM) for exactly the op day(s) being reconciled.
 
@@ -383,6 +478,10 @@ async def _job_price(page, shift_dates: list[str], price_dir: Path):
         records = _prm.parse_price_file(fpath)
         print(f"  [PRM] {len(records)} price records in downloaded file")
         _prm.print_price_summary(records)
+        if dry_run:
+            print(f"  [dry-run] DB write skipped — would have saved {len(records)} price record(s)")
+        else:
+            _save_prices_to_db(records)
     else:
         print("  [PRM] WARNING: Price download failed")
 
@@ -478,7 +577,7 @@ async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
     print("=" * 55)
 
     # ── Job 0: Paytm — runs its own browser context before the IRAS session ──
-    await _job_paytm()
+    await _job_paytm(dry_run=dry_run)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -507,13 +606,16 @@ async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
             return False
 
         # ── Job 1: Price (PRM) — RSP for the exact op day(s) ─────────────────
-        await _job_price(page, shift_dates, price_dir)
+        await _job_price(page, shift_dates, price_dir, dry_run=dry_run)
 
         # ── Job 2: Shift Totalizer — must precede ISS (ISS reads ST from disk) ─
         await _job_shift_totalizer(page, op_dates, st_dir)
 
         # ── Job 3: ISS boundary → DB ──────────────────────────────────────────
         await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
+
+        # ── Job 5: ATG snapshot — reuses existing IRAS session, no re-login ──
+        await _job_atg(page, dry_run=dry_run)
 
         await browser.close()
 

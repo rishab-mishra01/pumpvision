@@ -1,53 +1,103 @@
 {% extends "base.html" %}
-{% block title %}Customers — PumpVision{% endblock %}
+{% block title %}Ledger — Pumpvision{% endblock %}
 
-{% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-xl font-bold text-gray-800">Customers</h1>
-  <a href="{{ url_for('credit.new_customer') }}"
-     class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Add</a>
-</div>
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>body { margin: 0; background: #050505; }</style>
+{% endblock %}
 
-{% if customers %}
-<div class="space-y-2">
-  {% for c in customers %}
-  <div class="bg-white rounded-xl shadow p-4">
-    <div class="flex justify-between items-start">
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <p class="font-semibold text-gray-800 truncate">{{ c.company_name }}</p>
+{% block page %}
+<div class="credit-screen" style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
+
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+
+    <!-- HEADER -->
+    <div class="cred-head-bar ledger-head">
+      <div class="cred-titlerow">
+        <span class="ttl">Ledger</span>
+        <span class="sub">{{ customers | length }} customer{{ 's' if customers | length != 1 }}<br>as of {{ today | dshort }}</span>
+      </div>
+      <div class="ledger-total">
+        <span class="lab">Total outstanding</span>
+        <span class="amt"><span class="rs">₹</span>{{ total_outstanding | inr }}</span>
+      </div>
+    </div>
+
+    <!-- CUSTOMER LIST -->
+    <div class="cust-list-min">
+      {% for c in customers %}
+      {% set lp = last_payments.get(c.customer_id) %}
+      {% set state = 'err' if c.utilization_pct > 80 else ('warn' if c.utilization_pct >= 70 else '') %}
+      <a href="{{ url_for('credit.ledger', customer_id=c.customer_id) }}" class="cust-card-min {{ state }}">
+        <div class="left">
+          <span class="cname">{{ c.company_name }}</span>
           {% if not c.is_active %}
-            <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">Inactive</span>
+          <span class="lastpay">Suspended</span>
+          {% elif lp %}
+          {% set days_ago = (today - lp.payment_date).days %}
+          <span class="lastpay good">Last paid <b>₹ {{ lp.amount | inr }}</b> ·
+            {% if days_ago == 0 %}Today
+            {% elif days_ago == 1 %}Yesterday
+            {% else %}{{ lp.payment_date | dshort }}{% endif %}
+          </span>
+          {% else %}
+          <span class="lastpay" style="font-style:italic;color:var(--c-ink-4);">No payments yet</span>
           {% endif %}
         </div>
-        <p class="text-xs text-gray-500 mt-0.5">{{ c.fleet_manager_name }} · {{ c.whatsapp_number }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">Limit: ₹{{ "{:,.0f}".format(c.credit_limit) }} · {{ c.payment_terms_days }}-day terms</p>
-        {% set vehicles = c.vehicles | selectattr('is_active') | list %}
-        {% if vehicles %}
-        <p class="text-xs text-gray-400 mt-0.5">Vehicles: {{ vehicles | map(attribute='vehicle_number') | join(', ') }}</p>
-        {% endif %}
+        <div class="right">
+          <span class="amt"><span class="rs">₹</span>{{ c.outstanding_balance | inr }}</span>
+          <span class="amt-lab">Outstanding</span>
+        </div>
+      </a>
+      {% else %}
+      <div style="padding:48px 18px;text-align:center;">
+        <div style="font-family:var(--font-sans);font-size:14px;color:rgba(244,241,232,0.35);">No customers yet</div>
       </div>
-      <div class="flex flex-col gap-1 ml-3 flex-shrink-0">
-        <a href="{{ url_for('credit.ledger', customer_id=c.customer_id) }}"
-           class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-center">Ledger</a>
-        <a href="{{ url_for('credit.edit_customer', customer_id=c.customer_id) }}"
-           class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-center">Edit</a>
-      </div>
+      {% endfor %}
     </div>
-    <div class="mt-3">
-      <div class="flex justify-between text-xs text-gray-500 mb-1">
-        <span>Outstanding: ₹{{ "{:,.0f}".format(c.outstanding_balance) }}</span>
-        <span>{{ "{:.0f}".format(c.utilization_pct) }}%</span>
-      </div>
-      <div class="w-full bg-gray-200 rounded-full h-1.5">
-        <div class="h-1.5 rounded-full {% if c.utilization_pct >= 80 %}bg-red-500{% elif c.utilization_pct >= 60 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
-             style="width: {{ [c.utilization_pct, 100]|min }}%"></div>
-      </div>
-    </div>
+
+    <div style="height:100px;"></div>
   </div>
-  {% endfor %}
+
+  <!-- ADD CUSTOMER FAB -->
+  <a href="{{ url_for('credit.new_customer') }}" class="cust-add-fab">+</a>
+
+  <!-- Bottom nav -->
+  <nav class="nav">
+    <a href="{{ url_for('dashboard.index') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-3v-7H8v7H5a2 2 0 0 1-2-2v-9z"/>
+      </svg>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="{{ url_for('owner.tanks') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/>
+      </svg>
+      <span class="nav-label">Stock</span>
+    </a>
+    <a href="{{ url_for('credit.credit_home') }}" class="nav-tab active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="6" width="18" height="13" rx="2"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span class="nav-label">Credit</span>
+    </a>
+    <a href="{{ url_for('dashboard.summary') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
+      </svg>
+      <span class="nav-label">Summary</span>
+    </a>
+    <a href="{{ url_for('auth.logout') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="5" cy="12" r="1.6"/>
+        <circle cx="12" cy="12" r="1.6"/>
+        <circle cx="19" cy="12" r="1.6"/>
+      </svg>
+      <span class="nav-label">More</span>
+    </a>
+  </nav>
+
 </div>
-{% else %}
-<div class="bg-white rounded-xl shadow p-8 text-center text-gray-500">No customers yet.</div>
-{% endif %}
 {% endblock %}

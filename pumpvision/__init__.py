@@ -59,6 +59,55 @@ def create_app():
     app.register_blueprint(owner_bp, url_prefix="/owner")
     app.register_blueprint(manager_bp, url_prefix="/manager")
 
+    @app.template_filter('inr')
+    def inr_filter(v):
+        """Indian rupee format — whole number only. E.g. 467404.41 → '4,67,404'"""
+        if v is None:
+            return '—'
+        neg = v < 0
+        s = str(int(abs(v)))
+        if len(s) <= 3:
+            whole = s
+        else:
+            last3 = s[-3:]
+            rest = s[:-3]
+            groups = []
+            while rest:
+                groups.append(rest[-2:])
+                rest = rest[:-2]
+            groups.reverse()
+            whole = ','.join(groups) + ',' + last3
+        return ('-' if neg else '') + whole
+
+    @app.template_filter('thousands')
+    def thousands_filter(v):
+        """Western comma format, integer. E.g. 4872 → '4,872'"""
+        if v is None:
+            return '—'
+        return f'{int(v):,}'
+
+    @app.template_filter('inr_full')
+    def inr_full_filter(v):
+        """Indian rupee format with paise. E.g. 467404.41 → '4,67,404.41'"""
+        if v is None:
+            return '—'
+        paise = f'{round((abs(v) - int(abs(v))) * 100):02d}'
+        return inr_filter(v) + '.' + paise
+
+    @app.template_filter('dshort')
+    def dshort_filter(d):
+        """Cross-platform '21 May' — no leading zero, works on Windows + Linux."""
+        if d is None:
+            return '—'
+        return f"{d.day} {d.strftime('%b')}"
+
+    @app.template_filter('dlong')
+    def dlong_filter(d):
+        """Cross-platform '21 May 2026' — no leading zero, works on Windows + Linux."""
+        if d is None:
+            return '—'
+        return f"{d.day} {d.strftime('%b %Y')}"
+
     @app.context_processor
     def inject_notification_count():
         from flask_login import current_user
@@ -117,6 +166,14 @@ def _seed_data():
 
     if db.session.get(AppSetting, "alert_threshold") is None:
         db.session.add(AppSetting(key="alert_threshold", value="80"))
+
+    _cng_setting = db.session.get(AppSetting, "cng_rsp_per_kg")
+    if _cng_setting is None:
+        db.session.add(AppSetting(key="cng_rsp_per_kg", value="93.40"))
+    elif _cng_setting.value == "87.00":
+        # Correct the old wrong default — safe to overwrite because 87.00 was never
+        # a valid RSP and was only seeded by a prior coding error.
+        _cng_setting.value = "93.40"
 
     for nozzle_no in [7, 11, 15, 16, 17, 18]:
         key = f"pump_test_nozzle_{nozzle_no}"

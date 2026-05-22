@@ -303,3 +303,46 @@ class FleetCardTransaction(db.Model):
     logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# CNG
+# ─────────────────────────────────────────────
+
+class CngShiftReading(db.Model):
+    """Attendant-entered CNG meter reading at shift close."""
+    __tablename__ = 'cng_shift_readings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    op_date = db.Column(db.Date, nullable=False, unique=True, index=True)
+    opening_reading = db.Column(db.Float, nullable=False)
+    closing_reading = db.Column(db.Float, nullable=False)
+    kg_sold = db.Column(db.Float, nullable=False)
+    rsp_per_kg = db.Column(db.Float, nullable=False)
+    revenue = db.Column(db.Float, nullable=False)
+    submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# ATG TANK READINGS
+# ─────────────────────────────────────────────
+
+class TankReading(db.Model):
+    """ATG stock snapshot scraped from IRAS Stock tab every ~30 minutes."""
+    __tablename__ = 'tank_readings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    scraped_at = db.Column(db.DateTime, nullable=False, index=True)
+    tank_id = db.Column(db.Integer, nullable=False)
+    product = db.Column(db.String(5), nullable=False)
+    level_mm = db.Column(db.Float)
+    volume_litres = db.Column(db.Float)
+    capacity_litres = db.Column(db.Float)
+    pct_full = db.Column(db.Float)
+    is_reliable = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('scraped_at', 'tank_id', name='uq_tank_reading_snapshot'),
+    )
