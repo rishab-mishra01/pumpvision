@@ -722,12 +722,54 @@ def save_outputs(
 
 
 # ─────────────────────────────────────────────
+# DB PERSISTENCE
+# ─────────────────────────────────────────────
+
+def save_summary_to_db(date_iso: str, metadata: dict,
+                       fleet_total: float, fleet_count: int,
+                       cng_kg: float, cng_revenue: float, cng_count: int) -> bool:
+    """
+    Upsert a SdmsSummary row for the given operational date.
+    Idempotent — safe to call repeatedly; re-running for the same date updates the row.
+    Returns True on success, False on error.
+    Requires Flask app context (DATABASE_URL must be set).
+    """
+    try:
+        from datetime import date as _date
+        from pumpvision import create_app
+        from pumpvision.models import SdmsSummary, db
+
+        flask_app = create_app()
+        with flask_app.app_context():
+            op_date = _date.fromisoformat(date_iso)
+            row = SdmsSummary.query.filter_by(op_date=op_date).first()
+            if row is None:
+                row = SdmsSummary(op_date=op_date)
+                db.session.add(row)
+            row.fleet_card_total = fleet_total
+            row.fleet_card_count = fleet_count
+            row.cng_kg_total     = cng_kg
+            row.cng_revenue      = cng_revenue
+            row.cng_rsp_per_kg   = CNG_RSP_PER_KG
+            row.cng_count        = cng_count
+            row.opening_balance  = metadata.get("opening_balance")
+            row.closing_balance  = metadata.get("closing_balance")
+            db.session.commit()
+        print(f"  [db] SdmsSummary upserted for {date_iso}")
+        return True
+    except Exception as e:
+        print(f"  [db] WARNING: could not save to DB: {e}")
+        return False
+
+
+# ─────────────────────────────────────────────
 # MAIN FLOW
 # ─────────────────────────────────────────────
 
-async def run() -> bool:
+async def run(dry_run: bool = False) -> bool:
     """
     Full SDMS PAD export flow. Returns True on success, False on any failure.
+    dry_run=True: download and parse as normal, but skip DB write.
     """
     _, date_ddmmyyyy, date_iso = get_yesterday()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -831,6 +873,19 @@ async def run() -> bool:
                 fleet_total, fleet_count,
                 cng_kg, cng_revenue, cng_count,
             )
+
+            # ── Step 7: Persist summary to DB ──────────────────────────────
+            if dry_run:
+                print("[step 7] [dry-run] DB write skipped")
+            elif os.environ.get("DATABASE_URL"):
+                print("[step 7] Saving summary to DB...")
+                save_summary_to_db(
+                    date_iso, metadata,
+                    fleet_total, fleet_count,
+                    cng_kg, cng_revenue, cng_count,
+                )
+            else:
+                print("[step 7] DATABASE_URL not set — skipping DB save (local-only mode)")
 
             print()
             print("=" * 55)
