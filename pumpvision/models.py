@@ -328,6 +328,24 @@ class CngShiftReading(db.Model):
 # ATG TANK READINGS
 # ─────────────────────────────────────────────
 
+class SdmsSummary(db.Model):
+    """Daily SDMS PAD scrape summary — fleet card totals + CNG totals per operational date."""
+    __tablename__ = 'sdms_summaries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    op_date = db.Column(db.Date, unique=True, nullable=False, index=True)
+    fleet_card_total = db.Column(db.Float, default=0.0)
+    fleet_card_count = db.Column(db.Integer, default=0)
+    cng_kg_total = db.Column(db.Float, default=0.0)
+    cng_revenue = db.Column(db.Float, default=0.0)
+    cng_rsp_per_kg = db.Column(db.Float, default=93.40)
+    cng_count = db.Column(db.Integer, default=0)
+    opening_balance = db.Column(db.Float)
+    closing_balance = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class TankReading(db.Model):
     """ATG stock snapshot scraped from IRAS Stock tab every ~30 minutes."""
     __tablename__ = 'tank_readings'

@@ -360,13 +360,14 @@ async def _job_atg(page, dry_run: bool = False):
 # JOB 4 — SDMS PAD STATEMENT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_sdms():
+async def _job_sdms(dry_run: bool = False):
     """
     Download yesterday's SDMS PAD Statement and compute fleet card posting total.
 
     Runs in its own persistent browser context (independent of the IRAS session).
     Skipped silently when SDMS_USERNAME / SDMS_PASSWORD are not configured.
     Outputs: data/sdms/sdms_pad_YYYY-MM-DD.csv + _summary.json
+    dry_run=True: download and parse, but skip DB write.
     """
     print(f"\n{'='*55}")
     print(f"  JOB 4 — SDMS PAD Statement")
@@ -376,7 +377,7 @@ async def _job_sdms():
         print("  [SKIP] SDMS_USERNAME or SDMS_PASSWORD not set in .env")
         return
 
-    success = await _sdms.run()
+    success = await _sdms.run(dry_run=dry_run)
     if not success:
         print("  [WARN] SDMS download failed — daily scrape continues")
 
@@ -620,7 +621,7 @@ async def run(shift_dates: list[str], dry_run: bool = False) -> bool:
         await browser.close()
 
     # ── Job 4: SDMS PAD — own browser context, runs after IRAS session ───────
-    await _job_sdms()
+    await _job_sdms(dry_run=dry_run)
 
     print("\n[DONE] All jobs complete.")
     return True
