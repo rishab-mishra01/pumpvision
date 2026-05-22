@@ -319,7 +319,7 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
     Returns the list of parsed reading dicts (empty on failure).
     """
     print(f"\n{'='*55}")
-    print(f"  JOB 5 — ATG Stock Snapshot")
+    print(f"  JOB 5 — ATG Stock Snapshot  (current reading, not date-specific)")
     print(f"{'='*55}")
 
     if output_dir is None:
@@ -395,10 +395,9 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
 
     if readings:
         for r in readings:
-            rel = "" if r["is_reliable"] else " [UNRELIABLE]"
             vol = f"{r['volume_litres']:.0f} L" if r["volume_litres"] is not None else "—"
             pct = f"{r['pct_full']:.1f}%" if r["pct_full"] is not None else "—"
-            print(f"    Tank {r['tank_id']} ({r['product']}){rel}: {vol}  {pct}  "
+            print(f"    Tank {r['tank_id']} ({r['product']}): {vol}  {pct}  "
                   f"@ {r['scraped_at'].strftime('%H:%M')}")
 
         if dry_run:

@@ -507,12 +507,19 @@ async def scrape_summary(page) -> tuple[str, str]:
 # MAIN FLOW
 # ─────────────────────────────────────────────
 
-async def run() -> bool:
+async def run(target_date: str | None = None) -> bool:
     """
     Full Paytm report download flow. Manages its own browser context.
+    target_date: YYYY-MM-DD accounting op_date to scrape. If None, uses yesterday.
     Returns True on success, False on any failure.
     """
-    op_date, start_dt, end_dt = get_op_day_range()
+    if target_date is not None:
+        _d = datetime.strptime(target_date, "%Y-%m-%d")
+        op_date  = _d.date()
+        start_dt = _d.replace(hour=6, minute=0, second=0, microsecond=0)
+        end_dt   = (_d + timedelta(days=1)).replace(hour=5, minute=59, second=0, microsecond=0)
+    else:
+        op_date, start_dt, end_dt = get_op_day_range()
     output_csv = OUTPUT_DIR / f"paytm_{op_date.strftime('%Y-%m-%d')}.csv"
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
