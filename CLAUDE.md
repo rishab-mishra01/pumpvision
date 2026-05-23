@@ -305,6 +305,14 @@ What it coordinates:
 One IRAS login covers Price + any needed boundary scrapes (no second CAPTCHA solve).
 Add `--dry-run` to preview what would run/skip without writing to DB.
 
+**Accounting source skips:** Paytm, Price, and SDMS are each checked against the DB before
+running. Sources already present are skipped automatically. See *Accounting Source Existence
+Checks* below.
+
+**IRAS failure isolation:** If IRAS login fails (CAPTCHA failure), Price and boundary scrapes
+are skipped but SDMS still runs independently. The run returns a non-zero exit if any source
+failed.
+
 ### Boundary Completeness Check
 
 Before scraping each boundary, `--completed-shift` checks `nozzle_totalizers`.
@@ -320,6 +328,110 @@ A boundary is **complete** only if all six expected nozzle numbers are present:
 The check uses SQLAlchemy Core directly (`create_engine` + `select`). It does **not** call
 `create_app()`, so it never triggers `db.create_all()`, Alembic migrations, or seed logic.
 Safe to call with `--dry-run`.
+
+### Accounting Source Existence Checks
+
+Before running any accounting source (Paytm / Price / SDMS), `--completed-shift`,
+`--accounting-only`, and all `--*-only` modes check the DB using SQLAlchemy Core
+(`create_engine` + `select`). No `create_app()`, no migrations, no seed logic. Safe
+with `--dry-run`.
+
+| Source | Table checked | Completeness rule |
+|--------|--------------|-------------------|
+| Paytm | `paytm_transactions` | `COUNT(*) WHERE operational_date = D > 0` |
+| Price | `iras_prices` | `SELECT DISTINCT product` set = `{HS, MS, X2, XG}` |
+| SDMS | `sdms_summaries` | `COUNT(*) WHERE op_date = D > 0` |
+
+**Price completeness uses set logic, not row count.** A date with only HS and MS rows
+is `INCOMPLETE`, not `COMPLETE`. Duplicate rows do not cause a false pass.
+Status values: `COMPLETE` (skip) · `INCOMPLETE` (re-scrape) · `MISSING` (scrape).
+Only `COMPLETE` is treated as a skip — any other status triggers re-scraping.
+
+CNG is not in the IRAS Price table and is not part of the Price existence check.
+
+**Skipped = successful.** A source that is already in DB does not degrade the final
+exit status. Only actively-failed sources cause a non-zero exit.
+
+### Source-Specific Retry Modes
+
+Single-source retry without touching unrelated portals. Use when one source failed in a
+`--completed-shift` run and the others already succeeded.
+
+```
+# Retry Paytm only
+python -X utf8 scrapers/daily_scrape.py --paytm-only --date 2026-05-20
+
+# Retry Price only (requires IRAS login)
+python -X utf8 scrapers/daily_scrape.py --price-only --date 2026-05-20
+
+# Retry SDMS only
+python -X utf8 scrapers/daily_scrape.py --sdms-only --date 2026-05-20
+```
+
+For all three modes, `--date` is the **accounting op_date** (shift start date), not the
+shift boundary date. `--date 2026-05-20` covers the shift window `2026-05-20 06:00 →
+2026-05-21 05:59`.
+
+Each mode runs its existence check first and skips silently if the data is already in DB.
+No IRAS login is attempted by `--paytm-only` or `--sdms-only`. `--price-only` defers the
+IRAS credential check to runtime — if all four products are already present, no login occurs.
+
+**Rationale:** IRAS CAPTCHA failures are an operational reality. If SDMS succeeds and IRAS
+fails, retry with `--price-only` (or `--boundary-only`) without re-running Paytm or SDMS.
+Minimises unnecessary portal hits and avoids redundant data duplication.
+
+### Failure Isolation
+
+Each source runs in its own browser context. A failure in one source does not abort others.
+
+| Failure | Behaviour |
+|---------|-----------|
+| Paytm download fails | Warning printed; Price and SDMS still run |
+| IRAS login fails (CAPTCHA) | Price and boundaries marked failed; SDMS still runs |
+| SDMS download fails | Warning printed; final summary shows failed |
+| DB save fails (any source) | Source marked failed; other sources unaffected |
+
+**Final summary** is printed after all sources complete:
+
+```
+=======================================================
+  ACCOUNTING SOURCE SUMMARY
+=======================================================
+  op_date 2026-05-20:
+    paytm   : SUCCEEDED
+    price   : SUCCEEDED
+    sdms    : SKIPPED (already in DB)
+=======================================================
+```
+
+`run()` returns `False` (non-zero exit) if any source shows `FAILED`. `SKIPPED` is not
+a failure. If the process exits non-zero, check the summary above to see which source failed,
+then use the corresponding `--*-only` flag to retry that source alone.
+
+### Paytm Wait and Debug Options
+
+| Flag | Behaviour |
+|------|-----------|
+| _(not set)_ | Paytm download waits up to the scraper's built-in timeout |
+| `--paytm-wait-seconds N` (N > 0) | Poll for download link for up to N seconds |
+| `--paytm-wait-seconds 0` | Poll indefinitely (use with caution) |
+| `--paytm-wait-seconds N` (N < 0) | Rejected — script exits with error |
+
+```
+python -X utf8 scrapers/daily_scrape.py --completed-shift --date 2026-05-20 --paytm-wait-seconds 120
+```
+
+`--paytm-debug` saves diagnostic artifacts to the working directory:
+- `paytm_page.html` — full page HTML at the time of the download attempt
+- `paytm_anchors.txt` — all anchor hrefs found on the page
+- `paytm_candidates.txt` — candidate download link(s) evaluated
+- `network.log` — network requests observed (URLs sanitized — query strings stripped)
+- `paytm_debug.png` — screenshot at the time of the download attempt
+
+**Security note:** Page HTML, anchor lists, and candidate-link files may contain signed
+S3 URLs or other sensitive query parameters in their raw (pre-sanitization) form.
+These artifacts are **local-only** and must **not** be committed to git or shared externally.
+Add them to `.gitignore` if you run `--paytm-debug` regularly.
 
 ### ATG Rule
 
@@ -343,6 +455,57 @@ It is not historical completed-shift accounting data.
 | Accounting only | `--accounting-only` | Accounting op_date | Paytm + Price + SDMS. IRAS for Price only. |
 | ATG snapshot | `--atg-only` | Ignored | Current tank levels only. |
 | All (default) | _(none)_ | Shift boundary date | All 6 jobs in order (0 → 5). |
+| Paytm only | `--paytm-only` | Accounting op_date | Paytm only. Skips if rows already in DB. No IRAS login. |
+| Price only | `--price-only` | Accounting op_date | IRAS Price (PRM) only. Skips if all 4 products in DB. |
+| SDMS only | `--sdms-only` | Accounting op_date | SDMS PAD only. Skips if row already in DB. No IRAS login. |
+
+### Recommended Operational Runbook
+
+**Automated scheduling is not live on Railway.** All runs are currently manual from a local
+machine using the Railway `DATABASE_URL` env var. The intent when scheduling is implemented:
+
+| Schedule | Command | Notes |
+|----------|---------|-------|
+| Once daily, after 06:10 | `--completed-shift --date YESTERDAY` | After the shift closes; YESTERDAY = calendar date − 1 |
+| Every 30 minutes | `--atg-only` | Tank levels; separate from completed-shift |
+
+**Standard daily workflow (manual until scheduling is live):**
+
+```bash
+# Run after 06:10 on YYYY-MM-DD for the shift that just closed (op_date = yesterday)
+python -X utf8 scrapers/daily_scrape.py --completed-shift --date YYYY-MM-DD
+
+# Separately, to refresh tank levels
+python -X utf8 scrapers/daily_scrape.py --atg-only
+```
+
+**If a source fails in the completed-shift run:**
+
+```bash
+# Retry Paytm only (if Paytm download failed or timed out)
+python -X utf8 scrapers/daily_scrape.py --paytm-only --date YYYY-MM-DD
+
+# Retry Paytm with extended wait (if report generation is slow)
+python -X utf8 scrapers/daily_scrape.py --paytm-only --date YYYY-MM-DD --paytm-wait-seconds 180
+
+# Retry Price only (if IRAS CAPTCHA failed)
+python -X utf8 scrapers/daily_scrape.py --price-only --date YYYY-MM-DD
+
+# Retry SDMS only (if SDMS failed)
+python -X utf8 scrapers/daily_scrape.py --sdms-only --date YYYY-MM-DD
+```
+
+**Dry-run (preview without writing to DB):**
+
+```bash
+python -X utf8 scrapers/daily_scrape.py --completed-shift --date YYYY-MM-DD --dry-run
+```
+
+**Paytm manual import (if CSV already exists locally):**
+
+```bash
+python -X utf8 scrapers/import_paytm_csv.py data/paytm/paytm_YYYY-MM-DD.csv
+```
 
 ---
 
@@ -535,7 +698,7 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ## Production Data Status (Railway PostgreSQL)
 
-Last updated: 22 May 2026.
+Last updated: 23 May 2026.
 
 ### op_date 2026-05-21 — fully verified
 
@@ -550,7 +713,7 @@ Owner dashboard proof-of-life succeeded for accounting op_date **2026-05-21**
 | `tank_readings` | ✓ ATG snapshot populated |
 | `sdms_summaries` | ✓ CNG + fleet data for 2026-05-21 present |
 
-### op_date 2026-05-20 — Paytm outstanding
+### op_date 2026-05-20 — fully complete
 
 Completed-shift live test for op_date **2026-05-20** (shift window 2026-05-20 06:00 → 2026-05-21 05:59):
 
@@ -560,13 +723,31 @@ Completed-shift live test for op_date **2026-05-20** (shift window 2026-05-20 06
 | Closing boundary 2026-05-21 | ✓ Already present (COMPLETE) — skipped |
 | Price for 2026-05-20 | ✓ Downloaded and saved |
 | SDMS PAD for 2026-05-20 | ✓ Downloaded and saved |
-| Paytm for 2026-05-20 | **Open — download failed during live test** |
+| Paytm for 2026-05-20 | ✓ 520 rows imported via `import_paytm_csv.py` |
 
-The 2026-05-20 accounting day is **not complete** until Paytm data is imported.
-If the CSV already exists locally, import it with:
-```
-python -X utf8 scrapers/import_paytm_csv.py data/paytm/paytm_2026-05-20.csv
-```
+Owner dashboard shows data for 2026-05-20. All streams complete.
+
+### Known IRAS Reliability Issue (May 2026)
+
+In recent runs, Paytm succeeded but the subsequent IRAS session failed after 3 CAPTCHA
+attempts. This is **not necessarily a credentials problem** — IRAS CAPTCHA is intermittently
+difficult, and repeated attempts sometimes fail even with correct login details.
+
+**If IRAS fails after Paytm succeeds:**
+
+1. Check the failure screenshot (if `--paytm-debug` was active) for clues.
+2. Retry with `--price-only` — Paytm is already in DB and will be skipped.
+3. If failure recurs, consider saving the failed CAPTCHA image and the predicted text
+   to diagnose whether the Claude Vision response is incorrect, or whether the IRAS
+   login page itself changed.
+
+**Recommended diagnostics when IRAS keeps failing:**
+- Save the CAPTCHA image sent to Claude Vision alongside the predicted text
+- Save a screenshot immediately after the failed login attempt
+- Compare the predicted text with the actual CAPTCHA characters if visible
+
+This has not been automated yet. If IRAS login proves persistently unreliable, a
+manual CAPTCHA entry fallback may be warranted (out of scope for current stage).
 
 ### Backfill command reference
 
@@ -596,6 +777,7 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | ATG scraper (`iras_atg_exporter.py`, `tank_readings` table, Job 5) | ✓ Built + data populated for 2026-05-21; run `--atg-only` on separate schedule |
 | `--completed-shift` orchestration mode (`daily_scrape.py`) | ✓ Built — boundary completeness check, single IRAS session for Price + boundaries |
 | `import_paytm_csv.py` — Paytm CSV import fallback | ✓ Built |
+| Source-specific retry modes (`--paytm-only`, `--price-only`, `--sdms-only`) | ✓ Built — existence checks, failure isolation, final summary |
 | Owner dashboard (screen 10, wire to real data) | ✓ Done |
 | Owner daily summary (screen 15, wire to real data) | ✓ Done |
 | Tanks screen (screen 11, wire to `tank_readings`) | ✓ Done |
@@ -603,12 +785,12 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | CNG shift close (`cng_shift_readings` table, attendant flow) | ✓ Done |
 | Credit screens polish (12, 13, 14) | ✓ Substantially done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
-| Production data — op_date 2026-05-20 boundaries + Price + SDMS | ✓ Scraped and saved |
-| Production data — op_date 2026-05-20 Paytm | **Open — download failed; import via `import_paytm_csv.py` if CSV exists** |
+| Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported via `import_paytm_csv.py` |
 | Decide scraper schedule (completed-shift once daily after 06:00; ATG every 30 min) | Pending — not automated yet |
+| IRAS CAPTCHA diagnostics (save failed image + prediction for debugging) | Pending — recurring failure observed May 2026 |
 | Manager home checklist | Pending |
 | Manager log expense | Pending |
-| Manager record payment | **Next priority after Paytm 2026-05-20 is resolved** |
+| Manager record payment | **Next priority** |
 
 ### Stage 2 — Complete Operational Layer
 
@@ -1000,6 +1182,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | ATG scraper | ✓ Built — data populated for 2026-05-21; run `--atg-only` separately (not in completed-shift) |
 | `--completed-shift` orchestration mode | ✓ Built — boundary completeness check, single IRAS session |
 | `import_paytm_csv.py` Paytm CSV import fallback | ✓ Built |
+| Source-specific retry modes (`--paytm-only`, `--price-only`, `--sdms-only`) | ✓ Built — existence checks, failure isolation, final summary per source |
 | Owner dashboard (screen 10) | ✓ Complete |
 | Owner daily summary (screen 15) | ✓ Complete |
 | Owner tanks screen (screen 11) | ✓ Complete |
@@ -1010,9 +1193,10 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | dry-run DB-skip for all scraper jobs (Paytm, Price, ATG, SDMS) | ✓ Done |
 | Production debug traceback handler removed | ✓ Done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
-| Production data — op_date 2026-05-20 Paytm | Open — download failed; import pending |
+| Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported |
 | Scraper scheduling (completed-shift daily + ATG 30-min) | Pending — not automated yet |
-| Manager core (checklist, expenses, payments) | Stage 1 — pending; **next after Paytm 2026-05-20 resolved** |
+| IRAS CAPTCHA diagnostics | Pending — recurring failures observed May 2026; see *Known IRAS Reliability Issue* |
+| Manager core (checklist, expenses, payments) | Stage 1 — **next priority** |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
 | Manager lube sales + invoicing | Stage 2 |
 | Bank transfer verification UI | Stage 2 |
