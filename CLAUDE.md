@@ -492,7 +492,8 @@ It is not historical completed-shift accounting data.
   python -X utf8 scrapers/daily_scrape.py --atg-only
   ```
 - Ideal: every 30 minutes, or another multiple of 30 minutes, depending on operational need.
-- Automated scheduling is not live on Railway — runs are currently manual.
+- Railway cron entrypoint: `scripts/run_atg_snapshot.py`. Schedule `*/30 * * * *` (UTC).
+- Railway cron has **not yet been configured** in the Railway dashboard — runs are currently manual.
 
 ### Mode Summary
 
@@ -509,16 +510,18 @@ It is not historical completed-shift accounting data.
 
 ### Recommended Operational Runbook
 
-> **Full runbook and Windows Task Scheduler setup:** `docs/scrape_scheduling_runbook.md`
-> **Wrapper scripts:** `scripts/run_completed_shift.ps1` · `scripts/run_atg_snapshot.ps1`
+> **Full runbook (Railway-first):** `docs/scrape_scheduling_runbook.md`
+> **Railway cron entrypoints:** `scripts/run_completed_shift.py` · `scripts/run_atg_snapshot.py`
+> **Windows local fallback:** `scripts/run_completed_shift.ps1` · `scripts/run_atg_snapshot.ps1`
 
-**Automated scheduling is not live on Railway.** All runs are currently manual from a local
-machine using the Railway `DATABASE_URL` env var. The intent when scheduling is implemented:
+**Production target: Railway cron services** (separate from the Flask web service). The Python
+entrypoints are cross-platform and Railway-ready. The `.ps1` scripts are local/manual fallback
+only. Railway cron has **not yet been configured** in the Railway dashboard.
 
-| Schedule | Command | Notes |
-|----------|---------|-------|
-| Once daily, after 06:10 | `--completed-shift --date YESTERDAY` | After the shift closes; YESTERDAY = calendar date − 1 |
-| Every 30 minutes | `--atg-only` | Tank levels; separate from completed-shift |
+| Schedule | Railway start command | Cron (UTC) | Notes |
+|----------|-----------------------|------------|-------|
+| Once daily, after 06:00 IST | `python -X utf8 scripts/run_completed_shift.py` | `0 1 * * *` | 01:00 UTC = 06:30 IST; op\_date auto-calculated in IST |
+| Every 30 minutes | `python -X utf8 scripts/run_atg_snapshot.py` | `*/30 * * * *` | ATG live snapshot; separate from completed-shift |
 
 **Standard daily workflow (manual until scheduling is live):**
 
@@ -831,7 +834,8 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | Credit screens polish (12, 13, 14) | ✓ Substantially done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported via `import_paytm_csv.py` |
-| Scheduler wrapper scripts (`run_completed_shift.ps1` + `run_atg_snapshot.ps1`) | ✓ Built — ASCII-safe, Windows PowerShell 5 compatible; Task Scheduler not yet configured |
+| Railway cron entrypoints (`run_completed_shift.py` + `run_atg_snapshot.py`) | ✓ Built — Railway-first, cross-platform; Railway cron not yet configured in dashboard |
+| Windows fallback scripts (`run_completed_shift.ps1` + `run_atg_snapshot.ps1`) | ✓ Built — ASCII-safe, PowerShell 5 compatible; local/manual use only |
 | IRAS CAPTCHA diagnostics (auto-save on failure + `--iras-manual-captcha` fallback) | ✓ Built — artifacts at `data/iras/debug/login_<ts>/`; manual fallback optional |
 | Manager home checklist | Pending |
 | Manager log expense | Pending |
@@ -1190,10 +1194,12 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `pumpvision/templates/macros/ui.html`
 - `pumpvision/templates/owner/summary.html` — daily summary (screen 15)
 
-### Scheduler wrapper scripts
-- `scripts/run_completed_shift.ps1` — daily completed-shift wrapper; logs to `data/logs/scheduler/`
-- `scripts/run_atg_snapshot.ps1` — ATG snapshot wrapper (repeating schedule)
-- `docs/scrape_scheduling_runbook.md` — full scheduling guide, Task Scheduler setup, recovery commands
+### Scheduler scripts
+- `scripts/run_completed_shift.py` — **Railway cron entrypoint** for completed-shift (cross-platform, IST op\_date auto-calc)
+- `scripts/run_atg_snapshot.py` — **Railway cron entrypoint** for ATG snapshot (cross-platform)
+- `scripts/run_completed_shift.ps1` — Windows local/manual fallback for completed-shift
+- `scripts/run_atg_snapshot.ps1` — Windows local/manual fallback for ATG snapshot
+- `docs/scrape_scheduling_runbook.md` — full scheduling guide: Railway cron setup, env vars, Windows fallback, recovery
 
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode
@@ -1244,7 +1250,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Production debug traceback handler removed | ✓ Done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported |
-| Scraper scheduling wrapper scripts (completed-shift + ATG) | ✓ Built — see `scripts/` and runbook; Task Scheduler not yet configured |
+| Scraper scheduling — Railway cron entrypoints | ✓ Built — `scripts/run_completed_shift.py` + `run_atg_snapshot.py`; Railway cron not yet configured |
 | IRAS CAPTCHA diagnostics + manual fallback | ✓ Built — auto-save on failure; `--iras-manual-captcha` for terminal fallback |
 | Manager core (checklist, expenses, payments) | Stage 1 — **next priority** |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
