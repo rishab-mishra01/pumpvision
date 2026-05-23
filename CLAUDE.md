@@ -433,6 +433,54 @@ S3 URLs or other sensitive query parameters in their raw (pre-sanitization) form
 These artifacts are **local-only** and must **not** be committed to git or shared externally.
 Add them to `.gitignore` if you run `--paytm-debug` regularly.
 
+### IRAS Login Diagnostics
+
+Diagnostics are saved **automatically** whenever an autonomous CAPTCHA attempt fails —
+no flag required. For each failed attempt, the following are written to a timestamped
+directory:
+
+**Path:** `data/iras/debug/login_YYYYMMDD_HHMMSS/`
+
+| File | Contents |
+|------|----------|
+| `attempt_NN_captcha.png` | CAPTCHA image sent to Claude Vision |
+| `attempt_NN_prediction.txt` | Predicted text · timestamp · attempt number · result |
+| `attempt_NN_after_submit.png` | Screenshot taken after clicking submit |
+| `attempt_NN_error_text.txt` | Any visible error text scraped from the page |
+
+`data/` is in `.gitignore` and is never committed.
+**Not saved:** passwords, cookies, session tokens, auth headers.
+
+**Reading the artifacts:** Open `attempt_NN_captcha.png` alongside `attempt_NN_prediction.txt`
+to compare what Claude Vision predicted vs. what the image actually shows. If they
+consistently agree but login still fails, the CAPTCHA image may be stale or IRAS is
+rejecting the session for another reason. If prediction is clearly wrong, the model
+may need a better prompt or the image selector may have changed.
+
+### IRAS Manual CAPTCHA Fallback
+
+If autonomous solving fails persistently, add `--iras-manual-captcha`:
+
+```
+python -X utf8 scrapers/daily_scrape.py --price-only --date 2026-05-22 --iras-manual-captcha
+```
+
+Behaviour:
+1. Autonomous attempts run first (unchanged — up to `MAX_LOGIN_ATTEMPTS = 3`).
+2. If all fail, the login page is reloaded for a fresh CAPTCHA.
+3. Fresh CAPTCHA saved to `data/iras/debug/login_<ts>/manual_captcha.png`.
+4. Terminal prompts: `CAPTCHA text: `
+5. User opens the image, types the characters, presses Enter.
+6. Script submits and continues if login succeeds; exits non-zero otherwise.
+7. Empty input or Ctrl-C aborts.
+
+**Important constraints:**
+- Default behavior is unchanged — autonomous-only, no blocking.
+- Never pass `--iras-manual-captcha` in scheduled/unattended runs — it blocks indefinitely.
+- Compatible with all IRAS-using modes: `all`, `--boundary-only`, `--atg-only`,
+  `--price-only`, `--accounting-only`, `--completed-shift`.
+- Not applicable to `--paytm-only` or `--sdms-only` (no IRAS login in those modes).
+
 ### ATG Rule
 
 ATG/tank stock is a **live/current snapshot** of what is in the tanks right now.
@@ -490,6 +538,9 @@ python -X utf8 scrapers/daily_scrape.py --paytm-only --date YYYY-MM-DD --paytm-w
 
 # Retry Price only (if IRAS CAPTCHA failed)
 python -X utf8 scrapers/daily_scrape.py --price-only --date YYYY-MM-DD
+
+# Retry Price with manual CAPTCHA fallback (if autonomous solving keeps failing)
+python -X utf8 scrapers/daily_scrape.py --price-only --date YYYY-MM-DD --iras-manual-captcha
 
 # Retry SDMS only (if SDMS failed)
 python -X utf8 scrapers/daily_scrape.py --sdms-only --date YYYY-MM-DD
@@ -735,19 +786,10 @@ difficult, and repeated attempts sometimes fail even with correct login details.
 
 **If IRAS fails after Paytm succeeds:**
 
-1. Check the failure screenshot (if `--paytm-debug` was active) for clues.
+1. Check the debug artifacts (auto-saved — see *IRAS Login Diagnostics* below).
 2. Retry with `--price-only` — Paytm is already in DB and will be skipped.
-3. If failure recurs, consider saving the failed CAPTCHA image and the predicted text
-   to diagnose whether the Claude Vision response is incorrect, or whether the IRAS
-   login page itself changed.
-
-**Recommended diagnostics when IRAS keeps failing:**
-- Save the CAPTCHA image sent to Claude Vision alongside the predicted text
-- Save a screenshot immediately after the failed login attempt
-- Compare the predicted text with the actual CAPTCHA characters if visible
-
-This has not been automated yet. If IRAS login proves persistently unreliable, a
-manual CAPTCHA entry fallback may be warranted (out of scope for current stage).
+3. If failure recurs and autonomous solving keeps failing, use `--iras-manual-captcha`
+   to fall back to manual terminal entry after autonomous attempts are exhausted.
 
 ### Backfill command reference
 
@@ -787,7 +829,7 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported via `import_paytm_csv.py` |
 | Decide scraper schedule (completed-shift once daily after 06:00; ATG every 30 min) | Pending — not automated yet |
-| IRAS CAPTCHA diagnostics (save failed image + prediction for debugging) | Pending — recurring failure observed May 2026 |
+| IRAS CAPTCHA diagnostics (auto-save on failure + `--iras-manual-captcha` fallback) | ✓ Built — artifacts at `data/iras/debug/login_<ts>/`; manual fallback optional |
 | Manager home checklist | Pending |
 | Manager log expense | Pending |
 | Manager record payment | **Next priority** |
@@ -1195,7 +1237,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported |
 | Scraper scheduling (completed-shift daily + ATG 30-min) | Pending — not automated yet |
-| IRAS CAPTCHA diagnostics | Pending — recurring failures observed May 2026; see *Known IRAS Reliability Issue* |
+| IRAS CAPTCHA diagnostics + manual fallback | ✓ Built — auto-save on failure; `--iras-manual-captcha` for terminal fallback |
 | Manager core (checklist, expenses, payments) | Stage 1 — **next priority** |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
 | Manager lube sales + invoicing | Stage 2 |
