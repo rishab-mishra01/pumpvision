@@ -196,6 +196,41 @@ def _solve_captcha(image_bytes: bytes) -> str:
     return msg.content[0].text.strip()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# IRAS LOGIN DIAGNOSTICS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_login_debug_dir() -> "Path | None":
+    """
+    Create and return a timestamped IRAS login debug directory.
+    Path: data/iras/debug/login_YYYYMMDD_HHMMSS/
+    Returns None on failure — diagnostics will be skipped, but login continues.
+    """
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    d  = _PROJECT_ROOT / "data" / "iras" / "debug" / f"login_{ts}"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    except Exception as exc:
+        print(f"  [login-debug] Could not create debug dir {d}: {exc}")
+        return None
+
+
+def _save_login_artifact(debug_dir: Path, filename: str, content: "bytes | str") -> None:
+    """
+    Write a login debug artifact to debug_dir/filename.
+    Silent on failure — never raises, never interrupts the scraper.
+    Does NOT save cookies, session tokens, auth headers, or passwords.
+    """
+    try:
+        mode = "wb" if isinstance(content, bytes) else "w"
+        kw   = {} if isinstance(content, bytes) else {"encoding": "utf-8"}
+        with open(debug_dir / filename, mode, **kw) as fh:
+            fh.write(content)
+    except Exception as exc:
+        print(f"  [login-debug] Could not save {filename}: {exc}")
+
+
 async def _find(page, selectors: list[str], *, visible_check: bool = True):
     """Return the first locator from the list that exists (and is visible)."""
     for sel in selectors:
@@ -209,44 +244,30 @@ async def _find(page, selectors: list[str], *, visible_check: bool = True):
     return None
 
 
-async def _autonomous_login(page) -> bool:
+async def _autonomous_login(
+    page,
+    *,
+    debug_dir: "Path | None" = None,
+    allow_manual: bool = False,
+) -> bool:
     """
     Solve the IRAS CAPTCHA with Claude Vision and log in.
     Retries up to MAX_LOGIN_ATTEMPTS times, refreshing the CAPTCHA between each.
     Returns True on success, False if all attempts are exhausted.
+
+    debug_dir:    if provided, saves per-attempt diagnostics here —
+                  CAPTCHA image, predicted text, post-submit screenshot, visible
+                  error text. Writes are best-effort and never raise.
+                  Does NOT save passwords, cookies, or auth headers.
+    allow_manual: if True and autonomous attempts all fail, prompts the user to
+                  type the CAPTCHA in the terminal. The browser stays open while
+                  waiting. NOT suitable for unattended/scheduled runs.
     """
     print(f"\n[login] Autonomous login — up to {MAX_LOGIN_ATTEMPTS} attempts")
 
-    for attempt in range(1, MAX_LOGIN_ATTEMPTS + 1):
-        print(f"  [login] Attempt {attempt}/{MAX_LOGIN_ATTEMPTS}")
-
-        if attempt > 1:
-            refresh = await _find(page, [
-                "img[src*='refresh']", "img[src*='reload']",
-                "a[onclick*='captcha']", ".captcha-refresh", "#captchaRefresh",
-            ], visible_check=False)
-            if refresh:
-                await refresh.click()
-                await page.wait_for_timeout(1000)
-            else:
-                await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-                await page.wait_for_timeout(800)
-
-        # Screenshot CAPTCHA image only
-        captcha_img = await _find(page, [
-            "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
-            "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
-            "img[alt*='aptcha']", "form img",
-        ])
-        if captcha_img is None:
-            print("  [login] CAPTCHA image not found — retrying")
-            continue
-
-        img_bytes = await captcha_img.screenshot()
-        captcha_text = _solve_captcha(img_bytes)
-        print(f"  [login] CAPTCHA solved: {captcha_text}")
-
-        # Fill form: Dealer role → username → password → CAPTCHA → submit
+    # ── Inner: fill and submit the login form ─────────────────────────────────
+    async def _fill_and_submit(captcha_text: str) -> None:
+        """Fill Dealer role, credentials, captcha field and click submit."""
         await page.wait_for_timeout(800)
         try:
             native = page.locator("select").first
@@ -308,24 +329,169 @@ async def _autonomous_login(page) -> bool:
 
         await page.wait_for_timeout(3000)
 
-        # Check success: URL no longer contains /login
+    # ── Inner: check if login succeeded (URL left /login) ────────────────────
+    async def _check_success() -> bool:
         try:
             await page.wait_for_function(
                 "() => !window.location.href.includes('/login')", timeout=5000)
-            print("  [login] SUCCESS")
-            await page.wait_for_timeout(2000)
             return True
         except PlaywrightTimeout:
             pass
+        return "/login" not in page.url
 
-        if "/login" not in page.url:
+    # ── Inner: scrape visible error text from page (best-effort) ─────────────
+    async def _get_page_error() -> str:
+        for _sel in [
+            "[role='alert']", ".alert", ".error-message", ".MuiAlert-message",
+            "[class*='error']", "[class*='Error']",
+            ".text-danger", "p.text-danger",
+        ]:
+            try:
+                _loc = page.locator(_sel).first
+                if await _loc.count() > 0 and await _loc.is_visible(timeout=400):
+                    _txt = (await _loc.inner_text(timeout=400)).strip()
+                    if _txt:
+                        return _txt
+            except Exception:
+                continue
+        return ""
+
+    # ── Autonomous attempts ───────────────────────────────────────────────────
+    for attempt in range(1, MAX_LOGIN_ATTEMPTS + 1):
+        print(f"  [login] Attempt {attempt}/{MAX_LOGIN_ATTEMPTS}")
+
+        if attempt > 1:
+            refresh = await _find(page, [
+                "img[src*='refresh']", "img[src*='reload']",
+                "a[onclick*='captcha']", ".captcha-refresh", "#captchaRefresh",
+            ], visible_check=False)
+            if refresh:
+                await refresh.click()
+                await page.wait_for_timeout(1000)
+            else:
+                await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+                await page.wait_for_timeout(800)
+
+        # Screenshot CAPTCHA image only
+        captcha_img = await _find(page, [
+            "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
+            "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
+            "img[alt*='aptcha']", "form img",
+        ])
+        if captcha_img is None:
+            print("  [login] CAPTCHA image not found — retrying")
+            continue
+
+        img_bytes = await captcha_img.screenshot()
+        captcha_text = _solve_captcha(img_bytes)
+        print(f"  [login] CAPTCHA solved: {captcha_text}")
+
+        await _fill_and_submit(captcha_text)
+
+        if await _check_success():
             print("  [login] SUCCESS")
             await page.wait_for_timeout(2000)
             return True
 
         print(f"  [login] Failed — CAPTCHA was: {captcha_text}")
 
+        # ── Save diagnostics for this failed attempt ──────────────────────────
+        if debug_dir is not None:
+            _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            _save_login_artifact(
+                debug_dir, f"attempt_{attempt:02d}_captcha.png", img_bytes)
+            _save_login_artifact(
+                debug_dir, f"attempt_{attempt:02d}_prediction.txt",
+                f"attempt: {attempt}/{MAX_LOGIN_ATTEMPTS}\n"
+                f"timestamp: {_ts}\n"
+                f"predicted: {captcha_text}\n"
+                f"result: FAILED\n",
+            )
+            try:
+                _after = await page.screenshot()
+                _save_login_artifact(
+                    debug_dir, f"attempt_{attempt:02d}_after_submit.png", _after)
+            except Exception as _sc_exc:
+                print(f"  [login-debug] Post-submit screenshot failed: {_sc_exc}")
+            _save_login_artifact(
+                debug_dir, f"attempt_{attempt:02d}_error_text.txt",
+                (await _get_page_error()) or "(no visible error text found)\n",
+            )
+            print(f"  [login-debug] Artifacts saved → {debug_dir}")
+
     print(f"[login] FAILED after {MAX_LOGIN_ATTEMPTS} attempts")
+
+    # ── Manual CAPTCHA fallback (only when explicitly requested) ─────────────
+    if allow_manual:
+        print(f"\n[login] Manual fallback — autonomous attempts exhausted.")
+        if debug_dir is not None:
+            print(f"[login] Debug dir (CAPTCHA images): {debug_dir}")
+
+        print(f"[login] Reloading login page for a fresh CAPTCHA ...")
+        try:
+            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            await page.wait_for_timeout(1000)
+        except Exception as _nav_exc:
+            print(f"[login] Could not reload login page: {_nav_exc}")
+            return False
+
+        # Save fresh CAPTCHA image so the user can open it from disk
+        fresh_img = await _find(page, [
+            "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
+            "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
+            "img[alt*='aptcha']", "form img",
+        ])
+        if fresh_img is not None:
+            try:
+                fresh_bytes = await fresh_img.screenshot()
+                if debug_dir is not None:
+                    _save_login_artifact(debug_dir, "manual_captcha.png", fresh_bytes)
+                    print(f"[login] Fresh CAPTCHA saved to: {debug_dir / 'manual_captcha.png'}")
+                else:
+                    _fb = _PROJECT_ROOT / "iras_manual_captcha.png"
+                    _fb.write_bytes(fresh_bytes)
+                    print(f"[login] Fresh CAPTCHA saved to: {_fb}")
+            except Exception as _img_exc:
+                print(f"[login] Could not save fresh CAPTCHA image: {_img_exc}")
+
+        print("[login] Open the saved CAPTCHA image and type the text below.")
+        print("[login] Press Enter with no input to abort.")
+        try:
+            manual_text = (await asyncio.to_thread(input, "  CAPTCHA text: ")).strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[login] Manual fallback aborted.")
+            return False
+
+        if not manual_text:
+            print("[login] No text entered — manual fallback aborted.")
+            return False
+
+        print(f"  [login] Submitting manual CAPTCHA: {manual_text}")
+        await _fill_and_submit(manual_text)
+
+        if await _check_success():
+            print("  [login] Manual CAPTCHA SUCCESS")
+            await page.wait_for_timeout(2000)
+            if debug_dir is not None:
+                _save_login_artifact(
+                    debug_dir, "manual_result.txt",
+                    f"manual_text: {manual_text}\n"
+                    f"result: SUCCEEDED\n"
+                    f"timestamp: {datetime.now().strftime('%Y%m%d_%H%M%S')}\n",
+                )
+            return True
+
+        print("[login] Manual CAPTCHA also failed.")
+        if debug_dir is not None:
+            _save_login_artifact(
+                debug_dir, "manual_result.txt",
+                f"manual_text: {manual_text}\n"
+                f"result: FAILED\n"
+                f"timestamp: {datetime.now().strftime('%Y%m%d_%H%M%S')}\n"
+                f"error: {(await _get_page_error()) or '(none)'}\n",
+            )
+        return False
+
     return False
 
 
@@ -823,7 +989,8 @@ async def _job_iss_boundary(page, shift_dates: list[str], iss_dir: Path, dry_run
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
-              paytm_wait_seconds: int | None = None, paytm_debug: bool = False) -> bool:
+              paytm_wait_seconds: int | None = None, paytm_debug: bool = False,
+              manual_captcha: bool = False) -> bool:
     """
     Main orchestration entry point.
 
@@ -854,6 +1021,10 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
       shift/boundary date D → totalizer boundary captured at 06:00 on D.
       accounting op_date D  → shift window D 06:00 → D+1 05:59.
                               Paytm, Price, and SDMS are all scraped for this window.
+
+    manual_captcha: if True, prompts for terminal CAPTCHA input after autonomous
+                    attempts fail. Blocks until input is received. Never use for
+                    unattended/scheduled runs.
     """
     shift_dates = dates  # clear alias — only meaningful for boundary/all modes
 
@@ -995,8 +1166,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
             print(f"\n[step 0] Loading: {LOGIN_URL}")
             await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
             await page.wait_for_timeout(1000)
-
-            if not await _autonomous_login(page):
+            _login_debug_dir = _make_login_debug_dir()
+            if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                           allow_manual=manual_captcha):
                 print("\nABORTED — login failed after all attempts.")
                 await browser.close()
                 return False
@@ -1062,7 +1234,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                     print(f"\n[step 0] Loading: {LOGIN_URL}")
                     await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
                     await page.wait_for_timeout(1000)
-                    if not await _autonomous_login(page):
+                    _login_debug_dir = _make_login_debug_dir()
+                    if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                                   allow_manual=manual_captcha):
                         print("\n  [WARN] IRAS login failed — price-only run cannot complete.")
                         for d in _price_needed:
                             _acct_results[('price', d)] = 'failed'
@@ -1127,7 +1301,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                     print(f"\n[step 0] Loading: {LOGIN_URL}")
                     await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
                     await page.wait_for_timeout(1000)
-                    if not await _autonomous_login(page):
+                    _login_debug_dir = _make_login_debug_dir()
+                    if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                                   allow_manual=manual_captcha):
                         print("\n  [WARN] IRAS login failed — Price skipped; continuing to SDMS.")
                         for d in _price_needed:
                             _acct_results[('price', d)] = 'failed'
@@ -1212,7 +1388,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                     print(f"\n[step 0] Loading: {LOGIN_URL}")
                     await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
                     await page.wait_for_timeout(1000)
-                    if not await _autonomous_login(page):
+                    _login_debug_dir = _make_login_debug_dir()
+                    if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                                   allow_manual=manual_captcha):
                         print("\n  [WARN] IRAS login failed — Price and boundary scrapes skipped; continuing to SDMS.")
                         for d in _price_needed:
                             _acct_results[('price', d)] = 'failed'
@@ -1393,6 +1571,18 @@ def _parse_args():
             "Use when the report download link is not detected."
         ),
     )
+    parser.add_argument(
+        "--iras-manual-captcha", action="store_true", dest="iras_manual_captcha",
+        help=(
+            "If autonomous IRAS CAPTCHA attempts all fail, prompt for manual CAPTCHA "
+            "entry in the terminal. The browser stays open while waiting for input. "
+            "A fresh CAPTCHA image is saved to data/iras/debug/login_<ts>/manual_captcha.png "
+            "so you can open it and type the text. "
+            "NOT suitable for unattended/scheduled runs — it will block indefinitely. "
+            "Applies to all IRAS-using modes: all, boundary, atg, price-only, "
+            "accounting-only, completed-shift."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1450,5 +1640,6 @@ if __name__ == "__main__":
 
     success = asyncio.run(run(dates, dry_run=args.dry_run, mode=mode,
                               paytm_wait_seconds=args.paytm_wait_seconds,
-                              paytm_debug=args.paytm_debug))
+                              paytm_debug=args.paytm_debug,
+                              manual_captcha=args.iras_manual_captcha))
     sys.exit(0 if success else 1)
