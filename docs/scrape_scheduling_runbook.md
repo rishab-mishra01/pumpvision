@@ -8,10 +8,15 @@ Last updated: May 2026
 
 The scraper pipeline runs two independent jobs. They must never be merged into one.
 
-| Job | Entrypoint (Railway) | Cron schedule (UTC) | What it does |
-|-----|---------------------|---------------------|-------------|
-| Completed-shift | `scripts/run_completed_shift.py` | `0 1 * * *` | Paytm + Price (PRM) + SDMS for yesterday's op\_date |
-| ATG snapshot | `scripts/run_atg_snapshot.py` | `*/30 * * * *` | Current tank stock levels — live snapshot only |
+| Job | Railway start command | Role variable | Cron (UTC) | What it does |
+|-----|-----------------------|---------------|------------|-------------|
+| Completed-shift | `python -X utf8 scripts/railway_entrypoint.py` | `PUMPVISION_SERVICE_ROLE=completed-shift` | `0 1 * * *` | Paytm + Price (PRM) + SDMS for yesterday's op\_date |
+| ATG snapshot | `python -X utf8 scripts/railway_entrypoint.py` | `PUMPVISION_SERVICE_ROLE=atg` | `*/30 * * * *` | Current tank stock levels — live snapshot only |
+| Web (Flask) | `python -X utf8 scripts/railway_entrypoint.py` | `PUMPVISION_SERVICE_ROLE=web` (default) | *(always on)* | Flask app served by gunicorn |
+
+All three services use the **same start command**. The `railway.json` file sets this command
+for all services from this repo. The `PUMPVISION_SERVICE_ROLE` variable in each service's
+Variables panel controls which role actually runs.
 
 **Critical rule: ATG is never included in completed-shift.** ATG is a live reading of what
 is in the tanks right now. It has no date argument and must not be mixed into accounting
@@ -31,42 +36,95 @@ local/manual fallback only. See section 6.
 
 ---
 
-## 2. Railway cron setup
+## 2. Railway service setup
 
-Railway supports a dedicated cron service type: a service that runs a command on a crontab
-schedule, then exits. Create two cron services in the same Railway project as the web service.
+### How start commands work
 
-### Service 1: Completed-shift — once daily
+`railway.json` (checked into the repo) controls the start command for **all Railway services
+built from this repo**. Dashboard custom start commands are overridden by `railway.json` on
+every deploy.
+
+`railway.json` currently sets only two things in `deploy`:
+```json
+"deploy": {
+  "startCommand": "python -X utf8 scripts/railway_entrypoint.py"
+}
+```
+
+**Why only `startCommand`?** `railway.json` is a shared file. Any deploy setting in it
+applies to every service created from this repo — web, completed-shift cron, and ATG cron
+alike. Settings like `healthcheckPath`, `healthcheckTimeout`, `restartPolicyType`, and
+`restartPolicyMaxRetries` are web-only concerns. A cron service does not serve HTTP, so a
+shared `healthcheckPath` would make cron deployments fail the health check. A shared
+`restartPolicyType: ON_FAILURE` would cause Railway to immediately retry failed scraper
+runs. Both are incorrect behaviour for cron services, so these settings are intentionally
+absent from `railway.json`.
+
+**Per-service settings (configure in Railway dashboard, not in `railway.json`):**
+
+| Setting | Web service | Cron services |
+|---------|-------------|---------------|
+| Health check path | Set to `/login` in Railway dashboard | Do not set |
+| Health check timeout | Set in Railway dashboard (e.g. 30s) | Not applicable |
+| Restart policy | Configure as needed in Railway dashboard | Not applicable |
+
+`scripts/railway_entrypoint.py` reads `PUMPVISION_SERVICE_ROLE` and dispatches accordingly:
+
+| Role value | What runs |
+|------------|-----------|
+| `web` (default if unset) | gunicorn serving `wsgi:app` on `$PORT` |
+| `completed-shift` | `scripts/run_completed_shift.py` (daily accounting scrape) |
+| `atg` | `scripts/run_atg_snapshot.py` (ATG tank snapshot) |
+
+**Set `PUMPVISION_SERVICE_ROLE` in each service's Variables panel in the Railway dashboard.**
+Do not change `railway.json`'s `startCommand` per-service — that is overridden on deploy.
+
+### Service 1: Web (existing service)
+
+| Setting | Value |
+|---------|-------|
+| Service type | Web |
+| Start command | *(set by railway.json — do not override)* |
+| Variable | `PUMPVISION_SERVICE_ROLE=web` |
+| Health check path | Set to `/login` in Railway dashboard (service-level, not in railway.json) |
+
+The web service runs gunicorn. `PUMPVISION_SERVICE_ROLE=web` is the default if the variable
+is absent, so the existing web service continues to work without any variable change.
+Setting it explicitly is recommended for clarity.
+
+Health check and restart policy settings that were previously in `railway.json` have been
+moved to service-level configuration in the Railway dashboard. This prevents those web-only
+settings from applying to cron services built from the same repo.
+
+### Service 2: Completed-shift cron — once daily
 
 | Setting | Value |
 |---------|-------|
 | Service type | Cron |
-| Start command | `python -X utf8 scripts/run_completed_shift.py` |
+| Start command | *(set by railway.json — do not override)* |
 | Cron schedule | `0 1 * * *` |
-| Root directory | *(same repo root as web service)* |
+| Variable | `PUMPVISION_SERVICE_ROLE=completed-shift` |
 
 **Schedule explanation:**
 - `0 1 * * *` fires at 01:00 UTC every day.
 - 01:00 UTC = 06:30 IST (UTC+05:30).
 - This is 30 minutes after the outlet's 06:00 IST shift boundary — enough margin.
-- op\_date is calculated automatically by `run_completed_shift.py` as IST today − 1 day.
+- op\_date is calculated automatically as IST today − 1 day.
 
-To override op\_date for a backfill run, change the start command temporarily:
-```
-python -X utf8 scripts/run_completed_shift.py --date 2026-05-20
-```
+**To override op\_date for a one-off backfill test:** set `PUMPVISION_COMPLETED_SHIFT_DATE=2026-05-20`
+in the service Variables, trigger a manual run, then remove the variable. See section 5.
 
-### Service 2: ATG snapshot — every 30 minutes
+### Service 3: ATG snapshot cron — every 30 minutes
 
 | Setting | Value |
 |---------|-------|
 | Service type | Cron |
-| Start command | `python -X utf8 scripts/run_atg_snapshot.py` |
+| Start command | *(set by railway.json — do not override)* |
 | Cron schedule | `*/30 * * * *` |
-| Root directory | *(same repo root as web service)* |
+| Variable | `PUMPVISION_SERVICE_ROLE=atg` |
 
 **Schedule explanation:**
-- `*/30 * * * *` fires at :00 and :30 every hour, every day, all UTC.
+- `*/30 * * * *` fires at :00 and :30 every hour, all UTC.
 - ATG is a live/current tank level snapshot with no date argument.
 - 60-minute schedule (`0 * * * *`) is also acceptable if 30 minutes is too frequent.
 
@@ -75,6 +133,9 @@ python -X utf8 scripts/run_completed_shift.py --date 2026-05-20
 > completes well within 30 minutes, but if IRAS is slow, a run may overlap.
 > `daily_scrape.py --completed-shift` can take 15–30 minutes; the once-daily schedule
 > avoids overlap in normal operation.
+
+> **Railway cron has not yet been configured.** The entrypoint is ready; create the cron
+> services in the Railway dashboard and set the variables above to activate.
 
 ---
 
@@ -95,6 +156,7 @@ dashboard under Service → Variables.
 
 | Variable | Used by |
 |----------|---------|
+| `PUMPVISION_SERVICE_ROLE` | Entrypoint dispatch — set to `completed-shift` |
 | `DATABASE_URL` | All DB writes |
 | `IRAS_USERNAME` | IRAS login (Price, boundaries) |
 | `IRAS_PASSWORD` | IRAS login |
@@ -111,6 +173,7 @@ dashboard under Service → Variables.
 
 | Variable | Used by |
 |----------|---------|
+| `PUMPVISION_SERVICE_ROLE` | Entrypoint dispatch — set to `atg` |
 | `DATABASE_URL` | DB writes for tank readings |
 | `IRAS_USERNAME` | IRAS login |
 | `IRAS_PASSWORD` | IRAS login |
@@ -144,33 +207,44 @@ attach a Railway volume to the cron services and set `PAYTM_STATE_PATH` /
 
 ## 5. Manual test — run before scheduling
 
-Always test with an explicit `--date` on a date that already has data in DB before configuring
-a live cron schedule.
+Always test on a date that already has data in DB before activating a live cron schedule.
 
-### Test completed-shift Python entrypoint
+### Test locally (any platform)
 
 ```bash
+# Test completed-shift with an explicit date
 python -X utf8 scripts/run_completed_shift.py --date 2026-05-21
+
+# Test via the shared entrypoint (same path Railway uses)
+PUMPVISION_SERVICE_ROLE=completed-shift \
+PUMPVISION_COMPLETED_SHIFT_DATE=2026-05-21 \
+python -X utf8 scripts/railway_entrypoint.py
 ```
 
-Expected output:
-- Header showing op\_date, IST timestamp, paytm wait, mode
-- Python script output (boundary status, source status, final ACCOUNTING SOURCE SUMMARY)
-- Footer showing RESULT: SUCCESS or FAILED
-
-If DATABASE\_URL is not set, the script exits immediately with a clear error before touching
-any portal.
-
-### Test ATG Python entrypoint
+Expected output: header showing op\_date, IST timestamp, paytm wait, mode; then the
+full `daily_scrape.py` output; then RESULT: SUCCESS or FAILED.
 
 ```bash
+# Test ATG entrypoint
 python -X utf8 scripts/run_atg_snapshot.py
+
+# Or via the shared entrypoint
+PUMPVISION_SERVICE_ROLE=atg python -X utf8 scripts/railway_entrypoint.py
 ```
 
-Expected output:
-- Header showing mode, IST timestamp
-- Python output for `--atg-only`
-- Footer showing RESULT
+### Test on Railway using service variables
+
+To trigger a one-off completed-shift run for a specific date on a Railway cron service:
+
+1. Go to the completed-shift cron service → **Variables**.
+2. Add `PUMPVISION_COMPLETED_SHIFT_DATE = 2026-05-20`.
+3. Trigger a manual run (Railway dashboard → Deploy → Run now, or wait for the next cron fire).
+4. Check the logs to confirm the correct op\_date was used.
+5. **Remove `PUMPVISION_COMPLETED_SHIFT_DATE`** after the test succeeds. If left set, every
+   future cron run will scrape that same fixed date instead of yesterday.
+
+To adjust the Paytm wait for a specific run, also set `PUMPVISION_PAYTM_WAIT_SECONDS = 1800`
+(or any integer). Remove it after the run.
 
 ---
 
@@ -311,10 +385,12 @@ or `--paytm-debug` to any cron start command.
 
 | File | Purpose |
 |------|---------|
-| `scripts/run_completed_shift.py` | **Railway cron entrypoint** — completed-shift (cross-platform) |
-| `scripts/run_atg_snapshot.py` | **Railway cron entrypoint** — ATG snapshot (cross-platform) |
+| `scripts/railway_entrypoint.py` | **Shared Railway start command** — dispatches on `PUMPVISION_SERVICE_ROLE` |
+| `scripts/run_completed_shift.py` | Completed-shift logic — called by entrypoint for `completed-shift` role |
+| `scripts/run_atg_snapshot.py` | ATG snapshot logic — called by entrypoint for `atg` role |
 | `scripts/run_completed_shift.ps1` | Windows local/manual fallback — completed-shift |
 | `scripts/run_atg_snapshot.ps1` | Windows local/manual fallback — ATG snapshot |
+| `railway.json` | Sets shared `startCommand` only; web-only healthcheck/restart settings are intentionally absent |
 | `scrapers/daily_scrape.py` | Underlying Python orchestrator — all scraper logic |
 | `data/logs/scheduler/` | Log output from .ps1 wrappers (gitignored, local only) |
 | `data/iras/debug/login_<ts>/` | IRAS CAPTCHA diagnostics (auto-saved on failure, local only) |
