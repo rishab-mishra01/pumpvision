@@ -509,6 +509,9 @@ It is not historical completed-shift accounting data.
 
 ### Recommended Operational Runbook
 
+> **Full runbook and Windows Task Scheduler setup:** `docs/scrape_scheduling_runbook.md`
+> **Wrapper scripts:** `scripts/run_completed_shift.ps1` · `scripts/run_atg_snapshot.ps1`
+
 **Automated scheduling is not live on Railway.** All runs are currently manual from a local
 machine using the Railway `DATABASE_URL` env var. The intent when scheduling is implemented:
 
@@ -828,7 +831,7 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | Credit screens polish (12, 13, 14) | ✓ Substantially done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported via `import_paytm_csv.py` |
-| Decide scraper schedule (completed-shift once daily after 06:00; ATG every 30 min) | Pending — not automated yet |
+| Scheduler wrapper scripts (`run_completed_shift.ps1` + `run_atg_snapshot.ps1`) | ✓ Built — ASCII-safe, Windows PowerShell 5 compatible; Task Scheduler not yet configured |
 | IRAS CAPTCHA diagnostics (auto-save on failure + `--iras-manual-captcha` fallback) | ✓ Built — artifacts at `data/iras/debug/login_<ts>/`; manual fallback optional |
 | Manager home checklist | Pending |
 | Manager log expense | Pending |
@@ -1187,6 +1190,11 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `pumpvision/templates/macros/ui.html`
 - `pumpvision/templates/owner/summary.html` — daily summary (screen 15)
 
+### Scheduler wrapper scripts
+- `scripts/run_completed_shift.ps1` — daily completed-shift wrapper; logs to `data/logs/scheduler/`
+- `scripts/run_atg_snapshot.ps1` — ATG snapshot wrapper (repeating schedule)
+- `docs/scrape_scheduling_runbook.md` — full scheduling guide, Task Scheduler setup, recovery commands
+
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode
 - `scrapers/iras_price_exporter.py` — Price (PRM)
@@ -1236,7 +1244,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Production debug traceback handler removed | ✓ Done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported |
-| Scraper scheduling (completed-shift daily + ATG 30-min) | Pending — not automated yet |
+| Scraper scheduling wrapper scripts (completed-shift + ATG) | ✓ Built — see `scripts/` and runbook; Task Scheduler not yet configured |
 | IRAS CAPTCHA diagnostics + manual fallback | ✓ Built — auto-save on failure; `--iras-manual-captcha` for terminal fallback |
 | Manager core (checklist, expenses, payments) | Stage 1 — **next priority** |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
