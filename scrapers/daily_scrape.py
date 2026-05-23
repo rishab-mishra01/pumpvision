@@ -316,7 +316,7 @@ async def _autonomous_login(page) -> bool:
 # JOB 0 — PAYTM PAYMENT REPORT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_paytm(dry_run: bool = False, target_date: str | None = None):
+async def _job_paytm(dry_run: bool = False, target_date: str | None = None, paytm_wait_seconds: int | None = None):
     """
     Download Paytm payment transaction CSV.
 
@@ -333,7 +333,7 @@ async def _job_paytm(dry_run: bool = False, target_date: str | None = None):
         print("  [SKIP] PAYTM_EMAIL or PAYTM_PASSWORD not set in .env")
         return
 
-    success = await _ptm.run(target_date=target_date)
+    success = await _ptm.run(target_date=target_date, poll_timeout=paytm_wait_seconds)
     if not success:
         print("  [WARN] Paytm download failed — continuing with remaining jobs")
         return
@@ -645,7 +645,7 @@ async def _job_iss_boundary(page, shift_dates: list[str], iss_dir: Path, dry_run
 # ORCHESTRATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> bool:
+async def run(dates: list[str], dry_run: bool = False, mode: str = 'all', paytm_wait_seconds: int | None = None) -> bool:
     """
     Main orchestration entry point.
 
@@ -745,9 +745,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
     if mode in ('all', 'accounting'):
         if mode == 'accounting':
             for acct_date in dates:
-                await _job_paytm(dry_run=dry_run, target_date=acct_date)
+                await _job_paytm(dry_run=dry_run, target_date=acct_date, paytm_wait_seconds=paytm_wait_seconds)
         else:
-            await _job_paytm(dry_run=dry_run)
+            await _job_paytm(dry_run=dry_run, paytm_wait_seconds=paytm_wait_seconds)
 
     # ── IRAS browser session (boundary, atg, all modes) ──────────────────────
     if mode in ('all', 'boundary', 'atg'):
@@ -837,7 +837,7 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
     if mode == 'completed_shift':
         # Job 0: Paytm for each accounting op_date (own browser context)
         for acct_date in dates:
-            await _job_paytm(dry_run=dry_run, target_date=acct_date)
+            await _job_paytm(dry_run=dry_run, target_date=acct_date, paytm_wait_seconds=paytm_wait_seconds)
 
         # Build the set of boundary dates that still need scraping, ordered ascending.
         # _cs_status was populated by the pre-check above (before the header log).
@@ -908,6 +908,19 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all') -> boo
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _paytm_wait_seconds_type(value: str) -> int:
+    """argparse type for --paytm-wait-seconds: must be 0 (indefinite) or a positive integer."""
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}")
+    if n < 0:
+        raise argparse.ArgumentTypeError(
+            f"--paytm-wait-seconds requires 0 (wait indefinitely) or a positive integer; got {n}"
+        )
+    return n
+
+
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="Daily IRAS orchestrator — one login, Shift Totalizer + Price + ISS."
@@ -958,6 +971,16 @@ def _parse_args():
         "--dry-run", action="store_true",
         help="Download and print results but do not write anything to the database.",
     )
+    parser.add_argument(
+        "--paytm-wait-seconds", type=_paytm_wait_seconds_type, default=None, metavar="N",
+        dest="paytm_wait_seconds",
+        help=(
+            "Maximum seconds to wait for the Paytm report download link to appear. "
+            "0 = wait indefinitely until interrupted (Ctrl-C). "
+            "If not specified, the scraper default is used (900 s = 15 min). "
+            "Applies to --completed-shift, --accounting-only, and default (all) modes."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -997,5 +1020,5 @@ if __name__ == "__main__":
         # so today is the correct shift_date for the shift that just completed.
         dates = [datetime.now().strftime("%Y-%m-%d")]
 
-    success = asyncio.run(run(dates, dry_run=args.dry_run, mode=mode))
+    success = asyncio.run(run(dates, dry_run=args.dry_run, mode=mode, paytm_wait_seconds=args.paytm_wait_seconds))
     sys.exit(0 if success else 1)

@@ -55,8 +55,9 @@ _state_path_raw = os.environ.get("PAYTM_STATE_PATH", "scrapers/paytm_state.json"
 STATE_PATH  = (_PROJECT_ROOT / _state_path_raw).resolve()
 OUTPUT_DIR  = _PROJECT_ROOT / "data" / "paytm"
 
-POLL_INTERVAL    = 2    # seconds between polling attempts
-POLL_TIMEOUT     = 120  # max seconds to wait for async file generation
+POLL_INTERVAL      = 2    # seconds between polling attempts
+POLL_TIMEOUT       = 900  # default max seconds to wait for async file generation (0 = indefinite)
+HEARTBEAT_INTERVAL = 60   # seconds between "still waiting" log lines during poll
 
 
 # ─────────────────────────────────────────────
@@ -507,7 +508,7 @@ async def scrape_summary(page) -> tuple[str, str]:
 # MAIN FLOW
 # ─────────────────────────────────────────────
 
-async def run(target_date: str | None = None) -> bool:
+async def run(target_date: str | None = None, poll_timeout: int | None = None) -> bool:
     """
     Full Paytm report download flow. Manages its own browser context.
     target_date: YYYY-MM-DD accounting op_date to scrape. If None, uses yesterday.
@@ -728,11 +729,29 @@ async def run(target_date: str | None = None) -> bool:
             # Paytm appends a new entry to the Files to Download panel when ready.
             # Re-open the panel every 10s in case it collapsed, and look for any
             # S3 / CSV href that wasn't present before the Download Report click.
-            print(f"[step 7] Polling up to {POLL_TIMEOUT}s for new S3 download link...")
+            #
+            # poll_timeout arg (seconds): None → use module POLL_TIMEOUT (900 s default)
+            #                             0    → wait indefinitely (Ctrl-C to abort)
+            #                             N>0  → wait at most N seconds
+            _poll_timeout_eff = POLL_TIMEOUT if poll_timeout is None else poll_timeout
+            if _poll_timeout_eff == 0:
+                print(f"[step 7] Polling indefinitely (Ctrl-C to abort) for new S3 download link...")
+            else:
+                print(f"[step 7] Polling up to {_poll_timeout_eff}s for new S3 download link...")
             download_href = None
-            for elapsed in range(0, POLL_TIMEOUT, POLL_INTERVAL):
-                # Re-expand panel every 10s in case it auto-collapsed
-                if elapsed > 0 and elapsed % 10 == 0:
+            _poll_start     = time.time()
+            _last_expand    = _poll_start
+            _next_heartbeat = _poll_start + HEARTBEAT_INTERVAL
+            while True:
+                _now     = time.time()
+                _elapsed = _now - _poll_start
+
+                # Timeout check — skipped when polling indefinitely
+                if _poll_timeout_eff > 0 and _elapsed >= _poll_timeout_eff:
+                    break
+
+                # Re-expand "Files to Download" panel every 10s in case it auto-collapsed
+                if _elapsed > 0 and (_now - _last_expand) >= 10:
                     try:
                         panel = page.locator(
                             "text=Files to Download, "
@@ -744,6 +763,7 @@ async def run(target_date: str | None = None) -> bool:
                             await page.wait_for_timeout(300)
                     except Exception:
                         pass
+                    _last_expand = _now
 
                 try:
                     result = await page.evaluate(f'''() => {{
@@ -765,12 +785,23 @@ async def run(target_date: str | None = None) -> bool:
                     }}''')
                     if result:
                         download_href = result
-                        print(f"  [OK] New download link appeared after ~{elapsed}s")
+                        print(f"  [OK] New download link appeared after ~{int(_elapsed)}s")
                         break
                 except Exception:
                     pass
 
                 await asyncio.sleep(POLL_INTERVAL)
+
+                # Heartbeat — lets the operator know the scraper is still alive
+                _now = time.time()
+                if _now >= _next_heartbeat:
+                    _int_elapsed = int(_now - _poll_start)
+                    if _poll_timeout_eff == 0:
+                        print(f"  [Paytm] Still waiting for report link... elapsed {_int_elapsed}s")
+                    else:
+                        _remaining = max(0, _poll_timeout_eff - _int_elapsed)
+                        print(f"  [Paytm] Still waiting for report link... elapsed {_int_elapsed}s ({_remaining}s remaining)")
+                    _next_heartbeat = _now + HEARTBEAT_INTERVAL
 
             if not download_href:
                 # Last resort: if Paytm reused the one pre-existing link, use it
@@ -796,8 +827,12 @@ async def run(target_date: str | None = None) -> bool:
 
             if not downloaded:
                 ts = datetime.now().strftime("%H:%M:%S")
+                _timeout_desc = (
+                    "indefinite wait" if _poll_timeout_eff == 0
+                    else f"{_poll_timeout_eff}s"
+                )
                 print(
-                    f"[ERROR] No download link found after {POLL_TIMEOUT}s ({ts})"
+                    f"[ERROR] No download link found after {_timeout_desc} ({ts})"
                 )
                 return False
 
@@ -820,10 +855,40 @@ async def run(target_date: str | None = None) -> bool:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import argparse as _ap
+
+    def _paytm_wait_type(value: str) -> int:
+        """argparse type for --paytm-wait-seconds: 0 (indefinite) or a positive integer."""
+        try:
+            n = int(value)
+        except ValueError:
+            raise _ap.ArgumentTypeError(f"invalid int value: {value!r}")
+        if n < 0:
+            raise _ap.ArgumentTypeError(
+                f"--paytm-wait-seconds requires 0 (wait indefinitely) or a positive integer; got {n}"
+            )
+        return n
+
+    _parser = _ap.ArgumentParser(description="Paytm Payment Report Exporter")
+    _parser.add_argument(
+        "--date", metavar="YYYY-MM-DD",
+        help="Accounting op_date to scrape (default: yesterday).",
+    )
+    _parser.add_argument(
+        "--paytm-wait-seconds", type=_paytm_wait_type, default=None, metavar="N",
+        dest="paytm_wait_seconds",
+        help=(
+            "Max seconds to wait for the Paytm report download link. "
+            "0 = wait indefinitely (Ctrl-C to abort). "
+            f"Default: {POLL_TIMEOUT} s."
+        ),
+    )
+    _args = _parser.parse_args()
+
     missing = [v for v in ("PAYTM_EMAIL", "PAYTM_PASSWORD") if not os.environ.get(v)]
     if missing:
         print(f"ERROR: missing environment variable(s): {', '.join(missing)}")
         sys.exit(1)
 
-    success = asyncio.run(run())
+    success = asyncio.run(run(target_date=_args.date, poll_timeout=_args.paytm_wait_seconds))
     sys.exit(0 if success else 1)
