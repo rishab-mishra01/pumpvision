@@ -511,12 +511,17 @@ It is not historical completed-shift accounting data.
 ### Recommended Operational Runbook
 
 > **Full runbook (Railway-first):** `docs/scrape_scheduling_runbook.md`
-> **Railway cron entrypoints:** `scripts/run_completed_shift.py` · `scripts/run_atg_snapshot.py`
+> **Shared Railway start command:** `scripts/railway_entrypoint.py` — dispatches on `PUMPVISION_SERVICE_ROLE`
 > **Windows local fallback:** `scripts/run_completed_shift.ps1` · `scripts/run_atg_snapshot.ps1`
 
-**Production target: Railway cron services** (separate from the Flask web service). The Python
-entrypoints are cross-platform and Railway-ready. The `.ps1` scripts are local/manual fallback
-only. Railway cron has **not yet been configured** in the Railway dashboard.
+**Production target: Railway cron services** (separate from the Flask web service).
+`railway.json` sets `python -X utf8 scripts/railway_entrypoint.py` as the start command
+for all Railway services. The service role is controlled by `PUMPVISION_SERVICE_ROLE`:
+`web` (default), `completed-shift`, or `atg`. `railway.json` contains only `startCommand`
+in its `deploy` block — healthcheck and restart-policy settings are intentionally omitted
+because `railway.json` is shared by all services and those settings are web-only (cron
+services do not serve HTTP). Configure them per-service in the Railway dashboard.
+Railway cron has **not yet been configured** in the Railway dashboard.
 
 | Schedule | Railway start command | Cron (UTC) | Notes |
 |----------|-----------------------|------------|-------|
@@ -1195,11 +1200,12 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `pumpvision/templates/owner/summary.html` — daily summary (screen 15)
 
 ### Scheduler scripts
-- `scripts/run_completed_shift.py` — **Railway cron entrypoint** for completed-shift (cross-platform, IST op\_date auto-calc)
-- `scripts/run_atg_snapshot.py` — **Railway cron entrypoint** for ATG snapshot (cross-platform)
+- `scripts/railway_entrypoint.py` — **shared Railway start command**; reads `PUMPVISION_SERVICE_ROLE` (`web`/`completed-shift`/`atg`)
+- `scripts/run_completed_shift.py` — completed-shift logic (IST op\_date auto-calc); called by entrypoint
+- `scripts/run_atg_snapshot.py` — ATG snapshot logic; called by entrypoint
 - `scripts/run_completed_shift.ps1` — Windows local/manual fallback for completed-shift
 - `scripts/run_atg_snapshot.ps1` — Windows local/manual fallback for ATG snapshot
-- `docs/scrape_scheduling_runbook.md` — full scheduling guide: Railway cron setup, env vars, Windows fallback, recovery
+- `docs/scrape_scheduling_runbook.md` — full scheduling guide: Railway setup, entrypoint roles, env vars, Windows fallback, recovery
 
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode
