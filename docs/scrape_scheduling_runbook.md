@@ -44,14 +44,25 @@ local/manual fallback only. See section 6.
 built from this repo**. Dashboard custom start commands are overridden by `railway.json` on
 every deploy.
 
-`railway.json` currently sets only two things in `deploy`:
+`railway.json` currently sets:
 ```json
+"build": {
+  "builder": "NIXPACKS",
+  "buildCommand": "pip install -r requirements.txt && python -m playwright install --with-deps chromium"
+},
 "deploy": {
   "startCommand": "python -X utf8 scripts/railway_entrypoint.py"
 }
 ```
 
-**Why only `startCommand`?** `railway.json` is a shared file. Any deploy setting in it
+**Why `playwright install` in the build command?** The scrapers use Playwright's async API
+(`playwright.async_api`). `pip install playwright` installs the Python package but not the
+browser binary. `python -m playwright install --with-deps chromium` downloads the Chromium
+binary and its OS-level dependencies during the Railway build step. This runs once at build
+time and applies to all service roles (web, cron) built from this repo. The web service
+does not use Playwright at runtime but the install is harmless.
+
+**Why only `startCommand` in `deploy`?** `railway.json` is a shared file. Any deploy setting in it
 applies to every service created from this repo — web, completed-shift cron, and ATG cron
 alike. Settings like `healthcheckPath`, `healthcheckTimeout`, `restartPolicyType`, and
 `restartPolicyMaxRetries` are web-only concerns. A cron service does not serve HTTP, so a

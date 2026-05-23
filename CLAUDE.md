@@ -914,7 +914,7 @@ after Railway idle-connection timeouts. SQLite is unaffected.
 - **Frontend:** Jinja2 + Tailwind CSS (mobile-first)
 - **Auth:** Flask-Login (session-based)
 - **PDF:** ReportLab (NOT WeasyPrint — Windows incompatibility)
-- **Scraping:** Playwright async + Claude Vision API (CAPTCHA)
+- **Scraping:** Playwright async + Claude Vision API (CAPTCHA). Railway build installs the Chromium binary via `python -m playwright install --with-deps chromium` (in `railway.json` buildCommand).
 - **Deployment:** Railway
 
 ### Environment Variables
