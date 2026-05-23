@@ -26,6 +26,7 @@ import re
 import sys
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -58,6 +59,10 @@ OUTPUT_DIR  = _PROJECT_ROOT / "data" / "paytm"
 POLL_INTERVAL      = 2    # seconds between polling attempts
 POLL_TIMEOUT       = 900  # default max seconds to wait for async file generation (0 = indefinite)
 HEARTBEAT_INTERVAL = 60   # seconds between "still waiting" log lines during poll
+
+# Regex for filtering network responses worth logging in debug mode.
+# Matches URL fragments common in report/export flows — no auth headers are logged.
+_DIAG_URL_RE = re.compile(r"report|export|download|transaction|file", re.I)
 
 
 # ─────────────────────────────────────────────
@@ -505,13 +510,265 @@ async def scrape_summary(page) -> tuple[str, str]:
 
 
 # ─────────────────────────────────────────────
+# DEBUG SESSION
+# ─────────────────────────────────────────────
+
+class _DebugSession:
+    """
+    Collects diagnostic screenshots, HTML snapshots, anchor audits, and filtered
+    network events when --paytm-debug is active.
+
+    Privacy:
+    - network.log records sanitized URLs only (scheme + host + path).  Query
+      strings and fragments are stripped to remove signed parameters, expiry
+      tokens, and any other auth-like values.
+    - Cookies, auth headers, request bodies, and response bodies are never logged.
+    - All debug artifacts are written locally and should NOT be committed or
+      shared externally, because page HTML, anchor lists, and candidate-link
+      files may contain signed S3 URLs or other sensitive query parameters in
+      their raw form.
+    """
+
+    def __init__(self, debug_dir: Path, op_date):
+        self.dir = debug_dir
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self._log_path = self.dir / "debug.log"
+        self._net_path = self.dir / "network.log"
+        self._seq = 0
+        self.log(f"Debug session open  op_date={op_date}  dir={self.dir}")
+
+    # ── public helpers ───────────────────────────────────────────────────
+
+    def log(self, msg: str):
+        """Print msg and append to debug.log."""
+        ts = datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}"
+        print(line)
+        try:
+            with open(self._log_path, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+        except Exception:
+            pass
+
+    def note_network(self, url: str, status: int, method: str = ""):
+        """Append one sanitized network event to network.log.
+
+        Only scheme + host + path are written.  Query strings and fragments
+        (which may carry signed params, expiry values, or tokens) are stripped
+        before the URL reaches disk.  No cookies, auth headers, request bodies,
+        or response bodies are ever logged.
+        """
+        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        try:
+            _parts = urlsplit(url)
+            _safe_url = _parts._replace(query="", fragment="").geturl()
+        except Exception:
+            _safe_url = url  # parsing failed — use as-is (rare edge case)
+        try:
+            with open(self._net_path, "a", encoding="utf-8") as fh:
+                fh.write(f"[{ts}] {method} {status}  {_safe_url}\n")
+        except Exception:
+            pass
+
+    def make_response_handler(self):
+        """Return an async response handler that logs relevant Paytm network calls."""
+        dbg = self
+
+        async def _handler(response):
+            try:
+                url = response.url
+                if _DIAG_URL_RE.search(url):
+                    # Sanitized URL (scheme+host+path only) + status code.
+                    # Query strings/fragments stripped — no signed params, no tokens.
+                    dbg.note_network(url, response.status, response.request.method)
+            except Exception:
+                pass
+
+        return _handler
+
+    async def capture(self, page, label: str):
+        """Save screenshot + page HTML + panel HTML/text + anchors + candidates + status text."""
+        self._seq += 1
+        safe = f"{self._seq:02d}_{label}".replace(" ", "_").replace("/", "-")
+        self.log(f"--- capture: {safe} ---")
+
+        # Screenshot (viewport only — faster, avoids very tall pages)
+        try:
+            await page.screenshot(
+                path=str(self.dir / f"{safe}.png"), full_page=False)
+        except Exception as exc:
+            self.log(f"  screenshot failed: {exc}")
+
+        # Full page HTML
+        try:
+            html = await page.content()
+            (self.dir / f"{safe}_page.html").write_text(html, encoding="utf-8")
+        except Exception as exc:
+            self.log(f"  page-html failed: {exc}")
+
+        await self._dump_panel(page, safe)
+        await self._dump_anchors(page, safe)
+        await self._dump_candidates(page, safe)
+        await self._dump_status_text(page, safe)
+
+    # ── private snapshot helpers ─────────────────────────────────────────
+
+    async def _dump_panel(self, page, safe: str):
+        try:
+            result = await page.evaluate(r'''() => {
+                const sels = [
+                    "[class*='fileDownload']", "[class*='file-download']",
+                    "[class*='downloadPanel']", "[class*='download-panel']",
+                ];
+                let panel = null;
+                for (const sel of sels) {
+                    panel = document.querySelector(sel);
+                    if (panel) break;
+                }
+                if (!panel) {
+                    for (const el of document.querySelectorAll("div,section,aside,footer")) {
+                        if (el.textContent.includes("Files to Download")) {
+                            panel = el;
+                            break;
+                        }
+                    }
+                }
+                if (!panel) return { found: false, html: "", text: "", rowCount: 0,
+                                     firstRowText: "", lastRowText: "" };
+                const rows = panel.querySelectorAll(
+                    "tr, li, [class*='row'], [class*='item']");
+                return {
+                    found:        true,
+                    html:         panel.innerHTML.slice(0, 50000),
+                    text:         panel.innerText,
+                    rowCount:     rows.length,
+                    firstRowText: rows.length > 0 ? rows[0].innerText.trim().slice(0, 200) : "",
+                    lastRowText:  rows.length > 0
+                                  ? rows[rows.length - 1].innerText.trim().slice(0, 200) : "",
+                };
+            }''')
+            if result["found"]:
+                (self.dir / f"{safe}_panel.html").write_text(
+                    result["html"], encoding="utf-8")
+                (self.dir / f"{safe}_panel.txt").write_text(
+                    result["text"], encoding="utf-8")
+                self.log(
+                    f"  panel: {result['rowCount']} rows | "
+                    f"first={result['firstRowText']!r} | "
+                    f"last={result['lastRowText']!r}"
+                )
+            else:
+                self.log("  panel: NOT FOUND in DOM")
+                (self.dir / f"{safe}_panel.txt").write_text(
+                    "FILES-TO-DOWNLOAD PANEL NOT FOUND IN DOM\n", encoding="utf-8")
+        except Exception as exc:
+            self.log(f"  panel dump failed: {exc}")
+
+    async def _dump_anchors(self, page, safe: str):
+        try:
+            anchors = await page.evaluate(r'''() =>
+                Array.from(document.querySelectorAll("a")).map(a => ({
+                    text:     (a.innerText || a.textContent || "").trim().slice(0, 120),
+                    href:     (a.getAttribute("href") || a.href || "").slice(0, 300),
+                    download: a.getAttribute("download") || "",
+                }))
+            ''')
+            lines = ["text\thref\tdownload"]
+            for a in anchors:
+                lines.append(f"{a['text']}\t{a['href']}\t{a['download']}")
+            (self.dir / f"{safe}_anchors.txt").write_text(
+                "\n".join(lines), encoding="utf-8")
+            self.log(f"  anchors on page: {len(anchors)}")
+        except Exception as exc:
+            self.log(f"  anchor dump failed: {exc}")
+
+    async def _dump_candidates(self, page, safe: str):
+        """Dump all links matching the scraper's download-detection selectors."""
+        try:
+            candidates = await page.evaluate(r'''() => {
+                const sels = [
+                    'a[download]',
+                    'a[href*="s3.amazonaws.com"]',
+                    'a[href*="s3-ap-southeast"]',
+                    'a[href*="s3-us-east"]',
+                    'a[href*=".csv"]',
+                ];
+                const seen = new Set();
+                const out  = [];
+                for (const sel of sels) {
+                    for (const a of document.querySelectorAll(sel)) {
+                        const href = (a.getAttribute("href") || a.href || "").slice(0, 300);
+                        if (!seen.has(href)) {
+                            seen.add(href);
+                            out.push({
+                                sel,
+                                text:     (a.innerText || "").trim().slice(0, 80),
+                                href,
+                                download: a.getAttribute("download") || "",
+                            });
+                        }
+                    }
+                }
+                return out;
+            }''')
+            lines = [f"candidate_links={len(candidates)}"]
+            for c in candidates:
+                lines.append(
+                    f"  sel={c['sel']}  download={c['download']!r}  text={c['text']!r}")
+                lines.append(f"    href={c['href']}")
+            (self.dir / f"{safe}_candidates.txt").write_text(
+                "\n".join(lines), encoding="utf-8")
+            self.log(f"  candidate download links: {len(candidates)}")
+        except Exception as exc:
+            self.log(f"  candidate dump failed: {exc}")
+
+    async def _dump_status_text(self, page, safe: str):
+        """Find visible text matching status keywords (Processing, Pending, etc.)."""
+        try:
+            found = await page.evaluate(r'''() => {
+                const kws = ['Processing','Pending','Failed','Completed','Ready',
+                             'Download','Error','Generating','Queued'];
+                const out  = [];
+                const seen = new Set();
+                document.querySelectorAll("*").forEach(el => {
+                    if (el.children.length === 0) {
+                        const t = (el.innerText || el.textContent || "").trim();
+                        if (!t || seen.has(t)) return;
+                        for (const kw of kws) {
+                            if (t.toLowerCase().includes(kw.toLowerCase())) {
+                                out.push(t.slice(0, 200));
+                                seen.add(t);
+                                break;
+                            }
+                        }
+                    }
+                });
+                return out.slice(0, 60);
+            }''')
+            if found:
+                (self.dir / f"{safe}_status_text.txt").write_text(
+                    "\n".join(found), encoding="utf-8")
+                self.log(f"  status keywords visible: {found[:6]!r}")
+            else:
+                self.log("  status keywords: none found")
+        except Exception as exc:
+            self.log(f"  status-text dump failed: {exc}")
+
+
+# ─────────────────────────────────────────────
 # MAIN FLOW
 # ─────────────────────────────────────────────
 
-async def run(target_date: str | None = None, poll_timeout: int | None = None) -> bool:
+async def run(
+    target_date: str | None = None,
+    poll_timeout: int | None = None,
+    debug: bool = False,
+) -> bool:
     """
     Full Paytm report download flow. Manages its own browser context.
     target_date: YYYY-MM-DD accounting op_date to scrape. If None, uses yesterday.
+    poll_timeout: seconds to wait for download link (None = module default 900 s; 0 = indefinite).
+    debug: save screenshots, HTML, anchor/network logs to data/paytm/debug/paytm_<date>_<time>/.
     Returns True on success, False on any failure.
     """
     if target_date is not None:
@@ -524,6 +781,13 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
     output_csv = OUTPUT_DIR / f"paytm_{op_date.strftime('%Y-%m-%d')}.csv"
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # ── Debug session ─────────────────────────────────────────────────────────
+    _dbg: _DebugSession | None = None
+    if debug:
+        _dbg_dir = OUTPUT_DIR / "debug" / f"paytm_{op_date}_{datetime.now().strftime('%H%M%S')}"
+        _dbg = _DebugSession(_dbg_dir, op_date)
+        print(f"[debug] Artifacts → {_dbg_dir}")
 
     print()
     print("=" * 55)
@@ -578,6 +842,10 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
         try:
             page = context.pages[0] if context.pages else await context.new_page()
 
+            # Attach network listener before any navigation so we capture all responses.
+            if _dbg:
+                page.on("response", _dbg.make_response_handler())
+
             # ── Step 1: Check session / login ─────────────────────────────────
             print("[step 1] Checking session...")
             await page.goto(PAYTM_DASHBOARD, wait_until="domcontentloaded", timeout=30_000)
@@ -591,6 +859,9 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                 if not await do_login(page, context):
                     print("Paytm login failed — check PAYTM_EMAIL and PAYTM_PASSWORD in .env")
                     return False
+
+            if _dbg:
+                await _dbg.capture(page, "step1_session_ok")
 
             # ── Step 2: Navigate to Payments ──────────────────────────────────
             print("[step 2] Navigating to Payments...")
@@ -656,6 +927,9 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
 
             await page.wait_for_timeout(2_000)
 
+            if _dbg:
+                await _dbg.capture(page, "step4_date_range_set")
+
             # ── Step 5: Read summary figures ───────────────────────────────────
             print("[step 5] Reading summary figures...")
             total_payments, total_transactions = await scrape_summary(page)
@@ -688,6 +962,9 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                 pre_href_set = set(pre_hrefs)
                 print(f"  [step 6] Files in panel before request: {pre_count}")
 
+                if _dbg:
+                    await _dbg.capture(page, "step6_pre_download_click")
+
                 dl_btn = page.locator("button:has-text('Download')").first
                 await dl_btn.wait_for(state="visible", timeout=6_000)
                 await dl_btn.click()
@@ -698,6 +975,9 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                 await dl_report.click()
                 await page.wait_for_timeout(3_000)
                 print("  [OK] 'Download Report' clicked — CSV generating on server")
+
+                if _dbg:
+                    await _dbg.capture(page, "step6_post_download_click")
 
             except Exception as e:
                 print(f"  [ERROR] Could not trigger download: {e}")
@@ -738,10 +1018,12 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                 print(f"[step 7] Polling indefinitely (Ctrl-C to abort) for new S3 download link...")
             else:
                 print(f"[step 7] Polling up to {_poll_timeout_eff}s for new S3 download link...")
-            download_href = None
+            download_href   = None
             _poll_start     = time.time()
             _last_expand    = _poll_start
             _next_heartbeat = _poll_start + HEARTBEAT_INTERVAL
+            _expand_count   = 0   # how many times the panel was successfully re-clicked
+
             while True:
                 _now     = time.time()
                 _elapsed = _now - _poll_start
@@ -761,6 +1043,7 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                         if await panel.count() > 0:
                             await panel.click()
                             await page.wait_for_timeout(300)
+                            _expand_count += 1
                     except Exception:
                         pass
                     _last_expand = _now
@@ -792,15 +1075,77 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
 
                 await asyncio.sleep(POLL_INTERVAL)
 
-                # Heartbeat — lets the operator know the scraper is still alive
+                # ── Heartbeat ─────────────────────────────────────────────────
+                # Always: elapsed time + lightweight DOM status query.
+                # Debug only: full screenshot/HTML capture.
                 _now = time.time()
                 if _now >= _next_heartbeat:
                     _int_elapsed = int(_now - _poll_start)
+
+                    # Lightweight DOM query — panel row count, newest row text,
+                    # new candidate link count. Runs in all modes (cheap at 60s interval).
+                    _status_str = ""
+                    try:
+                        _hb = await page.evaluate(f'''() => {{
+                            const known = new Set({list(pre_href_set)!r});
+                            let panel = null;
+                            const panelSels = ["[class*='fileDownload']","[class*='file-download']",
+                                               "[class*='downloadPanel']","[class*='download-panel']"];
+                            for (const sel of panelSels) {{
+                                panel = document.querySelector(sel);
+                                if (panel) break;
+                            }}
+                            if (!panel) {{
+                                for (const el of document.querySelectorAll("div,section,aside,footer")) {{
+                                    if (el.textContent.includes("Files to Download")) {{
+                                        panel = el; break;
+                                    }}
+                                }}
+                            }}
+                            let rowCount = 0, lastRow = "";
+                            if (panel) {{
+                                const rows = panel.querySelectorAll(
+                                    "tr,li,[class*='row'],[class*='item']");
+                                rowCount = rows.length;
+                                if (rows.length)
+                                    lastRow = rows[rows.length-1].innerText.trim().slice(0,120);
+                            }}
+                            let newLinks = 0;
+                            const dlSels = ['a[download]','a[href*="s3.amazonaws.com"]',
+                                            'a[href*="s3-ap-southeast"]','a[href*="s3-us-east"]',
+                                            'a[href*=".csv"]'];
+                            for (const sel of dlSels) {{
+                                for (const a of document.querySelectorAll(sel)) {{
+                                    const href = a.getAttribute("href") || a.href;
+                                    if (href && href.startsWith("http") && !known.has(href))
+                                        newLinks++;
+                                }}
+                            }}
+                            return {{ panelFound: panel !== null, rowCount, lastRow, newLinks }};
+                        }}''')
+                        _status_str = (
+                            f"panel={'yes' if _hb['panelFound'] else 'NO'}  "
+                            f"rows={_hb['rowCount']}  "
+                            f"new_links={_hb['newLinks']}  "
+                            f"re-expanded={_expand_count}x"
+                        )
+                        if _hb["lastRow"]:
+                            _status_str += f"  last_row={_hb['lastRow']!r}"
+                    except Exception:
+                        _status_str = f"(DOM query failed)  re-expanded={_expand_count}x"
+
                     if _poll_timeout_eff == 0:
-                        print(f"  [Paytm] Still waiting for report link... elapsed {_int_elapsed}s")
+                        print(f"  [Paytm] Still waiting... elapsed {_int_elapsed}s  {_status_str}")
                     else:
                         _remaining = max(0, _poll_timeout_eff - _int_elapsed)
-                        print(f"  [Paytm] Still waiting for report link... elapsed {_int_elapsed}s ({_remaining}s remaining)")
+                        print(
+                            f"  [Paytm] Still waiting... elapsed {_int_elapsed}s "
+                            f"({_remaining}s remaining)  {_status_str}"
+                        )
+
+                    if _dbg:
+                        await _dbg.capture(page, f"poll_{_int_elapsed}s")
+
                     _next_heartbeat = _now + HEARTBEAT_INTERVAL
 
             if not download_href:
@@ -813,6 +1158,9 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                         await page.screenshot(path=str(OUTPUT_DIR / "debug_step7_timeout.png"))
                     except Exception:
                         pass
+                    if _dbg:
+                        await _dbg.capture(page, "final_failure")
+                        _dbg.log("[debug] FINAL FAILURE — no new download link detected")
 
             # ── Step 8: Download the CSV directly via S3 presigned URL ─────────
             downloaded = False
@@ -822,8 +1170,13 @@ async def run(target_date: str | None = None, poll_timeout: int | None = None) -
                     urllib.request.urlretrieve(download_href, str(output_csv))
                     print(f"  [saved] {output_csv.name}")
                     downloaded = True
+                    if _dbg:
+                        await _dbg.capture(page, "step8_success")
                 except Exception as e:
                     print(f"  [ERROR] Direct download failed: {e}")
+                    if _dbg:
+                        await _dbg.capture(page, "step8_download_failed")
+                        _dbg.log(f"[debug] Direct download error: {e}")
 
             if not downloaded:
                 ts = datetime.now().strftime("%H:%M:%S")
@@ -883,6 +1236,15 @@ if __name__ == "__main__":
             f"Default: {POLL_TIMEOUT} s."
         ),
     )
+    _parser.add_argument(
+        "--paytm-debug", action="store_true", dest="paytm_debug",
+        help=(
+            "Save diagnostic screenshots, HTML, anchor/candidate lists, "
+            "status-keyword text, and filtered network log to "
+            "data/paytm/debug/paytm_<date>_<HHMMSS>/. "
+            "Use when the report download link is not detected."
+        ),
+    )
     _args = _parser.parse_args()
 
     missing = [v for v in ("PAYTM_EMAIL", "PAYTM_PASSWORD") if not os.environ.get(v)]
@@ -890,5 +1252,9 @@ if __name__ == "__main__":
         print(f"ERROR: missing environment variable(s): {', '.join(missing)}")
         sys.exit(1)
 
-    success = asyncio.run(run(target_date=_args.date, poll_timeout=_args.paytm_wait_seconds))
+    success = asyncio.run(run(
+        target_date=_args.date,
+        poll_timeout=_args.paytm_wait_seconds,
+        debug=_args.paytm_debug,
+    ))
     sys.exit(0 if success else 1)

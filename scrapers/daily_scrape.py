@@ -316,7 +316,7 @@ async def _autonomous_login(page) -> bool:
 # JOB 0 — PAYTM PAYMENT REPORT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_paytm(dry_run: bool = False, target_date: str | None = None, paytm_wait_seconds: int | None = None):
+async def _job_paytm(dry_run: bool = False, target_date: str | None = None, paytm_wait_seconds: int | None = None, paytm_debug: bool = False):
     """
     Download Paytm payment transaction CSV.
 
@@ -333,7 +333,7 @@ async def _job_paytm(dry_run: bool = False, target_date: str | None = None, payt
         print("  [SKIP] PAYTM_EMAIL or PAYTM_PASSWORD not set in .env")
         return
 
-    success = await _ptm.run(target_date=target_date, poll_timeout=paytm_wait_seconds)
+    success = await _ptm.run(target_date=target_date, poll_timeout=paytm_wait_seconds, debug=paytm_debug)
     if not success:
         print("  [WARN] Paytm download failed — continuing with remaining jobs")
         return
@@ -645,7 +645,7 @@ async def _job_iss_boundary(page, shift_dates: list[str], iss_dir: Path, dry_run
 # ORCHESTRATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run(dates: list[str], dry_run: bool = False, mode: str = 'all', paytm_wait_seconds: int | None = None) -> bool:
+async def run(dates: list[str], dry_run: bool = False, mode: str = 'all', paytm_wait_seconds: int | None = None, paytm_debug: bool = False) -> bool:
     """
     Main orchestration entry point.
 
@@ -745,9 +745,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all', paytm_
     if mode in ('all', 'accounting'):
         if mode == 'accounting':
             for acct_date in dates:
-                await _job_paytm(dry_run=dry_run, target_date=acct_date, paytm_wait_seconds=paytm_wait_seconds)
+                await _job_paytm(dry_run=dry_run, target_date=acct_date, paytm_wait_seconds=paytm_wait_seconds, paytm_debug=paytm_debug)
         else:
-            await _job_paytm(dry_run=dry_run, paytm_wait_seconds=paytm_wait_seconds)
+            await _job_paytm(dry_run=dry_run, paytm_wait_seconds=paytm_wait_seconds, paytm_debug=paytm_debug)
 
     # ── IRAS browser session (boundary, atg, all modes) ──────────────────────
     if mode in ('all', 'boundary', 'atg'):
@@ -837,7 +837,7 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all', paytm_
     if mode == 'completed_shift':
         # Job 0: Paytm for each accounting op_date (own browser context)
         for acct_date in dates:
-            await _job_paytm(dry_run=dry_run, target_date=acct_date, paytm_wait_seconds=paytm_wait_seconds)
+            await _job_paytm(dry_run=dry_run, target_date=acct_date, paytm_wait_seconds=paytm_wait_seconds, paytm_debug=paytm_debug)
 
         # Build the set of boundary dates that still need scraping, ordered ascending.
         # _cs_status was populated by the pre-check above (before the header log).
@@ -981,6 +981,15 @@ def _parse_args():
             "Applies to --completed-shift, --accounting-only, and default (all) modes."
         ),
     )
+    parser.add_argument(
+        "--paytm-debug", action="store_true", dest="paytm_debug",
+        help=(
+            "Save Paytm diagnostic artifacts (screenshots, page HTML, panel HTML/text, "
+            "anchor list, candidate links, status-keyword text, filtered network log) to "
+            "data/paytm/debug/paytm_<date>_<HHMMSS>/. "
+            "Use when the report download link is not detected."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1020,5 +1029,5 @@ if __name__ == "__main__":
         # so today is the correct shift_date for the shift that just completed.
         dates = [datetime.now().strftime("%Y-%m-%d")]
 
-    success = asyncio.run(run(dates, dry_run=args.dry_run, mode=mode, paytm_wait_seconds=args.paytm_wait_seconds))
+    success = asyncio.run(run(dates, dry_run=args.dry_run, mode=mode, paytm_wait_seconds=args.paytm_wait_seconds, paytm_debug=args.paytm_debug))
     sys.exit(0 if success else 1)
