@@ -31,6 +31,7 @@ from pathlib import Path
 
 import openpyxl
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from iras_proxy import iras_proxy_cfg, IRAS_PROXY_ENABLED, safe_exc_name
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
@@ -464,7 +465,13 @@ async def _autonomous_login(page, username: str, password: str, api_key: str) ->
                 except Exception:
                     continue
             if not refreshed:
-                await page.goto(login_url, wait_until="networkidle", timeout=30_000)
+                # Raw error message suppressed — may contain proxy host/port if connection dropped.
+                try:
+                    await page.goto(login_url, wait_until="networkidle", timeout=30_000)
+                except PlaywrightTimeout:
+                    pass  # timeout on retry is non-critical; continue attempt
+                except Exception as _retry_nav_exc:
+                    print(f"  [login] Retry navigation failed: {safe_exc_name(_retry_nav_exc)}")
                 await page.wait_for_timeout(800)
 
         # Screenshot CAPTCHA
@@ -615,19 +622,37 @@ async def _main_standalone():
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
-        context = await browser.new_context(
-            accept_downloads=True,
-            viewport={"width": 1400, "height": 900},
-            user_agent=(
+        _iras_proxy = iras_proxy_cfg()
+        _ctx_kw: dict = {
+            "accept_downloads": True,
+            "viewport": {"width": 1400, "height": 900},
+            "user_agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-        )
-        page = await context.new_page()
-
+        }
+        if _iras_proxy is not None:
+            _ctx_kw["proxy"] = _iras_proxy
+        # Context/page setup — exceptions suppressed to avoid leaking proxy config.
+        try:
+            context = await browser.new_context(**_ctx_kw)
+            page = await context.new_page()
+        except Exception as _setup_exc:
+            print(f"  [IRAS] Browser/context setup failed: {safe_exc_name(_setup_exc)}")
+            await browser.close()
+            return
+        print(f"  [IRAS] proxy : {'yes' if IRAS_PROXY_ENABLED else 'no'}")
         print(f"[step 0] Loading: {IRAS_URL}")
-        await page.goto(IRAS_URL, wait_until="networkidle", timeout=30_000)
+        # Initial navigation — raw error message suppressed (may contain proxy host/port).
+        try:
+            await page.goto(IRAS_URL, wait_until="networkidle", timeout=30_000)
+        except PlaywrightTimeout:
+            print(f"  [IRAS] Navigation timeout (networkidle) — continuing")
+        except Exception as _nav_exc:
+            print(f"  [IRAS] Initial navigation failed: {safe_exc_name(_nav_exc)}")
+            await browser.close()
+            return
         await page.wait_for_timeout(1000)
 
         if not await _autonomous_login(page, username, password, api_key):
