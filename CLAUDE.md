@@ -435,11 +435,12 @@ Add them to `.gitignore` if you run `--paytm-debug` regularly.
 
 ### IRAS Login Diagnostics
 
-Diagnostics are saved **automatically** whenever an autonomous CAPTCHA attempt fails —
-no flag required. For each failed attempt, the following are written to a timestamped
-directory:
+Diagnostics are saved **automatically** whenever a CAPTCHA attempt fails — no flag
+required. Two distinct failure modes are covered, each producing different artifacts.
 
 **Path:** `data/iras/debug/login_YYYYMMDD_HHMMSS/`
+
+**Mode A — CAPTCHA image found but login failed (wrong prediction):**
 
 | File | Contents |
 |------|----------|
@@ -448,14 +449,38 @@ directory:
 | `attempt_NN_after_submit.png` | Screenshot taken after clicking submit |
 | `attempt_NN_error_text.txt` | Any visible error text scraped from the page |
 
-`data/` is in `.gitignore` and is never committed.
-**Not saved:** passwords, cookies, session tokens, auth headers.
+**Mode B — CAPTCHA image not found on the page (e.g. page did not render):**
 
-**Reading the artifacts:** Open `attempt_NN_captcha.png` alongside `attempt_NN_prediction.txt`
+| File | Contents |
+|------|----------|
+| `attempt_NN_no_captcha.png` | Full-page screenshot at time of search |
+| `attempt_NN_no_captcha.html` | Full page HTML (capped at 500 KB) |
+| `attempt_NN_no_captcha_url.txt` | Current URL · attempt number · img count · field visibility |
+| `attempt_NN_no_captcha_text.txt` | Visible body text (capped at 10 000 chars) |
+| `attempt_NN_no_captcha_images.txt` | All `<img>` tags with src/alt/id/class (up to 50) |
+| `attempt_NN_no_captcha_candidates.txt` | Elements matching captcha-related id/class/src/alt, plus `<canvas>` |
+
+Console also logs (Mode B): current URL · img tag count on page · username/password field visibility.
+
+`data/` is in `.gitignore` and is never committed.
+**Not saved (either mode):** passwords, cookies, session tokens, auth headers.
+
+**Reading Mode A artifacts:** Open `attempt_NN_captcha.png` alongside `attempt_NN_prediction.txt`
 to compare what Claude Vision predicted vs. what the image actually shows. If they
 consistently agree but login still fails, the CAPTCHA image may be stale or IRAS is
 rejecting the session for another reason. If prediction is clearly wrong, the model
 may need a better prompt or the image selector may have changed.
+
+**Reading Mode B artifacts:** Open `attempt_NN_no_captcha.png` and `attempt_NN_no_captcha.html`
+to see what the page actually contained. Check `attempt_NN_no_captcha_images.txt` for all
+`<img>` tags — if the CAPTCHA img is there but has no captcha-related src/id/class/alt, add
+its actual attribute to the selector list. Check `attempt_NN_no_captcha_candidates.txt` for
+canvas elements or elements with verify/security class names. If `url.txt` shows the page is
+not the login page (e.g. redirected to an error page), the issue is upstream of CAPTCHA.
+
+**CAPTCHA selector fallbacks (as of May 2026):** in addition to url/id/class/alt keyword
+matching, the scraper also tries `img[src^='data:image']` (base64-embedded CAPTCHA) and
+`canvas` (CAPTCHA rendered to HTML canvas rather than `<img>`).
 
 ### IRAS Manual CAPTCHA Fallback
 

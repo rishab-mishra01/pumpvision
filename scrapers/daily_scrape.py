@@ -372,14 +372,175 @@ async def _autonomous_login(
                 await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
                 await page.wait_for_timeout(800)
 
-        # Screenshot CAPTCHA image only
+        # Screenshot CAPTCHA image only.
+        # Selector list is tried in order; first visible match wins.
+        # "canvas" covers CAPTCHA implementations that render to canvas rather than <img>.
+        # "img[src^='data:image']" covers base64-embedded CAPTCHAs with no URL to match on.
         captcha_img = await _find(page, [
             "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
             "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
-            "img[alt*='aptcha']", "form img",
+            "img[alt*='aptcha']",
+            "img[src^='data:image']",   # base64-embedded CAPTCHA (no URL keyword to match)
+            "canvas",                    # CAPTCHA rendered to canvas instead of <img>
+            "form img",
         ])
         if captcha_img is None:
-            print("  [login] CAPTCHA image not found — retrying")
+            # ── Diagnostics: CAPTCHA image not found ─────────────────────────
+            # This is a different failure mode from a wrong prediction — the page
+            # did not show any element matching the CAPTCHA selectors.  Could mean:
+            #   • The login page did not fully render (JS still loading)
+            #   • IRAS changed its CAPTCHA element structure
+            #   • Headless browser is presenting a different page (bot detection)
+            # Save artifacts so we can inspect what was actually on the page.
+
+            _cur_url = page.url
+
+            # Count all img tags (safe — counts only, no content)
+            try:
+                _all_img_count = await page.locator("img").count()
+            except Exception:
+                _all_img_count = -1
+
+            # Check whether the login form fields are visible (values never logged)
+            try:
+                _un_vis = await page.locator(
+                    "input[name='username'], input[name='userId'], "
+                    "input[placeholder*='User']"
+                ).first.is_visible(timeout=500)
+            except Exception:
+                _un_vis = None
+            try:
+                _pw_vis = await page.locator(
+                    "input[type='password']"
+                ).first.is_visible(timeout=500)
+            except Exception:
+                _pw_vis = None
+
+            print(f"  [login] CAPTCHA image not found")
+            print(f"  [login] Current URL        : {_cur_url}")
+            print(f"  [login] img tags on page   : {_all_img_count}")
+            print(f"  [login] Username visible   : {_un_vis}  "
+                  f"Password visible: {_pw_vis}")
+
+            if debug_dir is not None:
+                _nf = f"attempt_{attempt:02d}_no_captcha"
+
+                # Full-page screenshot
+                try:
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}.png",
+                        await page.screenshot(full_page=True))
+                except Exception as _exc:
+                    print(f"  [login-debug] Screenshot failed: {_exc}")
+
+                # Full page HTML (capped at 500 KB)
+                try:
+                    _html = await page.content()
+                    if len(_html) > 500_000:
+                        _html = _html[:500_000] + "\n\n[TRUNCATED — original was larger]\n"
+                    _save_login_artifact(debug_dir, f"{_nf}.html", _html)
+                except Exception as _exc:
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}.html",
+                        f"(could not capture page HTML: {_exc})\n")
+
+                # URL + metadata
+                _save_login_artifact(
+                    debug_dir, f"{_nf}_url.txt",
+                    f"url       : {_cur_url}\n"
+                    f"attempt   : {attempt}/{MAX_LOGIN_ATTEMPTS}\n"
+                    f"timestamp : {datetime.now().strftime('%Y%m%d_%H%M%S')}\n"
+                    f"img_count : {_all_img_count}\n"
+                    f"un_visible: {_un_vis}\n"
+                    f"pw_visible: {_pw_vis}\n",
+                )
+
+                # Visible body text (capped at 10 000 chars)
+                try:
+                    _body_text = await page.locator("body").inner_text(timeout=2000)
+                    if len(_body_text) > 10_000:
+                        _body_text = _body_text[:10_000] + "\n\n[TRUNCATED]\n"
+                    _save_login_artifact(debug_dir, f"{_nf}_text.txt", _body_text)
+                except Exception as _exc:
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}_text.txt",
+                        f"(could not extract body text: {_exc})\n")
+
+                # All img tags (up to 50) with src / alt / id / class
+                try:
+                    _imgs_loc = page.locator("img")
+                    _n_imgs   = await _imgs_loc.count()
+                    _img_lines: list[str] = []
+                    for _ii in range(min(_n_imgs, 50)):
+                        _il = _imgs_loc.nth(_ii)
+                        try:
+                            _i_src = await _il.get_attribute("src")   or ""
+                            _i_alt = await _il.get_attribute("alt")   or ""
+                            _i_id  = await _il.get_attribute("id")    or ""
+                            _i_cls = await _il.get_attribute("class") or ""
+                            _img_lines.append(
+                                f"img[{_ii}] src={_i_src!r} alt={_i_alt!r} "
+                                f"id={_i_id!r} class={_i_cls!r}"
+                            )
+                        except Exception as _ie:
+                            _img_lines.append(f"img[{_ii}]: (attribute error: {_ie})")
+                    if _n_imgs > 50:
+                        _img_lines.append(f"... ({_n_imgs - 50} more not listed)")
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}_images.txt",
+                        ("\n".join(_img_lines) + "\n") if _img_lines
+                        else "(no img tags found)\n",
+                    )
+                except Exception as _exc:
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}_images.txt",
+                        f"(could not enumerate img tags: {_exc})\n")
+
+                # Candidate CAPTCHA-related elements by id / class / src / alt / tag
+                _cand_selectors = [
+                    "[id*='captcha' i]",   "[class*='captcha' i]",
+                    "[src*='captcha' i]",  "[alt*='captcha' i]",
+                    "[id*='kaptcha' i]",   "[src*='kaptcha' i]",
+                    "[id*='verify' i]",    "[class*='verify' i]",
+                    "[id*='security' i]",  "[class*='security' i]",
+                    "canvas",
+                ]
+                try:
+                    _cand_lines: list[str] = []
+                    for _csel in _cand_selectors:
+                        try:
+                            _cloc = page.locator(_csel)
+                            _cn   = await _cloc.count()
+                            if _cn > 0:
+                                for _ci in range(min(_cn, 5)):
+                                    _cel  = _cloc.nth(_ci)
+                                    _ctag = await _cel.evaluate(
+                                        "el => el.tagName.toLowerCase()")
+                                    _cid  = await _cel.get_attribute("id")    or ""
+                                    _ccls = await _cel.get_attribute("class") or ""
+                                    _csrc = await _cel.get_attribute("src")   or ""
+                                    _calt = await _cel.get_attribute("alt")   or ""
+                                    _cvis = await _cel.is_visible()
+                                    _cand_lines.append(
+                                        f"selector={_csel!r} tag={_ctag} "
+                                        f"visible={_cvis} id={_cid!r} "
+                                        f"class={_ccls!r} src={_csrc!r} alt={_calt!r}"
+                                    )
+                        except Exception as _ce:
+                            _cand_lines.append(f"selector={_csel!r}: error={_ce}")
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}_candidates.txt",
+                        ("\n".join(_cand_lines) + "\n") if _cand_lines
+                        else "(no captcha-related elements found)\n",
+                    )
+                except Exception as _exc:
+                    _save_login_artifact(
+                        debug_dir, f"{_nf}_candidates.txt",
+                        f"(could not enumerate candidates: {_exc})\n")
+
+                print(f"  [login-debug] No-CAPTCHA artifacts saved → {debug_dir}")
+
+            print(f"  [login] Retrying...")
             continue
 
         img_bytes = await captcha_img.screenshot()
