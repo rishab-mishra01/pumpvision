@@ -356,6 +356,81 @@ async def _autonomous_login(
                 continue
         return ""
 
+    # ── Wait for the login page to render ────────────────────────────────────
+    # Railway headless Chromium on Linux fires "networkidle" before the
+    # JS-rendered login form is mounted.  Wait up to 20 s for any sign that
+    # the form is present: a password field, a username input, a form element,
+    # a CAPTCHA image, or a canvas.  The CSS comma-selector resolves as soon as
+    # ANY of the listed elements appears in the DOM.
+    #
+    # If the wait succeeds  → log one line and continue to the attempt loop.
+    # If the wait times out → log a concise diagnostic summary (URL, title,
+    #                         HTML length, img count, body text excerpt, field
+    #                         visibility) and fall through — attempt 1 will run
+    #                         and save full no-CAPTCHA artifacts via the
+    #                         existing diagnostic block.
+    _FORM_READY_SELECTORS = (
+        "input[type='password'], "
+        "input[name='username'], input[name='userId'], "
+        "form, "
+        "img[src*='captcha'], img[id*='captcha'], img[class*='captcha'], "
+        "canvas"
+    )
+    _FORM_WAIT_MS = 20_000
+    print(f"  [login] Waiting up to {_FORM_WAIT_MS // 1000}s for login form ...")
+    try:
+        await page.wait_for_selector(_FORM_READY_SELECTORS, timeout=_FORM_WAIT_MS)
+        print(f"  [login] Login page ready.")
+    except PlaywrightTimeout:
+        # Collect lightweight diagnostics — no screenshots here (attempt 1 will
+        # do that via the no-CAPTCHA artifact block).
+        _pre_url = page.url
+        try:
+            _pre_title = await page.title()
+        except Exception:
+            _pre_title = "(unavailable)"
+        try:
+            _pre_body = (await page.locator("body").inner_text(timeout=1000)).strip()
+            _pre_body_excerpt = _pre_body[:500]
+        except Exception:
+            _pre_body_excerpt = "(could not read body text)"
+        try:
+            _pre_html_len = len(await page.content())
+        except Exception:
+            _pre_html_len = -1
+        try:
+            _pre_img_count = await page.locator("img").count()
+        except Exception:
+            _pre_img_count = -1
+        try:
+            _pre_un_vis = await page.locator(
+                "input[name='username'], input[name='userId']"
+            ).first.is_visible(timeout=300)
+        except Exception:
+            _pre_un_vis = False
+        try:
+            _pre_pw_vis = await page.locator(
+                "input[type='password']"
+            ).first.is_visible(timeout=300)
+        except Exception:
+            _pre_pw_vis = False
+
+        print(f"  [login] WARNING: login form did not appear within "
+              f"{_FORM_WAIT_MS // 1000}s")
+        print(f"  [login] URL           : {_pre_url}")
+        print(f"  [login] Page title    : {_pre_title!r}")
+        print(f"  [login] HTML length   : {_pre_html_len} bytes")
+        print(f"  [login] img count     : {_pre_img_count}")
+        print(f"  [login] Username vis  : {_pre_un_vis}  "
+              f"Password vis: {_pre_pw_vis}")
+        print(f"  [login] Body text     : {_pre_body_excerpt!r}")
+        if debug_dir is not None:
+            print(f"  [login] Debug dir     : {debug_dir}")
+        # Fall through — attempt 1 will save full no-CAPTCHA page artifacts.
+    except Exception as _pre_exc:
+        # Unexpected error in the readiness check — log and continue; do not abort.
+        print(f"  [login] Page readiness check error (continuing): {_pre_exc}")
+
     # ── Autonomous attempts ───────────────────────────────────────────────────
     for attempt in range(1, MAX_LOGIN_ATTEMPTS + 1):
         print(f"  [login] Attempt {attempt}/{MAX_LOGIN_ATTEMPTS}")

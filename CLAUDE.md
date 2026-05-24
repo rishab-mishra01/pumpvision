@@ -478,6 +478,14 @@ its actual attribute to the selector list. Check `attempt_NN_no_captcha_candidat
 canvas elements or elements with verify/security class names. If `url.txt` shows the page is
 not the login page (e.g. redirected to an error page), the issue is upstream of CAPTCHA.
 
+**Pre-login page readiness wait (added May 2026):** before starting CAPTCHA attempts,
+`_autonomous_login()` calls `page.wait_for_selector()` with a comma-joined CSS selector
+covering the password field, username inputs, `form`, CAPTCHA `img` keywords, and `canvas`.
+Timeout: 20 s. This resolves the Railway/Linux Chromium issue where `wait_until="networkidle"`
+fires before the JS-rendered login form has mounted. If the wait times out, a diagnostic
+summary (URL, page title, HTML length, img count, body text excerpt, field visibility) is
+logged to stdout, and attempt 1 then saves full no-CAPTCHA page artifacts as usual.
+
 **CAPTCHA selector fallbacks (as of May 2026):** in addition to url/id/class/alt keyword
 matching, the scraper also tries `img[src^='data:image']` (base64-embedded CAPTCHA) and
 `canvas` (CAPTCHA rendered to HTML canvas rather than `<img>`).
