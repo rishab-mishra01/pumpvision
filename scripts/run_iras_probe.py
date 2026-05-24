@@ -24,6 +24,7 @@ Optional env var (read-only — not a credential):
 import asyncio
 import os
 import sys
+import urllib.parse
 
 # Read only the base URL — not credentials, not API keys.
 _IRAS_BASE = os.environ.get("IRAS_URL", "https://iras.iocliras.in").rstrip("/")
@@ -147,17 +148,54 @@ async def _run_probe() -> None:
         except Exception:
             pw_count = -1
 
-        # Script src values — strip query strings to avoid logging signed URLs
-        script_srcs: list[str] = []
+        # Script src values — strip query strings + fragments for display;
+        # keep raw values separately for absolute-URL resolution below.
+        script_srcs: list[str] = []        # display-safe (stripped)
+        _script_raw_srcs: list[str] = []   # original values for urljoin
         script_total = -1
         try:
             all_scripts = page.locator("script[src]")
             script_total = await all_scripts.count()
             for i in range(min(script_total, 10)):
                 raw_src = await all_scripts.nth(i).get_attribute("src") or ""
+                _script_raw_srcs.append(raw_src)
                 script_srcs.append(raw_src.split("?")[0].split("#")[0])
         except Exception:
             pass
+
+        # ── Fetch script asset responses ─────────────────────────────────────
+        # Resolve each script src to an absolute URL and make a GET request.
+        # Logs: HTTP status · content-type · content-length · body excerpt.
+        # Does NOT log cookies, auth headers, or any other headers.
+        script_assets: list[dict] = []
+        for _raw in _script_raw_srcs:
+            # Resolve to absolute URL first; strip query + fragment for display and fetching.
+            _abs_url = urllib.parse.urljoin(current_url, _raw)
+            _display_url = _abs_url.split("?")[0].split("#")[0]
+            _asset: dict = {
+                "display_url": _display_url,
+                "status": None,
+                "content_type": None,
+                "content_length": None,
+                "body_excerpt": None,
+                "error": None,
+            }
+            try:
+                _resp = await context.request.get(_display_url, timeout=10_000)
+                _asset["status"] = _resp.status
+                _asset["content_type"] = _resp.headers.get("content-type", "(none)")
+                _asset["content_length"] = _resp.headers.get("content-length")
+                try:
+                    _body_bytes = await _resp.body()
+                    _body_text = _body_bytes[:300].decode("utf-8", errors="replace")
+                    # Collapse whitespace → single line so log stays readable
+                    _body_line = " ".join(_body_text.split())
+                    _asset["body_excerpt"] = _body_line[:120]
+                except Exception as _be:
+                    _asset["body_excerpt"] = f"(body read error: {_be})"
+            except Exception as _fe:
+                _asset["error"] = str(_fe)[:120]
+            script_assets.append(_asset)
 
         await browser.close()
 
@@ -179,6 +217,21 @@ async def _run_probe() -> None:
     print(f"  script[src]    : {script_total} total")
     for src in script_srcs:
         print(f"    {src}")
+    if script_assets:
+        print()
+        print("  SCRIPT ASSET RESPONSES")
+        print("  " + "-" * 40)
+        for _a in script_assets:
+            print(f"    url      : {_a['display_url']}")
+            print(f"    status   : {_a['status']}")
+            print(f"    c-type   : {_a['content_type']}")
+            if _a["content_length"] is not None:
+                print(f"    c-len    : {_a['content_length']}")
+            if _a["body_excerpt"] is not None:
+                print(f"    body     : {_a['body_excerpt']!r}")
+            if _a["error"] is not None:
+                print(f"    error    : {_a['error']}")
+        print()
     if failed_requests:
         print(f"  failed requests: {len(failed_requests)}")
         for req in failed_requests[:20]:
