@@ -29,7 +29,22 @@ import urllib.parse
 # Read only the base URL — not credentials, not API keys.
 _IRAS_BASE = os.environ.get("IRAS_URL", "https://iras.iocliras.in").rstrip("/")
 _LOGIN_URL = _IRAS_BASE if _IRAS_BASE.endswith("/login") else _IRAS_BASE + "/login"
-_WAIT_MS   = 20_000   # seconds to wait for any form element to appear
+_WAIT_MS   = 20_000   # milliseconds to wait for any form element to appear
+
+# Optional proxy — values read here, never printed.
+_PROXY_SERVER   = os.environ.get("IRAS_PROXY_SERVER",   "").strip()
+_PROXY_USERNAME = os.environ.get("IRAS_PROXY_USERNAME", "").strip()
+_PROXY_PASSWORD = os.environ.get("IRAS_PROXY_PASSWORD", "").strip()
+
+
+def _exc_name(exc: BaseException) -> str:
+    """Return only the exception class name — never str(exc).
+
+    Exception messages from Playwright/HTTPX can contain proxy host, port,
+    or connection details that must not appear in logs.  All exception
+    reporting in this probe uses this helper instead of str(exc) or {exc}.
+    """
+    return exc.__class__.__name__
 
 
 async def _run_probe() -> None:
@@ -40,8 +55,18 @@ async def _run_probe() -> None:
     print("=" * 57)
     print(f"  target  : {_LOGIN_URL}")
     print(f"  wait    : {_WAIT_MS // 1000}s for login form elements")
+    print(f"  proxy   : {'yes' if _PROXY_SERVER else 'no'}")
     print("=" * 57)
     sys.stdout.flush()
+
+    # Proxy config — assembled from env vars; server/credentials never logged.
+    _proxy_cfg: dict | None = None
+    if _PROXY_SERVER:
+        _proxy_cfg = {"server": _PROXY_SERVER}
+        if _PROXY_USERNAME:
+            _proxy_cfg["username"] = _PROXY_USERNAME
+        if _PROXY_PASSWORD:
+            _proxy_cfg["password"] = _PROXY_PASSWORD
 
     # Collect failed network request paths (query strings + fragments stripped — no tokens)
     failed_requests: list[str] = []
@@ -49,21 +74,45 @@ async def _run_probe() -> None:
     _nav_status: int | None = None
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            # Match the exact launch args used by daily_scrape.py scrapers
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
-        context = await browser.new_context(
-            accept_downloads=False,
-            viewport={"width": 1400, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-        )
-        page = await context.new_page()
+        # ── Browser / context / page setup ──────────────────────────────────
+        # Proxy setup errors are intentionally sanitized — the exception message
+        # is NOT printed because it may contain the proxy server URL or credentials.
+        # If any step fails, a safe diagnostic is logged and the probe exits 0.
+        # The browser is closed cleanly if it was opened before the failure.
+        browser = None
+        try:
+            browser = await p.chromium.launch(
+                headless=True,
+                # Match the exact launch args used by daily_scrape.py scrapers
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            _ctx_kw: dict = {
+                "accept_downloads": False,
+                "viewport": {"width": 1400, "height": 900},
+                "user_agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            }
+            if _proxy_cfg is not None:
+                _ctx_kw["proxy"] = _proxy_cfg  # absent entirely when no proxy is configured
+            context = await browser.new_context(**_ctx_kw)
+            page = await context.new_page()
+        except Exception as _setup_exc:
+            # Exception message intentionally suppressed — may contain proxy URL/credentials.
+            print(
+                f"[probe] Browser/context setup failed"
+                f" ({type(_setup_exc).__name__})"
+                "; probe could not continue."
+            )
+            sys.stdout.flush()
+            if browser is not None:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+            return  # _run_probe() returns None; main() still returns 0
 
         # Track failed requests — strip query strings so no signed URLs are logged
         def _on_request_failed(req) -> None:
@@ -88,7 +137,7 @@ async def _run_probe() -> None:
         except PlaywrightTimeout:
             print("[probe] Navigation timed out (networkidle not reached — continuing)")
         except Exception as nav_exc:
-            print(f"[probe] Navigation error: {nav_exc}")
+            print(f"[probe] Navigation failed: {_exc_name(nav_exc)}")
 
         # ── Wait for any sign of a login form ─────────────────────────────────
         # Same selector list as _autonomous_login() in daily_scrape.py
@@ -107,7 +156,7 @@ async def _run_probe() -> None:
         except PlaywrightTimeout:
             print(f"[probe] No form element appeared within {_WAIT_MS // 1000}s.")
         except Exception as wait_exc:
-            print(f"[probe] Wait error: {wait_exc}")
+            print(f"[probe] Wait error: {_exc_name(wait_exc)}")
 
         # ── Collect diagnostics ───────────────────────────────────────────────
         current_url = page.url
@@ -192,9 +241,10 @@ async def _run_probe() -> None:
                     _body_line = " ".join(_body_text.split())
                     _asset["body_excerpt"] = _body_line[:120]
                 except Exception as _be:
-                    _asset["body_excerpt"] = f"(body read error: {_be})"
+                    _asset["body_excerpt"] = f"(body read error: {_exc_name(_be)})"
             except Exception as _fe:
-                _asset["error"] = str(_fe)[:120]
+                _asset["status"] = "fetch_failed"
+                _asset["error"] = _exc_name(_fe)
             script_assets.append(_asset)
 
         # ── Main.js header variant probes ────────────────────────────────────
@@ -265,9 +315,10 @@ async def _run_probe() -> None:
                     _vline = " ".join(_vtext.split())
                     _vr["body_excerpt"] = _vline[:120]
                 except Exception as _vbe:
-                    _vr["body_excerpt"] = f"(body read error: {_vbe})"
+                    _vr["body_excerpt"] = f"(body read error: {_exc_name(_vbe)})"
             except Exception as _vfe:
-                _vr["error"] = str(_vfe)[:120]
+                _vr["status"] = "fetch_failed"
+                _vr["error"] = _exc_name(_vfe)
             mainjs_variants.append(_vr)
 
         await browser.close()
@@ -338,7 +389,17 @@ async def _run_probe() -> None:
 
 
 def main() -> int:
-    asyncio.run(_run_probe())
+    # Catch-all: prevents any unhandled exception (e.g. Playwright startup failure)
+    # from reaching sys.exit with a nonzero code. Exception messages are suppressed
+    # to avoid accidentally leaking proxy credentials or other sensitive config.
+    try:
+        asyncio.run(_run_probe())
+    except Exception as _exc:
+        print(
+            f"[probe] Unexpected error ({type(_exc).__name__})"
+            "; probe could not complete."
+        )
+        sys.stdout.flush()
     return 0   # Always 0 — this is a diagnostic tool, not a pass/fail test
 
 
