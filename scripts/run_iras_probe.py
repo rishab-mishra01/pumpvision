@@ -197,6 +197,79 @@ async def _run_probe() -> None:
                 _asset["error"] = str(_fe)[:120]
             script_assets.append(_asset)
 
+        # ── Main.js header variant probes ────────────────────────────────────
+        # Fetch /main.js three times with different header sets to determine
+        # whether the server distinguishes requests by browser-like headers
+        # (User-Agent, Accept, Sec-Fetch-*) or blocks at IP/egress level.
+        # Request headers are NOT printed — only the variant name is logged.
+        # Does NOT log cookies, auth headers, or any other headers.
+        _MAIN_JS_URL = _IRAS_BASE + "/main.js"
+        _UA_CHROME = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
+        # Each entry: name + optional headers dict (None = Playwright defaults only)
+        _VARIANTS: list[dict] = [
+            {
+                "name": "1-minimal",
+                "headers": None,
+            },
+            {
+                "name": "2-browser-ish",
+                "headers": {
+                    "User-Agent": _UA_CHROME,
+                    "Accept": (
+                        "text/javascript, application/javascript, "
+                        "application/ecmascript, */*;q=0.8"
+                    ),
+                    "Referer": "https://iras.iocliras.in/login",
+                    "Origin": "https://iras.iocliras.in",
+                    "Sec-Fetch-Dest": "script",
+                    "Sec-Fetch-Mode": "no-cors",
+                    "Sec-Fetch-Site": "same-origin",
+                },
+            },
+            {
+                "name": "3-curl-ish",
+                "headers": {
+                    "Accept": "application/javascript, */*",
+                    "Referer": "https://iras.iocliras.in/login",
+                },
+            },
+        ]
+        mainjs_variants: list[dict] = []
+        for _var in _VARIANTS:
+            _vr: dict = {
+                "name": _var["name"],
+                "url": _MAIN_JS_URL,
+                "status": None,
+                "content_type": None,
+                "content_length": None,
+                "body_excerpt": None,
+                "error": None,
+            }
+            try:
+                # Only pass headers kwarg when the variant specifies custom headers;
+                # omitting it lets Playwright use its context defaults (variant 1).
+                _fetch_kw: dict = {"timeout": 10_000}
+                if _var["headers"] is not None:
+                    _fetch_kw["headers"] = _var["headers"]
+                _vresp = await context.request.get(_MAIN_JS_URL, **_fetch_kw)
+                _vr["status"] = _vresp.status
+                _vr["content_type"] = _vresp.headers.get("content-type", "(none)")
+                _vr["content_length"] = _vresp.headers.get("content-length")
+                try:
+                    _vbody = await _vresp.body()
+                    _vtext = _vbody[:300].decode("utf-8", errors="replace")
+                    _vline = " ".join(_vtext.split())
+                    _vr["body_excerpt"] = _vline[:120]
+                except Exception as _vbe:
+                    _vr["body_excerpt"] = f"(body read error: {_vbe})"
+            except Exception as _vfe:
+                _vr["error"] = str(_vfe)[:120]
+            mainjs_variants.append(_vr)
+
         await browser.close()
 
     # ── Print report ──────────────────────────────────────────────────────────
@@ -231,6 +304,22 @@ async def _run_probe() -> None:
                 print(f"    body     : {_a['body_excerpt']!r}")
             if _a["error"] is not None:
                 print(f"    error    : {_a['error']}")
+        print()
+    if mainjs_variants:
+        print()
+        print("  MAIN.JS HEADER VARIANT PROBES")
+        print("  " + "-" * 40)
+        for _v in mainjs_variants:
+            print(f"    variant  : {_v['name']}")
+            print(f"    url      : {_v['url']}")
+            print(f"    status   : {_v['status']}")
+            print(f"    c-type   : {_v['content_type']}")
+            if _v["content_length"] is not None:
+                print(f"    c-len    : {_v['content_length']}")
+            if _v["body_excerpt"] is not None:
+                print(f"    body     : {_v['body_excerpt']!r}")
+            if _v["error"] is not None:
+                print(f"    error    : {_v['error']}")
         print()
     if failed_requests:
         print(f"  failed requests: {len(failed_requests)}")
