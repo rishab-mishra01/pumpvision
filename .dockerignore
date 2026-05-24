@@ -1,0 +1,81 @@
+# ── Version control ─────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Python bytecode ──────────────────────────────────────────────────────────
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# ── Virtual environments — never copy into image ─────────────────────────────
+.venv
+venv
+env
+ENV
+
+# ── Secrets — must never be baked into image ─────────────────────────────────
+.env
+*.pem
+*.key
+
+# ── Local database files ──────────────────────────────────────────────────────
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Operational / downloaded data (large, environment-specific) ───────────────
+# Debug artifacts, scraper output, IRAS downloads, Paytm CSVs, ATG data, etc.
+data/
+
+# ── Scraper session state (browser cookies — sensitive + large) ───────────────
+scrapers/paytm_state.json
+scrapers/paytm_profile/
+scrapers/sdms_state.json
+scrapers/sdms_profile/
+
+# ── Legacy / reference files not needed in production ─────────────────────────
+credit_module/
+IRAS Tables April/
+Density records/
+Screenshots/
+screenshots/
+
+# ── Loose debug/scratch scripts at repo root ──────────────────────────────────
+iras_debug*.py
+iras_debug_inspector.py
+
+# ── Local operational data files ──────────────────────────────────────────────
+*.csv
+*.xlsx
+*.xls
+~$*
+
+# ── Build artefacts ───────────────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+
+# ── Test / type-check caches ──────────────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+
+# ── IDE settings ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS artefacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Claude Code settings / memory (local tooling only) ───────────────────────
+.claude/

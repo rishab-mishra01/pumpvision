@@ -550,8 +550,19 @@ It is not historical completed-shift accounting data.
 **Production target: Railway cron services** (separate from the Flask web service).
 `railway.json` sets `python -X utf8 scripts/railway_entrypoint.py` as the start command
 for all Railway services. The service role is controlled by `PUMPVISION_SERVICE_ROLE`:
-`web` (default), `completed-shift`, or `atg`. `railway.json` contains only `startCommand`
-in its `deploy` block — healthcheck and restart-policy settings are intentionally omitted
+
+| Role | Purpose |
+|------|---------|
+| `web` | Flask app via gunicorn (default if var not set) |
+| `completed-shift` | Daily accounting scrape cron |
+| `atg` | ATG tank snapshot cron (every 30 min) |
+| `iras-probe` | Diagnostic: opens IRAS login page, prints DOM/network report, exits 0. No login. |
+
+`railway.json` uses **DOCKERFILE** builder (switched from Nixpacks May 2026 to resolve
+`libstdc++.so.6` missing on Railway Linux). Base image:
+`mcr.microsoft.com/playwright/python:v1.58.0-noble` — Ubuntu 24.04 + Python 3.12 +
+Chromium pre-installed. `railway.json` contains only `builder` + `startCommand` in its
+`build`/`deploy` blocks — healthcheck and restart-policy settings are intentionally omitted
 because `railway.json` is shared by all services and those settings are web-only (cron
 services do not serve HTTP). Configure them per-service in the Railway dashboard.
 Railway cron has **not yet been configured** in the Railway dashboard.
@@ -947,8 +958,8 @@ after Railway idle-connection timeouts. SQLite is unaffected.
 - **Frontend:** Jinja2 + Tailwind CSS (mobile-first)
 - **Auth:** Flask-Login (session-based)
 - **PDF:** ReportLab (NOT WeasyPrint — Windows incompatibility)
-- **Scraping:** Playwright async + Claude Vision API (CAPTCHA). Railway build installs the Chromium binary via `python -m playwright install --with-deps chromium` (in `railway.json` buildCommand).
-- **Deployment:** Railway
+- **Scraping:** Playwright async + Claude Vision API (CAPTCHA). Production runtime: Docker image `mcr.microsoft.com/playwright/python:v1.58.0-noble` — Chromium + all system dependencies (libstdc++, libnss, libgbm, etc.) pre-installed. No separate `playwright install --with-deps` step needed.
+- **Deployment:** Railway (Dockerfile builder — switched from Nixpacks May 2026)
 
 ### Environment Variables
 ```
@@ -1233,12 +1244,17 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `pumpvision/templates/owner/summary.html` — daily summary (screen 15)
 
 ### Scheduler scripts
-- `scripts/railway_entrypoint.py` — **shared Railway start command**; reads `PUMPVISION_SERVICE_ROLE` (`web`/`completed-shift`/`atg`)
+- `scripts/railway_entrypoint.py` — **shared Railway start command**; reads `PUMPVISION_SERVICE_ROLE` (`web`/`completed-shift`/`atg`/`iras-probe`)
 - `scripts/run_completed_shift.py` — completed-shift logic (IST op\_date auto-calc); called by entrypoint
 - `scripts/run_atg_snapshot.py` — ATG snapshot logic; called by entrypoint
+- `scripts/run_iras_probe.py` — IRAS login-page diagnostic probe; no login, no credentials, exits 0
 - `scripts/run_completed_shift.ps1` — Windows local/manual fallback for completed-shift
 - `scripts/run_atg_snapshot.ps1` — Windows local/manual fallback for ATG snapshot
 - `docs/scrape_scheduling_runbook.md` — full scheduling guide: Railway setup, entrypoint roles, env vars, Windows fallback, recovery
+
+### Docker
+- `Dockerfile` — production image; base `mcr.microsoft.com/playwright/python:v1.58.0-noble`
+- `.dockerignore` — excludes secrets, data/, session state, venvs, bytecache, legacy files
 
 ### Scrapers
 - `scrapers/iras_iss_exporter.py` — ISS boundary mode

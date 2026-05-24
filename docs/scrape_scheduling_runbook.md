@@ -47,20 +47,21 @@ every deploy.
 `railway.json` currently sets:
 ```json
 "build": {
-  "builder": "NIXPACKS",
-  "buildCommand": "pip install -r requirements.txt && python -m playwright install --with-deps chromium"
+  "builder": "DOCKERFILE"
 },
 "deploy": {
   "startCommand": "python -X utf8 scripts/railway_entrypoint.py"
 }
 ```
 
-**Why `playwright install` in the build command?** The scrapers use Playwright's async API
-(`playwright.async_api`). `pip install playwright` installs the Python package but not the
-browser binary. `python -m playwright install --with-deps chromium` downloads the Chromium
-binary and its OS-level dependencies during the Railway build step. This runs once at build
-time and applies to all service roles (web, cron) built from this repo. The web service
-does not use Playwright at runtime but the install is harmless.
+**Docker base image:** `mcr.microsoft.com/playwright/python:v1.58.0-noble`
+(Microsoft's official Playwright Python image; Ubuntu 24.04 LTS / Noble Numbat, Python 3.12).
+Chromium, Firefox, and WebKit binaries are **pre-installed** at `/ms-playwright`.
+All OS-level browser dependencies (`libstdc++.so.6`, `libnss3`, `libatk1.0`, `libgbm1`, etc.)
+are pre-installed by the base image. No `python -m playwright install --with-deps chromium`
+step is needed — the Dockerfile simply runs `pip install -r requirements.txt` after copying
+`requirements.txt`. The `playwright==1.58.0` Python package in `requirements.txt` matches the
+image tag exactly, keeping the Python bindings and browser binaries in sync.
 
 **Why only `startCommand` in `deploy`?** `railway.json` is a shared file. Any deploy setting in it
 applies to every service created from this repo — web, completed-shift cron, and ATG cron
@@ -86,6 +87,7 @@ absent from `railway.json`.
 | `web` (default if unset) | gunicorn serving `wsgi:app` on `$PORT` |
 | `completed-shift` | `scripts/run_completed_shift.py` (daily accounting scrape) |
 | `atg` | `scripts/run_atg_snapshot.py` (ATG tank snapshot) |
+| `iras-probe` | `scripts/run_iras_probe.py` (diagnostic probe — opens IRAS login page, prints DOM/network report, exits 0; no login, no credentials) |
 
 **Set `PUMPVISION_SERVICE_ROLE` in each service's Variables panel in the Railway dashboard.**
 Do not change `railway.json`'s `startCommand` per-service — that is overridden on deploy.
@@ -396,12 +398,15 @@ or `--paytm-debug` to any cron start command.
 
 | File | Purpose |
 |------|---------|
+| `Dockerfile` | Production Docker image — uses `mcr.microsoft.com/playwright/python:v1.58.0-noble`; Chromium + OS deps pre-installed |
+| `.dockerignore` | Excludes secrets, local data, session state, legacy files, and venvs from the Docker build context |
 | `scripts/railway_entrypoint.py` | **Shared Railway start command** — dispatches on `PUMPVISION_SERVICE_ROLE` |
 | `scripts/run_completed_shift.py` | Completed-shift logic — called by entrypoint for `completed-shift` role |
 | `scripts/run_atg_snapshot.py` | ATG snapshot logic — called by entrypoint for `atg` role |
+| `scripts/run_iras_probe.py` | IRAS login-page diagnostic probe — called by entrypoint for `iras-probe` role; no login, exits 0 always |
 | `scripts/run_completed_shift.ps1` | Windows local/manual fallback — completed-shift |
 | `scripts/run_atg_snapshot.ps1` | Windows local/manual fallback — ATG snapshot |
-| `railway.json` | Sets shared `startCommand` only; web-only healthcheck/restart settings are intentionally absent |
+| `railway.json` | Sets `builder: DOCKERFILE` and shared `startCommand`; web-only healthcheck/restart settings are intentionally absent |
 | `scrapers/daily_scrape.py` | Underlying Python orchestrator — all scraper logic |
 | `data/logs/scheduler/` | Log output from .ps1 wrappers (gitignored, local only) |
 | `data/iras/debug/login_<ts>/` | IRAS CAPTCHA diagnostics (auto-saved on failure, local only) |

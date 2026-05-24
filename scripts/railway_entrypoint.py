@@ -7,6 +7,9 @@ Supported roles:
   web              Flask app via gunicorn (default if variable is not set)
   completed-shift  Daily accounting scrape cron job
   atg              ATG tank snapshot cron job
+  iras-probe       Diagnostic: opens IRAS login page, prints DOM/network report,
+                   exits 0.  Use to verify browser + IRAS reachability without
+                   logging in or using credentials.
 
 Set PUMPVISION_SERVICE_ROLE in each Railway service's Variables panel.
 Never set it to a secret value -- it is printed to logs at startup.
@@ -19,7 +22,7 @@ import os
 import subprocess
 import sys
 
-_VALID_ROLES = frozenset({"web", "completed-shift", "atg"})
+_VALID_ROLES = frozenset({"web", "completed-shift", "atg", "iras-probe"})
 
 
 def _role() -> str:
@@ -122,6 +125,32 @@ def _dispatch_atg() -> int:
 
 
 # ---------------------------------------------------------------------------
+# Role: iras-probe
+# ---------------------------------------------------------------------------
+
+def _dispatch_iras_probe() -> int:
+    """Delegate to scripts/run_iras_probe.py.
+
+    Launches Chromium, navigates to the IRAS login page, prints a diagnostic
+    report (URL, title, HTML length, DOM counts, script srcs, failed requests),
+    and exits 0 regardless of whether the page rendered.
+
+    Use this role to verify that the Docker/browser environment can reach and
+    render iras.iocliras.in before attempting a real scraper run.
+
+    Does NOT log in.  Does NOT use IRAS credentials.  Does NOT save cookies.
+    """
+    script = os.path.join(_scripts_dir(), "run_iras_probe.py")
+    cmd = [sys.executable, "-X", "utf8", script]
+
+    print("[railway_entrypoint] role=iras-probe")
+    sys.stdout.flush()
+
+    result = subprocess.run(cmd, cwd=_repo_root())
+    return result.returncode
+
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 
@@ -145,6 +174,9 @@ def main() -> int:
 
     if role == "atg":
         return _dispatch_atg()
+
+    if role == "iras-probe":
+        return _dispatch_iras_probe()
 
     return 1  # unreachable
 
