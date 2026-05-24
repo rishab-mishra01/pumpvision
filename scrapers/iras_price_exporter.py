@@ -20,6 +20,7 @@ from pathlib import Path
 import openpyxl
 
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from iras_proxy import iras_proxy_cfg, IRAS_PROXY_ENABLED, safe_exc_name
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
@@ -403,13 +404,31 @@ async def main():
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False, args=["--start-maximized"])
-        context = await browser.new_context(
-            accept_downloads=True,
-            viewport={"width": 1400, "height": 900},
-        )
-        page = await context.new_page()
-
-        await page.goto(IRAS_URL, wait_until="networkidle")
+        _iras_proxy = iras_proxy_cfg()
+        _ctx_kw: dict = {
+            "accept_downloads": True,
+            "viewport": {"width": 1400, "height": 900},
+        }
+        if _iras_proxy is not None:
+            _ctx_kw["proxy"] = _iras_proxy
+        # Context/page setup — exceptions suppressed to avoid leaking proxy config.
+        try:
+            context = await browser.new_context(**_ctx_kw)
+            page = await context.new_page()
+        except Exception as _setup_exc:
+            print(f"  [IRAS] Browser/context setup failed: {safe_exc_name(_setup_exc)}")
+            await browser.close()
+            return
+        print(f"  [IRAS] proxy : {'yes' if IRAS_PROXY_ENABLED else 'no'}")
+        # Initial navigation — raw error message suppressed (may contain proxy host/port).
+        try:
+            await page.goto(IRAS_URL, wait_until="networkidle")
+        except PlaywrightTimeout:
+            print(f"  [IRAS] Navigation timeout (networkidle) — continuing")
+        except Exception as _nav_exc:
+            print(f"  [IRAS] Initial navigation failed: {safe_exc_name(_nav_exc)}")
+            await browser.close()
+            return
         await page.wait_for_timeout(1500)
 
         # Pre-fill credentials

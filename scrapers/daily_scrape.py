@@ -111,6 +111,7 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 import anthropic
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from iras_proxy import iras_proxy_cfg, IRAS_PROXY_ENABLED, safe_exc_name
 
 # ── Credentials + output paths from environment ───────────────────────────────
 _base_url     = os.environ.get("IRAS_URL", "https://iras.iocliras.in").rstrip("/")
@@ -429,7 +430,8 @@ async def _autonomous_login(
         # Fall through — attempt 1 will save full no-CAPTCHA page artifacts.
     except Exception as _pre_exc:
         # Unexpected error in the readiness check — log and continue; do not abort.
-        print(f"  [login] Page readiness check error (continuing): {_pre_exc}")
+        # Raw message suppressed — may contain proxy/network details.
+        print(f"  [login] Page readiness check error (continuing): {safe_exc_name(_pre_exc)}")
 
     # ── Autonomous attempts ───────────────────────────────────────────────────
     for attempt in range(1, MAX_LOGIN_ATTEMPTS + 1):
@@ -444,7 +446,14 @@ async def _autonomous_login(
                 await refresh.click()
                 await page.wait_for_timeout(1000)
             else:
-                await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+                # Raw error message suppressed — may contain proxy host/port if connection dropped.
+                try:
+                    await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+                except PlaywrightTimeout:
+                    pass  # timeout on retry is non-critical; continue attempt
+                except Exception as _retry_nav_exc:
+                    print(f"  [login] Retry navigation failed: {safe_exc_name(_retry_nav_exc)}")
+                    return False
                 await page.wait_for_timeout(800)
 
         # Screenshot CAPTCHA image only.
@@ -506,7 +515,7 @@ async def _autonomous_login(
                         debug_dir, f"{_nf}.png",
                         await page.screenshot(full_page=True))
                 except Exception as _exc:
-                    print(f"  [login-debug] Screenshot failed: {_exc}")
+                    print(f"  [login-debug] Screenshot failed: {safe_exc_name(_exc)}")
 
                 # Full page HTML (capped at 500 KB)
                 try:
@@ -517,7 +526,7 @@ async def _autonomous_login(
                 except Exception as _exc:
                     _save_login_artifact(
                         debug_dir, f"{_nf}.html",
-                        f"(could not capture page HTML: {_exc})\n")
+                        f"(could not capture page HTML: {safe_exc_name(_exc)})\n")
 
                 # URL + metadata
                 _save_login_artifact(
@@ -539,7 +548,7 @@ async def _autonomous_login(
                 except Exception as _exc:
                     _save_login_artifact(
                         debug_dir, f"{_nf}_text.txt",
-                        f"(could not extract body text: {_exc})\n")
+                        f"(could not extract body text: {safe_exc_name(_exc)})\n")
 
                 # All img tags (up to 50) with src / alt / id / class
                 try:
@@ -558,7 +567,7 @@ async def _autonomous_login(
                                 f"id={_i_id!r} class={_i_cls!r}"
                             )
                         except Exception as _ie:
-                            _img_lines.append(f"img[{_ii}]: (attribute error: {_ie})")
+                            _img_lines.append(f"img[{_ii}]: (attribute error: {safe_exc_name(_ie)})")
                     if _n_imgs > 50:
                         _img_lines.append(f"... ({_n_imgs - 50} more not listed)")
                     _save_login_artifact(
@@ -569,7 +578,7 @@ async def _autonomous_login(
                 except Exception as _exc:
                     _save_login_artifact(
                         debug_dir, f"{_nf}_images.txt",
-                        f"(could not enumerate img tags: {_exc})\n")
+                        f"(could not enumerate img tags: {safe_exc_name(_exc)})\n")
 
                 # Candidate CAPTCHA-related elements by id / class / src / alt / tag
                 _cand_selectors = [
@@ -602,7 +611,7 @@ async def _autonomous_login(
                                         f"class={_ccls!r} src={_csrc!r} alt={_calt!r}"
                                     )
                         except Exception as _ce:
-                            _cand_lines.append(f"selector={_csel!r}: error={_ce}")
+                            _cand_lines.append(f"selector={_csel!r}: error={safe_exc_name(_ce)}")
                     _save_login_artifact(
                         debug_dir, f"{_nf}_candidates.txt",
                         ("\n".join(_cand_lines) + "\n") if _cand_lines
@@ -611,7 +620,7 @@ async def _autonomous_login(
                 except Exception as _exc:
                     _save_login_artifact(
                         debug_dir, f"{_nf}_candidates.txt",
-                        f"(could not enumerate candidates: {_exc})\n")
+                        f"(could not enumerate candidates: {safe_exc_name(_exc)})\n")
 
                 print(f"  [login-debug] No-CAPTCHA artifacts saved → {debug_dir}")
 
@@ -648,7 +657,7 @@ async def _autonomous_login(
                 _save_login_artifact(
                     debug_dir, f"attempt_{attempt:02d}_after_submit.png", _after)
             except Exception as _sc_exc:
-                print(f"  [login-debug] Post-submit screenshot failed: {_sc_exc}")
+                print(f"  [login-debug] Post-submit screenshot failed: {safe_exc_name(_sc_exc)}")
             _save_login_artifact(
                 debug_dir, f"attempt_{attempt:02d}_error_text.txt",
                 (await _get_page_error()) or "(no visible error text found)\n",
@@ -668,7 +677,8 @@ async def _autonomous_login(
             await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
             await page.wait_for_timeout(1000)
         except Exception as _nav_exc:
-            print(f"[login] Could not reload login page: {_nav_exc}")
+            # Raw message suppressed — may contain proxy host/port.
+            print(f"[login] Could not reload login page: {safe_exc_name(_nav_exc)}")
             return False
 
         # Save fresh CAPTCHA image so the user can open it from disk
@@ -688,7 +698,8 @@ async def _autonomous_login(
                     _fb.write_bytes(fresh_bytes)
                     print(f"[login] Fresh CAPTCHA saved to: {_fb}")
             except Exception as _img_exc:
-                print(f"[login] Could not save fresh CAPTCHA image: {_img_exc}")
+                # Raw message suppressed — may contain proxy/network details.
+                print(f"[login] Could not save fresh CAPTCHA image: {safe_exc_name(_img_exc)}")
 
         print("[login] Open the saved CAPTCHA image and type the text below.")
         print("[login] Press Enter with no input to abort.")
@@ -1388,19 +1399,37 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                 headless=True,
                 args=["--no-sandbox", "--disable-dev-shm-usage"],
             )
-            context = await browser.new_context(
-                accept_downloads=True,
-                viewport={"width": 1400, "height": 900},
-                user_agent=(
+            _iras_proxy = iras_proxy_cfg()
+            _ctx_kw: dict = {
+                "accept_downloads": True,
+                "viewport": {"width": 1400, "height": 900},
+                "user_agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/124.0.0.0 Safari/537.36"
                 ),
-            )
-            page = await context.new_page()
-
+            }
+            if _iras_proxy is not None:
+                _ctx_kw["proxy"] = _iras_proxy
+            # Context/page setup — exceptions suppressed to avoid leaking proxy config.
+            try:
+                context = await browser.new_context(**_ctx_kw)
+                page = await context.new_page()
+            except Exception as _setup_exc:
+                print(f"  [IRAS] Browser/context setup failed: {safe_exc_name(_setup_exc)}")
+                await browser.close()
+                return False
+            print(f"  [IRAS] proxy : {'yes' if IRAS_PROXY_ENABLED else 'no'}")
             print(f"\n[step 0] Loading: {LOGIN_URL}")
-            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            # Initial navigation — raw error message suppressed (may contain proxy host/port).
+            try:
+                await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            except PlaywrightTimeout:
+                print(f"  [IRAS] Navigation timeout (networkidle) — continuing")
+            except Exception as _nav_exc:
+                print(f"  [IRAS] Initial navigation failed: {safe_exc_name(_nav_exc)}")
+                await browser.close()
+                return False
             await page.wait_for_timeout(1000)
             _login_debug_dir = _make_login_debug_dir()
             if not await _autonomous_login(page, debug_dir=_login_debug_dir,
@@ -1461,29 +1490,58 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(
                         headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                    context = await browser.new_context(
-                        accept_downloads=True, viewport={"width": 1400, "height": 900},
-                        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                    "Chrome/124.0.0.0 Safari/537.36"))
-                    page = await context.new_page()
-                    print(f"\n[step 0] Loading: {LOGIN_URL}")
-                    await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-                    await page.wait_for_timeout(1000)
-                    _login_debug_dir = _make_login_debug_dir()
-                    if not await _autonomous_login(page, debug_dir=_login_debug_dir,
-                                                   allow_manual=manual_captcha):
-                        print("\n  [WARN] IRAS login failed — price-only run cannot complete.")
+                    _iras_proxy = iras_proxy_cfg()
+                    _ctx_kw: dict = {
+                        "accept_downloads": True,
+                        "viewport": {"width": 1400, "height": 900},
+                        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                       "Chrome/124.0.0.0 Safari/537.36"),
+                    }
+                    if _iras_proxy is not None:
+                        _ctx_kw["proxy"] = _iras_proxy
+                    print(f"  [IRAS] proxy : {'yes' if IRAS_PROXY_ENABLED else 'no'}")
+                    # Context/page setup — exceptions suppressed to avoid leaking proxy config.
+                    # Fall through on failure rather than return early — allows summary to print.
+                    _iras_ok = True
+                    try:
+                        context = await browser.new_context(**_ctx_kw)
+                        page = await context.new_page()
+                    except Exception as _setup_exc:
+                        print(f"  [IRAS] Browser/context setup failed: {safe_exc_name(_setup_exc)}")
                         for d in _price_needed:
                             _acct_results[('price', d)] = 'failed'
                         await browser.close()
-                    else:
-                        price_ok = await _job_price(page, [], price_dir, dry_run=dry_run,
-                                                    acct_dates=_price_needed)
-                        _st = 'succeeded' if price_ok else 'failed'
-                        for d in _price_needed:
-                            _acct_results[('price', d)] = _st
-                        await browser.close()
+                        _iras_ok = False
+                    # Initial navigation — raw error message suppressed (may contain proxy host/port).
+                    if _iras_ok:
+                        print(f"\n[step 0] Loading: {LOGIN_URL}")
+                        try:
+                            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+                        except PlaywrightTimeout:
+                            print(f"  [IRAS] Navigation timeout (networkidle) — continuing")
+                        except Exception as _nav_exc:
+                            print(f"  [IRAS] Initial navigation failed: {safe_exc_name(_nav_exc)}")
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = 'failed'
+                            await browser.close()
+                            _iras_ok = False
+                    if _iras_ok:
+                        await page.wait_for_timeout(1000)
+                        _login_debug_dir = _make_login_debug_dir()
+                        if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                                       allow_manual=manual_captcha):
+                            print("\n  [WARN] IRAS login failed — price-only run cannot complete.")
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = 'failed'
+                            await browser.close()
+                        else:
+                            price_ok = await _job_price(page, [], price_dir, dry_run=dry_run,
+                                                        acct_dates=_price_needed)
+                            _st = 'succeeded' if price_ok else 'failed'
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = _st
+                            await browser.close()
 
     # ── sdms-only ─────────────────────────────────────────────────────────────
     if mode == 'sdms_only':
@@ -1528,29 +1586,58 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(
                         headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                    context = await browser.new_context(
-                        accept_downloads=True, viewport={"width": 1400, "height": 900},
-                        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                    "Chrome/124.0.0.0 Safari/537.36"))
-                    page = await context.new_page()
-                    print(f"\n[step 0] Loading: {LOGIN_URL}")
-                    await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-                    await page.wait_for_timeout(1000)
-                    _login_debug_dir = _make_login_debug_dir()
-                    if not await _autonomous_login(page, debug_dir=_login_debug_dir,
-                                                   allow_manual=manual_captcha):
-                        print("\n  [WARN] IRAS login failed — Price skipped; continuing to SDMS.")
+                    _iras_proxy = iras_proxy_cfg()
+                    _ctx_kw: dict = {
+                        "accept_downloads": True,
+                        "viewport": {"width": 1400, "height": 900},
+                        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                       "Chrome/124.0.0.0 Safari/537.36"),
+                    }
+                    if _iras_proxy is not None:
+                        _ctx_kw["proxy"] = _iras_proxy
+                    print(f"  [IRAS] proxy : {'yes' if IRAS_PROXY_ENABLED else 'no'}")
+                    # Context/page setup — exceptions suppressed to avoid leaking proxy config.
+                    # Fall through on failure rather than return early — SDMS still runs.
+                    _iras_ok = True
+                    try:
+                        context = await browser.new_context(**_ctx_kw)
+                        page = await context.new_page()
+                    except Exception as _setup_exc:
+                        print(f"  [IRAS] Browser/context setup failed: {safe_exc_name(_setup_exc)}")
                         for d in _price_needed:
                             _acct_results[('price', d)] = 'failed'
                         await browser.close()
-                    else:
-                        price_ok = await _job_price(page, [], price_dir, dry_run=dry_run,
-                                                    acct_dates=_price_needed)
-                        _st = 'succeeded' if price_ok else 'failed'
-                        for d in _price_needed:
-                            _acct_results[('price', d)] = _st
-                        await browser.close()
+                        _iras_ok = False
+                    # Initial navigation — raw error message suppressed (may contain proxy host/port).
+                    if _iras_ok:
+                        print(f"\n[step 0] Loading: {LOGIN_URL}")
+                        try:
+                            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+                        except PlaywrightTimeout:
+                            print(f"  [IRAS] Navigation timeout (networkidle) — continuing")
+                        except Exception as _nav_exc:
+                            print(f"  [IRAS] Initial navigation failed: {safe_exc_name(_nav_exc)}")
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = 'failed'
+                            await browser.close()
+                            _iras_ok = False
+                    if _iras_ok:
+                        await page.wait_for_timeout(1000)
+                        _login_debug_dir = _make_login_debug_dir()
+                        if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                                       allow_manual=manual_captcha):
+                            print("\n  [WARN] IRAS login failed — Price skipped; continuing to SDMS.")
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = 'failed'
+                            await browser.close()
+                        else:
+                            price_ok = await _job_price(page, [], price_dir, dry_run=dry_run,
+                                                        acct_dates=_price_needed)
+                            _st = 'succeeded' if price_ok else 'failed'
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = _st
+                            await browser.close()
         else:
             print(f"\n  [SKIP] Price: already in DB for all requested dates")
 
@@ -1611,51 +1698,92 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                       f"— Price and boundary scrapes skipped; continuing to SDMS.")
                 for d in _price_needed:
                     _acct_results[('price', d)] = 'failed'
+                if all_needed:
+                    for _d in dates:
+                        _acct_results[('boundary', _d)] = 'failed'
             else:
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(
                         headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                    context = await browser.new_context(
-                        accept_downloads=True, viewport={"width": 1400, "height": 900},
-                        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                    "Chrome/124.0.0.0 Safari/537.36"))
-                    page = await context.new_page()
-                    print(f"\n[step 0] Loading: {LOGIN_URL}")
-                    await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-                    await page.wait_for_timeout(1000)
-                    _login_debug_dir = _make_login_debug_dir()
-                    if not await _autonomous_login(page, debug_dir=_login_debug_dir,
-                                                   allow_manual=manual_captcha):
-                        print("\n  [WARN] IRAS login failed — Price and boundary scrapes skipped; continuing to SDMS.")
+                    _iras_proxy = iras_proxy_cfg()
+                    _ctx_kw: dict = {
+                        "accept_downloads": True,
+                        "viewport": {"width": 1400, "height": 900},
+                        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                       "Chrome/124.0.0.0 Safari/537.36"),
+                    }
+                    if _iras_proxy is not None:
+                        _ctx_kw["proxy"] = _iras_proxy
+                    print(f"  [IRAS] proxy : {'yes' if IRAS_PROXY_ENABLED else 'no'}")
+                    # Context/page setup — exceptions suppressed to avoid leaking proxy config.
+                    # Fall through on failure rather than return early — SDMS still runs.
+                    _iras_ok = True
+                    try:
+                        context = await browser.new_context(**_ctx_kw)
+                        page = await context.new_page()
+                    except Exception as _setup_exc:
+                        print(f"  [IRAS] Browser/context setup failed: {safe_exc_name(_setup_exc)}")
                         for d in _price_needed:
                             _acct_results[('price', d)] = 'failed'
-                        await browser.close()
-                    else:
-                        # Job 1: Price — for dates not already in DB
-                        if _price_needed:
-                            price_ok = await _job_price(page, [], price_dir, dry_run=dry_run,
-                                                        acct_dates=_price_needed)
-                            _st = 'succeeded' if price_ok else 'failed'
-                            for d in _price_needed:
-                                _acct_results[('price', d)] = _st
-                        else:
-                            print(f"\n  [SKIP] Price: already in DB for all dates")
-
-                        # Jobs 2 + 3: ST + ISS boundary — only for missing boundaries
                         if all_needed:
-                            _needed_op_dates = [
-                                (datetime.strptime(bd, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-                                for bd in all_needed
-                            ]
-                            await _job_shift_totalizer(page, _needed_op_dates, st_dir)
-                            await _job_iss_boundary(page, all_needed, iss_dir, dry_run=dry_run)
-                        else:
-                            print(f"\n{'='*55}")
-                            print(f"  Boundaries — all already in DB, ISS/ST scrape skipped")
-                            print(f"{'='*55}")
-
+                            for _d in dates:
+                                _acct_results[('boundary', _d)] = 'failed'
                         await browser.close()
+                        _iras_ok = False
+                    # Initial navigation — raw error message suppressed (may contain proxy host/port).
+                    if _iras_ok:
+                        print(f"\n[step 0] Loading: {LOGIN_URL}")
+                        try:
+                            await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+                        except PlaywrightTimeout:
+                            print(f"  [IRAS] Navigation timeout (networkidle) — continuing")
+                        except Exception as _nav_exc:
+                            print(f"  [IRAS] Initial navigation failed: {safe_exc_name(_nav_exc)}")
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = 'failed'
+                            if all_needed:
+                                for _d in dates:
+                                    _acct_results[('boundary', _d)] = 'failed'
+                            await browser.close()
+                            _iras_ok = False
+                    if _iras_ok:
+                        await page.wait_for_timeout(1000)
+                        _login_debug_dir = _make_login_debug_dir()
+                        if not await _autonomous_login(page, debug_dir=_login_debug_dir,
+                                                       allow_manual=manual_captcha):
+                            print("\n  [WARN] IRAS login failed — Price and boundary scrapes skipped; continuing to SDMS.")
+                            for d in _price_needed:
+                                _acct_results[('price', d)] = 'failed'
+                            if all_needed:
+                                for _d in dates:
+                                    _acct_results[('boundary', _d)] = 'failed'
+                            await browser.close()
+                        else:
+                            # Job 1: Price — for dates not already in DB
+                            if _price_needed:
+                                price_ok = await _job_price(page, [], price_dir, dry_run=dry_run,
+                                                            acct_dates=_price_needed)
+                                _st = 'succeeded' if price_ok else 'failed'
+                                for d in _price_needed:
+                                    _acct_results[('price', d)] = _st
+                            else:
+                                print(f"\n  [SKIP] Price: already in DB for all dates")
+
+                            # Jobs 2 + 3: ST + ISS boundary — only for missing boundaries
+                            if all_needed:
+                                _needed_op_dates = [
+                                    (datetime.strptime(bd, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                                    for bd in all_needed
+                                ]
+                                await _job_shift_totalizer(page, _needed_op_dates, st_dir)
+                                await _job_iss_boundary(page, all_needed, iss_dir, dry_run=dry_run)
+                            else:
+                                print(f"\n{'='*55}")
+                                print(f"  Boundaries — all already in DB, ISS/ST scrape skipped")
+                                print(f"{'='*55}")
+
+                            await browser.close()
         else:
             print(f"\n  [SKIP] IRAS session: Price and all boundaries already in DB")
 
@@ -1681,7 +1809,7 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
         _all_dates = sorted({d for (_, d) in _acct_results.keys()})
         for _d in _all_dates:
             print(f"  op_date {_d}:")
-            for _src in ('paytm', 'price', 'sdms'):
+            for _src in ('paytm', 'price', 'boundary', 'sdms'):
                 _st = _acct_results.get((_src, _d))
                 if _st is not None:
                     print(f"    {_src.ljust(8)}: {_status_labels.get(_st, _st.upper())}")
