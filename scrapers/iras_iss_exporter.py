@@ -295,7 +295,7 @@ async def navigate_to_iss(page, shift_date: str = SHIFT_DATES[0]):
     await page.wait_for_timeout(2000)
 
     overflow = page.locator("button[role='tab']:has-text('...')")
-    await overflow.wait_for(state="visible", timeout=10_000)
+    await overflow.wait_for(state="visible", timeout=40_000)
     await overflow.click()
     await page.wait_for_timeout(1000)
 
@@ -415,7 +415,7 @@ async def navigate_to_shift_totalizer(page, shift_date: str):
     await page.wait_for_timeout(2000)
 
     overflow = page.locator("button[role='tab']:has-text('...')")
-    await overflow.wait_for(state="visible", timeout=10_000)
+    await overflow.wait_for(state="visible", timeout=40_000)
     await overflow.click()
     await page.wait_for_timeout(1000)
 

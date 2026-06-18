@@ -218,7 +218,7 @@ async def do_login(page, context) -> bool:
 
     # Wait for the login iframe to load (accounts.paytm.com/oauth-js-sdk)
     login_frame = None
-    for _ in range(15):   # poll up to 15s
+    for _ in range(30):   # poll up to 30s
         for frame in page.frames:
             if "accounts.paytm.com" in frame.url:
                 login_frame = frame
@@ -238,13 +238,13 @@ async def do_login(page, context) -> bool:
     try:
         await login_frame.wait_for_selector(
             "input[placeholder='Enter your Mobile Number or Email']",
-            timeout=10_000,
+            timeout=30_000,
         )
     except PlaywrightTimeout:
         try:
-            await login_frame.wait_for_selector("input:visible", timeout=5_000)
+            await login_frame.wait_for_selector("input:visible", timeout=15_000)
         except PlaywrightTimeout:
-            print("  [login] ERROR: Login form did not render within 15s")
+            print("  [login] ERROR: Login form did not render within 45s")
             return False
 
     # Fill email / mobile
