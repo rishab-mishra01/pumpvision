@@ -59,6 +59,12 @@ DOWNLOAD_TIMEOUT   = 30   # seconds
 
 async def navigate_to_stock(page):
     """Navigate to FCC Data > Stock tab."""
+    try:
+        await page.get_by_role("button", name="FCC Data").wait_for(
+            state="visible", timeout=20_000
+        )
+    except Exception:
+        print("  [ATG] WARNING: FCC Data button not visible after 20s — proceeding anyway")
     await page.get_by_role("button", name="FCC Data").click()
     await page.wait_for_timeout(2000)
 

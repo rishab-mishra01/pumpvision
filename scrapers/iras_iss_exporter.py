@@ -285,6 +285,12 @@ async def navigate_to_iss(page, shift_date: str = SHIFT_DATES[0]):
     4. If shift_date is older than 7 days, click the archive toggle
     5. Set As Per = Actual Transaction Date and Time
     """
+    try:
+        await page.get_by_role("button", name="FCC Data").wait_for(
+            state="visible", timeout=20_000
+        )
+    except Exception:
+        print("  [ISS] WARNING: FCC Data button not visible after 20s — proceeding anyway")
     await page.get_by_role("button", name="FCC Data").click()
     await page.wait_for_timeout(2000)
 
@@ -399,6 +405,12 @@ async def handle_session_expiry(page):
 
 async def navigate_to_shift_totalizer(page, shift_date: str):
     """Navigate to FCC Data > Shift Totalizer Record(TOT) tab (via overflow '...' menu)."""
+    try:
+        await page.get_by_role("button", name="FCC Data").wait_for(
+            state="visible", timeout=20_000
+        )
+    except Exception:
+        print("  [ST] WARNING: FCC Data button not visible after 20s — proceeding anyway")
     await page.get_by_role("button", name="FCC Data").click()
     await page.wait_for_timeout(2000)
 

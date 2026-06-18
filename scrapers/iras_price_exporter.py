@@ -257,14 +257,41 @@ async def navigate_to_price(page):
     3. Click Price(PRM) directly if visible, otherwise use the '...' overflow menu.
     No archive toggle and no As Per dropdown on this tab.
     """
+    # Wait for the left nav to be ready before the first click. After login the
+    # SPA dashboard may not have mounted the nav buttons yet, so we wait up to
+    # 20s for the FCC Data button to become visible rather than clicking blindly.
+    try:
+        await page.get_by_role("button", name="FCC Data").wait_for(
+            state="visible", timeout=20_000
+        )
+    except Exception:
+        print("  [nav] WARNING: FCC Data button not visible after 20s — proceeding anyway")
+
     for attempt in range(1, 4):
+        if attempt > 1:
+            # On retry the SPA is in a partial state — navigate back to the
+            # dashboard root to reset before re-clicking FCC Data.
+            try:
+                _base = IRAS_URL.replace("/login", "")
+                await page.goto(_base, wait_until="networkidle", timeout=20_000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(2000)
+            # Wait for nav to be ready again after reset.
+            try:
+                await page.get_by_role("button", name="FCC Data").wait_for(
+                    state="visible", timeout=15_000
+                )
+            except Exception:
+                pass
+
         await page.get_by_role("button", name="FCC Data").click()
 
         # Wait for the tab bar to render rather than using a fixed sleep.
         # Any button[role='tab'] appearing means the FCC panel is loaded.
         try:
             await page.locator("button[role='tab']").first.wait_for(
-                state="visible", timeout=15_000
+                state="visible", timeout=20_000
             )
         except Exception:
             print(f"  [nav] FCC Data panel did not render (attempt {attempt}/3) — retrying")
