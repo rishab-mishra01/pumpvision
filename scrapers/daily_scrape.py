@@ -299,10 +299,13 @@ async def _autonomous_login(
 
         pw = page.locator("input[type='password']").first
         try:
-            if await pw.count() > 0 and await pw.is_visible(timeout=2000):
+            if await pw.count() > 0 and await pw.is_visible(timeout=8_000):
                 await pw.fill(IRAS_PASSWORD)
+                print("  [login] Password filled")
+            else:
+                print("  [login] WARNING: password field not visible — skipping fill")
         except Exception:
-            pass
+            print("  [login] WARNING: password fill failed (exception)")
 
         cap_input = await _find(page, [
             "input[name*='captcha']", "input[name*='Captcha']",
@@ -452,6 +455,7 @@ async def _autonomous_login(
             try:
                 if await _s1_loc.count() > 0 and await _s1_loc.is_visible(timeout=1000):
                     await _s1_loc.fill(IRAS_USERNAME)
+                    print(f"  [login] Step-1 username filled ({IRAS_USERNAME})")
                     break
             except Exception:
                 continue
@@ -460,12 +464,24 @@ async def _autonomous_login(
             "input[value='Next']", "button[type='submit']",
         ])
         if _next_btn:
+            print("  [login] Clicking Next — waiting up to 30s for step-2 (password field) ...")
             await _next_btn.click()
             try:
-                await page.wait_for_selector("input[type='password']", timeout=10_000)
+                await page.wait_for_selector("input[type='password']", timeout=30_000)
                 print("  [login] Step-2 rendered (password field visible)")
             except PlaywrightTimeout:
-                print("  [login] WARNING: password field did not appear after clicking Next")
+                _s2_url = page.url
+                try:
+                    _s2_inputs = await page.locator("input").count()
+                    _s2_imgs   = await page.locator("img").count()
+                    _s2_body   = (await page.locator("body").inner_text(timeout=1000)).strip()[:300]
+                except Exception:
+                    _s2_inputs = _s2_imgs = -1
+                    _s2_body   = "(unavailable)"
+                print(f"  [login] WARNING: password field did not appear after 30s")
+                print(f"  [login]   URL      : {_s2_url}")
+                print(f"  [login]   inputs   : {_s2_inputs}  imgs: {_s2_imgs}")
+                print(f"  [login]   body     : {_s2_body!r}")
         else:
             print("  [login] WARNING: Next button not found on step-1 page")
 
@@ -494,15 +510,16 @@ async def _autonomous_login(
 
         # If a retry navigated back to LOGIN_URL, we may be on step 1 again.
         try:
-            _pw_retry = await page.locator("input[type='password']").first.is_visible(timeout=500)
+            _pw_retry = await page.locator("input[type='password']").first.is_visible(timeout=5_000)
         except Exception:
             _pw_retry = False
         if not _pw_retry:
+            print(f"  [login] Attempt {attempt}: step-1 re-detected — clicking Next again")
             for _rs1_sel in ["input[name='username']", "input[name='userId']",
                              "input[placeholder*='Username']", "input[placeholder*='User']"]:
                 _rs1_loc = page.locator(_rs1_sel).first
                 try:
-                    if await _rs1_loc.count() > 0 and await _rs1_loc.is_visible(timeout=500):
+                    if await _rs1_loc.count() > 0 and await _rs1_loc.is_visible(timeout=2_000):
                         await _rs1_loc.fill(IRAS_USERNAME)
                         break
                 except Exception:
@@ -514,9 +531,10 @@ async def _autonomous_login(
             if _rs1_next:
                 await _rs1_next.click()
                 try:
-                    await page.wait_for_selector("input[type='password']", timeout=10_000)
+                    await page.wait_for_selector("input[type='password']", timeout=30_000)
+                    print(f"  [login] Attempt {attempt}: step-2 rendered after retry Next")
                 except PlaywrightTimeout:
-                    pass
+                    print(f"  [login] Attempt {attempt}: WARNING — password field still not visible after retry")
 
         # Screenshot CAPTCHA image only.
         # Selector list is tried in order; first visible match wins.
