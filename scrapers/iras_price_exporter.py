@@ -269,15 +269,10 @@ async def navigate_to_price(page):
 
     for attempt in range(1, 4):
         if attempt > 1:
-            # On retry the SPA is in a partial state — navigate back to the
-            # dashboard root to reset before re-clicking FCC Data.
-            try:
-                _base = IRAS_URL.replace("/login", "")
-                await page.goto(_base, wait_until="networkidle", timeout=20_000)
-            except Exception:
-                pass
-            await page.wait_for_timeout(2000)
-            # Wait for nav to be ready again after reset.
+            # Wait for the FCC Data button to be clickable again before retrying.
+            # Do NOT navigate away — the SPA session is in-memory and a goto
+            # risks landing back on the login page.
+            await page.wait_for_timeout(3000)
             try:
                 await page.get_by_role("button", name="FCC Data").wait_for(
                     state="visible", timeout=15_000
@@ -287,11 +282,11 @@ async def navigate_to_price(page):
 
         await page.get_by_role("button", name="FCC Data").click()
 
-        # Wait for the tab bar to render rather than using a fixed sleep.
-        # Any button[role='tab'] appearing means the FCC panel is loaded.
+        # Wait for the tab bar to render. The panel can take 30–40 s through a
+        # proxy — use a 40 s timeout so we don't bail out prematurely.
         try:
             await page.locator("button[role='tab']").first.wait_for(
-                state="visible", timeout=20_000
+                state="visible", timeout=40_000
             )
         except Exception:
             print(f"  [nav] FCC Data panel did not render (attempt {attempt}/3) — retrying")
