@@ -433,6 +433,42 @@ async def _autonomous_login(
         # Raw message suppressed — may contain proxy/network details.
         print(f"  [login] Page readiness check error (continuing): {safe_exc_name(_pre_exc)}")
 
+    # ── Step-1 handler: IRAS two-step login ──────────────────────────────────
+    # IRAS changed its login to a two-step flow: step 1 shows only the dealer
+    # ID field + "Next" button; password and CAPTCHA appear only after "Next"
+    # is clicked.  If no password field is visible after the form-ready wait,
+    # assume we are on step 1: fill the username and click "Next", then wait
+    # for step 2 (password + CAPTCHA) to render before starting attempt loop.
+    try:
+        _pw_now = await page.locator("input[type='password']").first.is_visible(timeout=1000)
+    except Exception:
+        _pw_now = False
+
+    if not _pw_now:
+        print("  [login] Step-1 detected (no password field) — filling username and clicking Next")
+        for _s1_sel in ["input[name='username']", "input[name='userId']",
+                        "input[placeholder*='Username']", "input[placeholder*='User']"]:
+            _s1_loc = page.locator(_s1_sel).first
+            try:
+                if await _s1_loc.count() > 0 and await _s1_loc.is_visible(timeout=1000):
+                    await _s1_loc.fill(IRAS_USERNAME)
+                    break
+            except Exception:
+                continue
+        _next_btn = await _find(page, [
+            "button:has-text('Next')", "[role='button']:has-text('Next')",
+            "input[value='Next']", "button[type='submit']",
+        ])
+        if _next_btn:
+            await _next_btn.click()
+            try:
+                await page.wait_for_selector("input[type='password']", timeout=10_000)
+                print("  [login] Step-2 rendered (password field visible)")
+            except PlaywrightTimeout:
+                print("  [login] WARNING: password field did not appear after clicking Next")
+        else:
+            print("  [login] WARNING: Next button not found on step-1 page")
+
     # ── Autonomous attempts ───────────────────────────────────────────────────
     for attempt in range(1, MAX_LOGIN_ATTEMPTS + 1):
         print(f"  [login] Attempt {attempt}/{MAX_LOGIN_ATTEMPTS}")
@@ -455,6 +491,32 @@ async def _autonomous_login(
                     print(f"  [login] Retry navigation failed: {safe_exc_name(_retry_nav_exc)}")
                     return False
                 await page.wait_for_timeout(800)
+
+        # If a retry navigated back to LOGIN_URL, we may be on step 1 again.
+        try:
+            _pw_retry = await page.locator("input[type='password']").first.is_visible(timeout=500)
+        except Exception:
+            _pw_retry = False
+        if not _pw_retry:
+            for _rs1_sel in ["input[name='username']", "input[name='userId']",
+                             "input[placeholder*='Username']", "input[placeholder*='User']"]:
+                _rs1_loc = page.locator(_rs1_sel).first
+                try:
+                    if await _rs1_loc.count() > 0 and await _rs1_loc.is_visible(timeout=500):
+                        await _rs1_loc.fill(IRAS_USERNAME)
+                        break
+                except Exception:
+                    continue
+            _rs1_next = await _find(page, [
+                "button:has-text('Next')", "[role='button']:has-text('Next')",
+                "input[value='Next']", "button[type='submit']",
+            ])
+            if _rs1_next:
+                await _rs1_next.click()
+                try:
+                    await page.wait_for_selector("input[type='password']", timeout=10_000)
+                except PlaywrightTimeout:
+                    pass
 
         # Screenshot CAPTCHA image only.
         # Selector list is tried in order; first visible match wins.
