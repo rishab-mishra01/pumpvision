@@ -824,8 +824,31 @@ async def run(
 
     headless = os.environ.get("PAYTM_HEADLESS", "true").lower() != "false"
 
+    # Proxy config — reads PAYTM_PROXY_* env vars, falls back to IRAS_PROXY_*.
+    # Paytm's accounts.paytm.com OAuth SDK shows an error page from non-India IPs.
+    _paytm_proxy_server = (
+        os.environ.get("PAYTM_PROXY_SERVER", "").strip()
+        or os.environ.get("IRAS_PROXY_SERVER", "").strip()
+    )
+    _paytm_proxy_cfg: dict | None = None
+    if _paytm_proxy_server:
+        _paytm_proxy_cfg = {"server": _paytm_proxy_server}
+        _pu = (
+            os.environ.get("PAYTM_PROXY_USERNAME", "").strip()
+            or os.environ.get("IRAS_PROXY_USERNAME", "").strip()
+        )
+        _pp = (
+            os.environ.get("PAYTM_PROXY_PASSWORD", "").strip()
+            or os.environ.get("IRAS_PROXY_PASSWORD", "").strip()
+        )
+        if _pu:
+            _paytm_proxy_cfg["username"] = _pu
+        if _pp:
+            _paytm_proxy_cfg["password"] = _pp
+    print(f"  [Paytm] proxy : {'yes' if _paytm_proxy_cfg else 'no'}")
+
     async with async_playwright() as p:
-        context = await p.chromium.launch_persistent_context(
+        _ctx_kw: dict = dict(
             user_data_dir=str(profile_dir),
             headless=headless,
             accept_downloads=True,
@@ -841,6 +864,9 @@ async def run(
                 "--disable-dev-shm-usage",
             ],
         )
+        if _paytm_proxy_cfg is not None:
+            _ctx_kw["proxy"] = _paytm_proxy_cfg
+        context = await p.chromium.launch_persistent_context(**_ctx_kw)
         # Mask the headless fingerprint — removes navigator.webdriver which
         # bot-detection checks use to identify automated browsers.
         await context.add_init_script(
