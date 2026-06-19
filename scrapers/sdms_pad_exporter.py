@@ -816,8 +816,31 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
     profile_dir = STATE_PATH.parent / "sdms_profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
 
+    # Proxy config — reads SDMS_PROXY_* env vars, falls back to IRAS_PROXY_* if unset.
+    # Required on Railway (US West) since sdms.indianoil.in is India-only.
+    _proxy_server = (
+        os.environ.get("SDMS_PROXY_SERVER", "").strip()
+        or os.environ.get("IRAS_PROXY_SERVER", "").strip()
+    )
+    _proxy_cfg: dict | None = None
+    if _proxy_server:
+        _proxy_cfg = {"server": _proxy_server}
+        _pu = (
+            os.environ.get("SDMS_PROXY_USERNAME", "").strip()
+            or os.environ.get("IRAS_PROXY_USERNAME", "").strip()
+        )
+        _pp = (
+            os.environ.get("SDMS_PROXY_PASSWORD", "").strip()
+            or os.environ.get("IRAS_PROXY_PASSWORD", "").strip()
+        )
+        if _pu:
+            _proxy_cfg["username"] = _pu
+        if _pp:
+            _proxy_cfg["password"] = _pp
+    print(f"  [SDMS] proxy : {'yes' if _proxy_cfg else 'no'}")
+
     async with async_playwright() as p:
-        context = await p.chromium.launch_persistent_context(
+        _ctx_kw: dict = dict(
             user_data_dir=str(profile_dir),
             headless=headless,
             accept_downloads=False,
@@ -833,6 +856,9 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
                 "--disable-dev-shm-usage",
             ],
         )
+        if _proxy_cfg is not None:
+            _ctx_kw["proxy"] = _proxy_cfg
+        context = await p.chromium.launch_persistent_context(**_ctx_kw)
         await context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )

@@ -213,12 +213,17 @@ async def do_login(page, context) -> bool:
 
     # Navigate directly to the login page
     await page.goto(PAYTM_LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+    # Wait for the page JS to finish loading (iframe injection happens after JS runs)
+    try:
+        await page.wait_for_load_state("networkidle", timeout=20_000)
+    except PlaywrightTimeout:
+        pass  # networkidle may not fire — proceed anyway
     await page.wait_for_timeout(2_000)
     print(f"  [login] Login page URL: {page.url}")
 
     # Wait for the login iframe to load (accounts.paytm.com/oauth-js-sdk)
     login_frame = None
-    for _ in range(30):   # poll up to 30s
+    for _ in range(60):   # poll up to 60s
         for frame in page.frames:
             if "accounts.paytm.com" in frame.url:
                 login_frame = frame
@@ -233,19 +238,34 @@ async def do_login(page, context) -> bool:
         login_frame = page
 
     print(f"  [login] Login frame: {login_frame.url if hasattr(login_frame, 'url') else 'main'}")
+    print(f"  [login] Frames on page: {[f.url for f in page.frames]}")
 
-    # Wait for the email input to appear inside the frame
+    # Wait for the email input to appear inside the frame (up to 90s)
+    email_appeared = False
     try:
         await login_frame.wait_for_selector(
             "input[placeholder='Enter your Mobile Number or Email']",
-            timeout=30_000,
+            timeout=90_000,
         )
+        email_appeared = True
     except PlaywrightTimeout:
         try:
-            await login_frame.wait_for_selector("input:visible", timeout=15_000)
+            await login_frame.wait_for_selector("input:visible", timeout=30_000)
+            email_appeared = True
         except PlaywrightTimeout:
-            print("  [login] ERROR: Login form did not render within 45s")
-            return False
+            pass
+
+    if not email_appeared:
+        # Log diagnostic info before giving up
+        try:
+            visible_text = await login_frame.locator("body").inner_text()
+            print(f"  [login] Frame body at timeout: {visible_text[:400]!r}")
+            all_inputs = await login_frame.locator("input").all_text_contents()
+            print(f"  [login] Inputs in frame: {all_inputs}")
+        except Exception:
+            pass
+        print("  [login] ERROR: Login form did not render within 120s")
+        return False
 
     # Fill email / mobile
     email_selectors = [
