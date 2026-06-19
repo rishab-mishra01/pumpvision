@@ -364,25 +364,49 @@ async def navigate_to_pad_statement(page, context):
 
     await page.wait_for_timeout(1_000)
 
-    # Click "Account" heading to expand submenu
+    # Print current URL + page title for diagnostics
+    try:
+        print(f"  [nav] URL   : {page.url}")
+        print(f"  [nav] Title : {await page.title()}")
+    except Exception:
+        pass
+
+    # Click "Account" heading to expand submenu — retry with increasing waits
     account_selectors = [
         "a:has-text('Account')", "span:has-text('Account')",
         "li:has-text('Account')", "text=Account",
     ]
     account_clicked = False
-    for sel in account_selectors:
-        try:
-            loc = page.locator(sel).first
-            if await loc.count() > 0 and await loc.is_visible(timeout=3_000):
-                await loc.click()
-                account_clicked = True
-                print("  [nav] 'Account' clicked")
-                break
-        except Exception:
-            continue
+    for nav_attempt in range(1, 4):
+        for sel in account_selectors:
+            try:
+                loc = page.locator(sel).first
+                if await loc.count() > 0 and await loc.is_visible(timeout=8_000):
+                    await loc.click()
+                    account_clicked = True
+                    print("  [nav] 'Account' clicked")
+                    break
+            except Exception:
+                continue
+        if account_clicked:
+            break
+        if nav_attempt < 3:
+            print(f"  [nav] 'Account' not visible (attempt {nav_attempt}/3) — waiting 5s")
+            await page.wait_for_timeout(5_000)
+            # Log visible text for diagnostics
+            try:
+                body = await page.locator("body").inner_text()
+                print(f"  [nav] Body excerpt: {body[:300]!r}")
+            except Exception:
+                pass
 
     if not account_clicked:
-        print("  [nav] ERROR: 'Account' menu item not found")
+        print("  [nav] ERROR: 'Account' menu item not found after 3 attempts")
+        try:
+            body = await page.locator("body").inner_text()
+            print(f"  [nav] Full body text: {body[:1000]!r}")
+        except Exception:
+            pass
         await page.screenshot(path=str(OUTPUT_DIR / "debug_nav_account.png"))
         raise RuntimeError("Could not find 'Account' nav item")
 

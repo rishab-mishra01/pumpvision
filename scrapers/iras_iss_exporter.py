@@ -280,8 +280,8 @@ async def set_as_per_actual(page):
 async def navigate_to_iss(page, shift_date: str = SHIFT_DATES[0]):
     """
     1. Click FCC Data in the left nav
-    2. Click the ... overflow tab
-    3. Click Issue(ISS) in the popup
+    2. Wait for any tab to appear (panel rendered)
+    3. Try Issue(ISS) directly; fall back to overflow menu
     4. If shift_date is older than 7 days, click the archive toggle
     5. Set As Per = Actual Transaction Date and Time
     """
@@ -291,18 +291,84 @@ async def navigate_to_iss(page, shift_date: str = SHIFT_DATES[0]):
         )
     except Exception:
         print("  [ISS] WARNING: FCC Data button not visible after 20s — proceeding anyway")
-    await page.get_by_role("button", name="FCC Data").click()
-    await page.wait_for_timeout(2000)
 
-    overflow = page.locator("button[role='tab']:has-text('...')")
-    await overflow.wait_for(state="visible", timeout=40_000)
-    await overflow.click()
-    await page.wait_for_timeout(1000)
+    for attempt in range(1, 4):
+        if attempt > 1:
+            await page.wait_for_timeout(3000)
+            try:
+                await page.get_by_role("button", name="FCC Data").wait_for(
+                    state="visible", timeout=15_000
+                )
+            except Exception:
+                pass
 
-    iss = page.locator("li.app-tab-list:has-text('Issue(ISS)')")
-    await iss.wait_for(state="visible", timeout=5_000)
-    await iss.click()
-    await page.wait_for_timeout(1500)
+        await page.get_by_role("button", name="FCC Data").click()
+
+        # Wait for the tab bar to render (any tab visible = panel ready)
+        try:
+            await page.locator("button[role='tab']").first.wait_for(
+                state="visible", timeout=40_000
+            )
+        except Exception:
+            print(f"  [ISS] FCC Data panel did not render (attempt {attempt}/3) — retrying")
+            await page.wait_for_timeout(2000)
+            continue
+
+        # Diagnostic: log all visible tab texts
+        try:
+            tab_texts = await page.locator("button[role='tab']").all_text_contents()
+            print(f"  [ISS] Visible tabs: {tab_texts}")
+        except Exception:
+            pass
+
+        await page.wait_for_timeout(500)
+
+        # Try Issue(ISS) as a direct tab first
+        for direct_sel in [
+            "button[role='tab']:has-text('Issue(ISS)')",
+            "button[role='tab']:has-text('ISS')",
+        ]:
+            try:
+                direct_tab = page.locator(direct_sel)
+                await direct_tab.wait_for(state="visible", timeout=3_000)
+                await direct_tab.click()
+                await page.wait_for_timeout(1000)
+                break
+            except Exception:
+                continue
+        else:
+            # Fall back to overflow menu — try multiple selectors
+            clicked_overflow = False
+            for ov_sel in [
+                "button[role='tab']:has-text('...')",
+                "button[role='tab']:has-text('…')",  # U+2026 ellipsis
+                "[role='tab']:has-text('...')",
+                "[role='tab']:has-text('…')",
+            ]:
+                try:
+                    ov = page.locator(ov_sel)
+                    if await ov.count() > 0:
+                        await ov.first.wait_for(state="visible", timeout=5_000)
+                        await ov.first.click()
+                        clicked_overflow = True
+                        break
+                except Exception:
+                    continue
+
+            if not clicked_overflow:
+                print(f"  [ISS] Overflow tab not found (attempt {attempt}/3) — retrying")
+                if attempt == 3:
+                    raise RuntimeError("Could not find ISS tab or overflow menu after 3 attempts")
+                await page.wait_for_timeout(2000)
+                continue
+
+            await page.wait_for_timeout(1000)
+            iss = page.locator("li.app-tab-list:has-text('Issue(ISS)')")
+            await iss.wait_for(state="visible", timeout=5_000)
+            await iss.click()
+            await page.wait_for_timeout(1500)
+
+        break  # navigation succeeded
 
     # Click archive toggle only when date is more than 7 days in the past
     days_old = (datetime.now() - datetime.strptime(shift_date, "%Y-%m-%d")).days
@@ -404,25 +470,92 @@ async def handle_session_expiry(page):
 # ─────────────────────────────────────────────
 
 async def navigate_to_shift_totalizer(page, shift_date: str):
-    """Navigate to FCC Data > Shift Totalizer Record(TOT) tab (via overflow '...' menu)."""
+    """Navigate to FCC Data > Shift Totalizer Record(TOT) tab."""
     try:
         await page.get_by_role("button", name="FCC Data").wait_for(
             state="visible", timeout=20_000
         )
     except Exception:
         print("  [ST] WARNING: FCC Data button not visible after 20s — proceeding anyway")
-    await page.get_by_role("button", name="FCC Data").click()
-    await page.wait_for_timeout(2000)
 
-    overflow = page.locator("button[role='tab']:has-text('...')")
-    await overflow.wait_for(state="visible", timeout=40_000)
-    await overflow.click()
-    await page.wait_for_timeout(1000)
+    for attempt in range(1, 4):
+        if attempt > 1:
+            await page.wait_for_timeout(3000)
+            try:
+                await page.get_by_role("button", name="FCC Data").wait_for(
+                    state="visible", timeout=15_000
+                )
+            except Exception:
+                pass
 
-    st = page.locator("li.app-tab-list:has-text('Shift Totalizer Record(TOT)')")
-    await st.wait_for(state="visible", timeout=5_000)
-    await st.click()
-    await page.wait_for_timeout(1500)
+        await page.get_by_role("button", name="FCC Data").click()
+
+        # Wait for the tab bar to render (any tab visible = panel ready)
+        try:
+            await page.locator("button[role='tab']").first.wait_for(
+                state="visible", timeout=40_000
+            )
+        except Exception:
+            print(f"  [ST] FCC Data panel did not render (attempt {attempt}/3) — retrying")
+            await page.wait_for_timeout(2000)
+            continue
+
+        # Diagnostic: log all visible tab texts
+        try:
+            tab_texts = await page.locator("button[role='tab']").all_text_contents()
+            print(f"  [ST] Visible tabs: {tab_texts}")
+        except Exception:
+            pass
+
+        await page.wait_for_timeout(500)
+
+        # Try Shift Totalizer as a direct tab first
+        for direct_sel in [
+            "button[role='tab']:has-text('Shift Totalizer Record(TOT)')",
+            "button[role='tab']:has-text('Shift Totalizer')",
+            "button[role='tab']:has-text('TOT')",
+        ]:
+            try:
+                direct_tab = page.locator(direct_sel)
+                await direct_tab.wait_for(state="visible", timeout=3_000)
+                await direct_tab.click()
+                await page.wait_for_timeout(1000)
+                break
+            except Exception:
+                continue
+        else:
+            # Fall back to overflow menu — try multiple selectors
+            clicked_overflow = False
+            for ov_sel in [
+                "button[role='tab']:has-text('...')",
+                "button[role='tab']:has-text('…')",  # U+2026 ellipsis
+                "[role='tab']:has-text('...')",
+                "[role='tab']:has-text('…')",
+            ]:
+                try:
+                    ov = page.locator(ov_sel)
+                    if await ov.count() > 0:
+                        await ov.first.wait_for(state="visible", timeout=5_000)
+                        await ov.first.click()
+                        clicked_overflow = True
+                        break
+                except Exception:
+                    continue
+
+            if not clicked_overflow:
+                print(f"  [ST] Overflow tab not found (attempt {attempt}/3) — retrying")
+                if attempt == 3:
+                    raise RuntimeError("Could not find Shift Totalizer tab or overflow menu after 3 attempts")
+                await page.wait_for_timeout(2000)
+                continue
+
+            await page.wait_for_timeout(1000)
+            st = page.locator("li.app-tab-list:has-text('Shift Totalizer Record(TOT)')")
+            await st.wait_for(state="visible", timeout=5_000)
+            await st.click()
+            await page.wait_for_timeout(1500)
+
+        break  # navigation succeeded
 
     days_old = (datetime.now() - datetime.strptime(shift_date, "%Y-%m-%d")).days
     if days_old > 7:

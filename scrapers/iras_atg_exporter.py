@@ -66,7 +66,23 @@ async def navigate_to_stock(page):
     except Exception:
         print("  [ATG] WARNING: FCC Data button not visible after 20s — proceeding anyway")
     await page.get_by_role("button", name="FCC Data").click()
-    await page.wait_for_timeout(2000)
+
+    # Wait for the tab bar to render (any tab visible = panel ready)
+    try:
+        await page.locator("button[role='tab']").first.wait_for(
+            state="visible", timeout=40_000
+        )
+    except Exception:
+        print("  [ATG] WARNING: FCC Data panel did not render after 40s — proceeding anyway")
+
+    # Diagnostic: log all visible tab texts
+    try:
+        tab_texts = await page.locator("button[role='tab']").all_text_contents()
+        print(f"  [ATG] Visible tabs: {tab_texts}")
+    except Exception:
+        pass
+
+    await page.wait_for_timeout(500)
 
     # Try direct tab first (visible without overflow)
     stock_tab = page.locator("button[role='tab']:has-text('Stock')")
@@ -74,10 +90,27 @@ async def navigate_to_stock(page):
         await stock_tab.wait_for(state="visible", timeout=4_000)
         await stock_tab.click()
     except Exception:
-        # Stock is in the overflow '...' menu — same pattern as Shift Totalizer
-        overflow = page.locator("button[role='tab']:has-text('...')")
-        await overflow.wait_for(state="visible", timeout=10_000)
-        await overflow.click()
+        # Stock is in the overflow menu — try multiple selectors
+        clicked_overflow = False
+        for ov_sel in [
+            "button[role='tab']:has-text('...')",
+            "button[role='tab']:has-text('…')",  # U+2026 ellipsis
+            "[role='tab']:has-text('...')",
+            "[role='tab']:has-text('…')",
+        ]:
+            try:
+                ov = page.locator(ov_sel)
+                if await ov.count() > 0:
+                    await ov.first.wait_for(state="visible", timeout=5_000)
+                    await ov.first.click()
+                    clicked_overflow = True
+                    break
+            except Exception:
+                continue
+
+        if not clicked_overflow:
+            raise RuntimeError("Could not find Stock tab or overflow menu")
+
         await page.wait_for_timeout(800)
         stock_item = page.locator("li.app-tab-list:has-text('Stock')")
         await stock_item.wait_for(state="visible", timeout=5_000)
