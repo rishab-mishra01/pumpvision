@@ -543,11 +543,50 @@ It is not historical completed-shift accounting data.
 
 ### Recommended Operational Runbook
 
-> **Full runbook (Railway-first):** `docs/scrape_scheduling_runbook.md`
+> **Production target changed (July 2026): India VPS, not Railway cron.** See *India VPS
+> Scraper Runner* below. The Railway-cron material in this section is retained for the web
+> service and as historical reference — do not configure new scraper crons on Railway.
+
+> **Full runbook (Railway-first, historical):** `docs/scrape_scheduling_runbook.md`
 > **Shared Railway start command:** `scripts/railway_entrypoint.py` — dispatches on `PUMPVISION_SERVICE_ROLE`
 > **Windows local fallback:** `scripts/run_completed_shift.ps1` · `scripts/run_atg_snapshot.ps1`
 
-**Production target: Railway cron services** (separate from the Flask web service).
+#### India VPS Scraper Runner (July 2026 — production path)
+
+IRAS, Paytm and SDMS are India-geo-restricted and fail from Railway's US egress IP
+(diagnosed July 2026; probe evidence in `scripts/vps_probe.py` runs). All scraper workloads
+run from an AWS Lightsail Mumbai VPS; Railway keeps only the Flask web app + PostgreSQL.
+The Bright Data proxy (`IRAS_PROXY_*` vars) is an emergency fallback only — never the default.
+
+| Item | Value |
+|------|-------|
+| Host | `ubuntu@65.2.38.210` (Lightsail Mumbai, ap-south-1) |
+| SSH key | `~/.ssh/LightsailDefaultKey-ap-south-1.pem` (owner's machine) |
+| Repo | `~/pumpvision` (read-only deploy key `pumpvision-vps`) |
+| Venv | `~/pumpvision/.venv` |
+| Data / logs | `/data` tree · logs at `/data/logs/` |
+| DB | Railway Postgres via **public** endpoint `hopper.proxy.rlwy.net:28578` (`railway.internal` does not resolve off-Railway) |
+| RAM | 911 MiB + 2G swap — Chromium swaps; scrapes are slow but complete |
+
+`.env` on the VPS holds all scraper secrets (verified identical to Railway's
+`completed-shift-cron` service variables, July 2026). `PAYTM_HEADLESS=true` on the VPS.
+
+Run commands are identical to the local ones below, executed on the VPS with
+`.venv/bin/python`. **Phase 1 verified (10 Jul 2026):** full `--completed-shift` run for
+op_date 2026-07-09 from the VPS wrote all four streams to Railway Postgres.
+
+**Operational cautions (learned July 2026):**
+- `--dry-run` is NOT a cheap preview — it performs the full browser scrape (Paytm login,
+  IRAS CAPTCHA, SDMS) and only skips DB writes. Budget the same time/RAM as a real run.
+- Never run two `daily_scrape.py` processes concurrently — overlapping runs interleave
+  portal sessions and can fail each other (observed: Paytm UI-state collision).
+- Launch long runs detached (`nohup ... > /data/logs/<name>.log 2>&1 &`) so SSH drops
+  don't kill them.
+
+VPS cron scheduling (completed-shift daily + ATG every 30 min) is **Phase 2 — not yet
+configured**. Until then, VPS runs are manual.
+
+**Railway cron (historical / superseded for scrapers):**
 `railway.json` sets `python -X utf8 scripts/railway_entrypoint.py` as the start command
 for all Railway services. The service role is controlled by `PUMPVISION_SERVICE_ROLE`:
 
@@ -804,7 +843,25 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ## Production Data Status (Railway PostgreSQL)
 
-Last updated: 23 May 2026.
+Last updated: 10 July 2026.
+
+### op_date 2026-07-09 — fully complete (first India VPS run)
+
+First end-to-end `--completed-shift` run from the India VPS (Phase 1 gate). All streams
+verified directly in Railway Postgres:
+
+| Item | Status |
+|------|--------|
+| Opening boundary 2026-07-09 | ✓ All 6 nozzles |
+| Closing boundary 2026-07-10 | ✓ All 6 nozzles |
+| Price for 2026-07-09 | ✓ All 4 products |
+| SDMS PAD for 2026-07-09 | ✓ Fleet ₹10,590.60 · CNG 2,120.41 kg |
+| Paytm | ✓ 592 rows imported (414 op_date 07-09 + 178 op_date 07-10) |
+
+Open observation: 178 of the 592 Paytm rows were assigned `operational_date = 2026-07-10`
+although the CSV covered the 2026-07-09 shift window (06:00 → 05:59). This is the importer's
+existing date-assignment logic, not a VPS issue — review if cash reconciliation ever looks
+off by roughly the post-midnight POS amount.
 
 ### op_date 2026-05-21 — fully verified
 
@@ -858,8 +915,10 @@ To populate ATG (run separately — tank stock is a live snapshot, not historica
 python -X utf8 scrapers/daily_scrape.py --atg-only
 ```
 
-**Automated scheduled scraping is not live on Railway.** All scraper runs are currently
-manual (local machine → Railway DB via `DATABASE_URL` env var).
+**Automated scheduled scraping is not yet live.** Scraper runs are currently manual, executed
+on the India VPS (or the local machine as fallback) against Railway Postgres. VPS cron
+scheduling is Phase 2 of the India-runner migration. Railway cron for scrapers is
+superseded — see *India VPS Scraper Runner*.
 
 ---
 
@@ -1314,3 +1373,16 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Automated Paytm ingestion | Stage 2 |
 | Full ISS + delivery scraper + variance | Stage 3 |
 | Anomaly detection, P&L, Phase 2 features | Stage 3 |
+
+## Agentic Routing (project override)
+
+The fable-advisor orchestration skill is active — all rules apply except one substitution:
+- Routine lane: `implementer` (Sonnet 4.6) replaces `grok-implementer` (Grok CLI not installed)
+- Subtle lane: `implementer-opus` (Opus 4.8) for tasks where a Sonnet miss is expensive
+- Cross-vendor lane: `codex-implementer` (GPT-5.6 Sol) — unchanged
+- Judgment lane: `fable-advisor` (Fable 5) — unchanged
+
+Spec contract (all five required on every delegation):
+Objective · Files · Interfaces · Constraints · Verification command
+
+Cost discipline: emit specs and decisions only. No narration. Delegate immediately.
