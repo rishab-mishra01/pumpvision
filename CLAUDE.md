@@ -1002,9 +1002,9 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | Railway cron entrypoints (`run_completed_shift.py` + `run_atg_snapshot.py`) | ✓ Built — Railway-first, cross-platform; Railway cron not yet configured in dashboard |
 | Windows fallback scripts (`run_completed_shift.ps1` + `run_atg_snapshot.ps1`) | ✓ Built — ASCII-safe, PowerShell 5 compatible; local/manual use only |
 | IRAS CAPTCHA diagnostics (auto-save on failure + `--iras-manual-captcha` fallback) | ✓ Built — artifacts at `data/iras/debug/login_<ts>/`; manual fallback optional |
-| Manager home checklist | Pending |
-| Manager log expense | Pending |
-| Manager record payment | **Next priority** |
+| Manager home checklist | ✓ Done — op-date-scoped checklist (dark theme), pending-payments awareness |
+| Manager log expense | ✓ Done (12 Jul 2026) — categories from `expense_categories` app setting |
+| Manager record payment | ✓ Done (12 Jul 2026) — Cash/Cheque confirm + decrement balance; Bank Transfer → pending_verification (owner confirm UI is Stage 2). `PaymentReceived.invoice_id` now nullable (migration `c3d4e5f6a1b2`) |
 
 ### Stage 2 — Complete Operational Layer
 
@@ -1423,7 +1423,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported |
 | Scraper scheduling — Railway cron entrypoints | ✓ Built — `scripts/run_completed_shift.py` + `run_atg_snapshot.py`; Railway cron not yet configured |
 | IRAS CAPTCHA diagnostics + manual fallback | ✓ Built — auto-save on failure; `--iras-manual-captcha` for terminal fallback |
-| Manager core (checklist, expenses, payments) | Stage 1 — **next priority** |
+| Manager core (checklist, expenses, payments) | ✓ Complete (12 Jul 2026) — Stage 1 manager branch done |
 | CNG shift close + `cng_shift_readings` | ✓ Complete |
 | Manager lube sales + invoicing | Stage 2 |
 | Bank transfer verification UI | Stage 2 |
