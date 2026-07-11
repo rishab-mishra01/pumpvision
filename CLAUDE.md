@@ -583,8 +583,44 @@ op_date 2026-07-09 from the VPS wrote all four streams to Railway Postgres.
 - Launch long runs detached (`nohup ... > /data/logs/<name>.log 2>&1 &`) so SSH drops
   don't kill them.
 
-VPS cron scheduling (completed-shift daily + ATG every 30 min) is **Phase 2 — not yet
-configured**. Until then, VPS runs are manual.
+**Phase 2 complete (11 Jul 2026): VPS cron is live.** Crontab for user `ubuntu`
+(VPS clock is UTC):
+
+```
+0 1 * * *    /home/ubuntu/pumpvision/scripts/vps_run_completed_shift.sh   # 06:30 IST
+*/30 * * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh
+```
+
+Both wrappers share a flock on `/data/locks/daily_scrape.lock` so two
+`daily_scrape.py` processes never overlap: completed-shift waits up to 25 min for the
+lock; ATG is non-blocking and logs `SKIPPED` if a run is in flight (verified live —
+cron ATG runs correctly skipped while a manual Paytm retry held the lock). Wrapper
+logs: `/data/logs/completed_shift_<op_date>.log` and `/data/logs/atg_<IST-date>.log`
+(30-day retention). The Python entrypoints (`scripts/run_completed_shift.py`,
+`run_atg_snapshot.py`) load the repo-root `.env` themselves, so the crontab carries
+no secrets.
+
+**Paytm portal changes discovered 11 Jul 2026 (all handled in `paytm_exporter.py`):**
+- The inline "Files to Download" panel is gone. Generated reports appear at
+  **Reports & Invoices > Reports** (`/next/reports?type=payments`), one row per
+  request with the requested duration and a presigned S3 CSV link (host
+  `*.s3.ap-south-1.amazonaws.com`). Step 7 polls that page, matching the exact
+  duration text — stale rows are never picked up.
+- A **"Merchant Configuration Issue — Please login again to continue"** modal can
+  overlay a blank dashboard on an authenticated URL (MID/filter selectors never
+  render). The scraper detects it, clicks "Login again" and re-logs-in. A fresh
+  login triggers an OTP to the owner's phone + email; the Gmail IMAP fetch handles
+  it automatically. Do not wipe `paytm_state.json` unless this modal recurs.
+- Paytm sometimes rejects the report request with a **"Something went wrong"** toast
+  (transient, server-side). The scraper now fails fast on it instead of polling 900s.
+- `is_logged_in()` accepts an authenticated `/next/*` URL as fallback evidence — on
+  this low-RAM VPS the MID text can miss its render window even when auth succeeded.
+
+**Paytm existence check hardened (11 Jul 2026):** `COMPLETE` now requires
+`max(transaction_datetime) >= op_date 20:00`, not just `COUNT(*) > 0`. Post-midnight
+spillover rows assigned to the next op_date would otherwise permanently skip the
+real full-shift download in scheduled runs. Earlier/partial data reports
+`INCOMPLETE` and is re-scraped (safe — import dedupes by `paytm_txn_id`).
 
 **Railway cron (historical / superseded for scrapers):**
 `railway.json` sets `python -X utf8 scripts/railway_entrypoint.py` as the start command
@@ -843,7 +879,21 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ## Production Data Status (Railway PostgreSQL)
 
-Last updated: 10 July 2026.
+Last updated: 11 July 2026.
+
+### op_date 2026-07-10 — complete except Price
+
+| Item | Status |
+|------|--------|
+| Opening boundary 2026-07-10 | ✓ (from Phase 1) |
+| Closing boundary 2026-07-11 | ✓ All 6 nozzles |
+| SDMS PAD 2026-07-10 | ✓ Fleet ₹15,395.80 (4 txns) · CNG 1,951.46 kg |
+| Paytm 2026-07-10 | ✓ 556 rows (06:09→23:31) + 187 spillover rows on op_date 07-11; no duplicates |
+| Price 2026-07-10 | ✗ **OPEN** — IRAS PRM portal returned an empty table twice; retry `--price-only --date 2026-07-10`. Rates static since 18 Jun (HS 101.16 · MS 116.02 · X2 125.36 · XG 106.41); without the row, `get_rsp()` falls back to LocalPrice |
+
+The 187 Paytm rows on op_date 2026-07-11 are correct per the 06:00 rule (post-midnight
+transactions belong to the next op_date's CSV window) and will NOT block the 07-11 cron
+download thanks to the hardened existence check.
 
 ### op_date 2026-07-09 — fully complete (first India VPS run)
 
@@ -915,10 +965,10 @@ To populate ATG (run separately — tank stock is a live snapshot, not historica
 python -X utf8 scrapers/daily_scrape.py --atg-only
 ```
 
-**Automated scheduled scraping is not yet live.** Scraper runs are currently manual, executed
-on the India VPS (or the local machine as fallback) against Railway Postgres. VPS cron
-scheduling is Phase 2 of the India-runner migration. Railway cron for scrapers is
-superseded — see *India VPS Scraper Runner*.
+**Automated scheduled scraping is LIVE on the India VPS (11 Jul 2026).** Completed-shift
+runs daily at 01:00 UTC (06:30 IST) and ATG every 30 minutes, via cron on the VPS —
+see *India VPS Scraper Runner*. Railway cron for scrapers is superseded. Next:
+Phase 3 — decommission the Railway cron services (`completed-shift-cron`, `atg-cron`).
 
 ---
 
