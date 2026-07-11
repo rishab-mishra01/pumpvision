@@ -46,7 +46,7 @@ git push
 | Item | Value |
 |------|-------|
 | Platform | Railway (paid tier) |
-| Live URL | `web-production-a1322.up.railway.app` |
+| Live URL | `pumpvision.up.railway.app` (old `web-production-a1322` domain is dead — 404) |
 | Database | PostgreSQL on Railway (SQLite locally) |
 | Auto-deploy | Every push to `main` |
 | PWA | manifest.json + icons at `pumpvision/static/` |
@@ -972,8 +972,10 @@ python -X utf8 scrapers/daily_scrape.py --atg-only
 
 **Automated scheduled scraping is LIVE on the India VPS (11 Jul 2026).** Completed-shift
 runs daily at 01:00 UTC (06:30 IST) and ATG every 30 minutes, via cron on the VPS —
-see *India VPS Scraper Runner*. Railway cron for scrapers is superseded. Next:
-Phase 3 — decommission the Railway cron services (`completed-shift-cron`, `atg-cron`).
+see *India VPS Scraper Runner*. Railway cron for scrapers is superseded.
+**Phase 3 complete (11 Jul 2026):** Railway cron services (`completed-shift-cron`,
+`atg-cron`) and the detached `atg-debug-data` volume deleted via Railway CLI. Railway
+now runs only the `web` service + Postgres.
 
 ---
 
