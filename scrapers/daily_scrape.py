@@ -88,7 +88,7 @@ import base64
 import io
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 from pathlib import Path
 
 # Duplicate fd 1 NOW, before any scraper imports touch sys.stdout.
@@ -1089,8 +1089,16 @@ _EXPECTED_PRICE_PRODUCTS: frozenset[str] = frozenset({'HS', 'MS', 'X2', 'XG'})
 
 def _acct_status_paytm(acct_date: str) -> str:
     """
-    Return 'COMPLETE' if PaytmTransaction rows already exist for acct_date
-    (matched on operational_date column), 'MISSING' otherwise.
+    Return 'COMPLETE' if PaytmTransaction rows exist for acct_date AND the
+    latest transaction is late enough in the shift to prove a full-shift CSV
+    was imported. 'INCOMPLETE' if rows exist but stop early (e.g. spillover
+    from an adjacent day's CSV, or a mid-shift partial download). 'MISSING'
+    if no rows at all.
+
+    Completeness cutoff: latest transaction_datetime >= acct_date 20:00.
+    A full-shift CSV (06:00 -> 05:59 next day) always contains evening
+    transactions at this outlet; a partial import does not. Re-scraping an
+    INCOMPLETE date is safe -- import is insert-or-skip by paytm_txn_id.
     """
     import sqlalchemy as _sa
 
@@ -1103,17 +1111,25 @@ def _acct_status_paytm(acct_date: str) -> str:
         eng  = _sa.create_engine(db_url, pool_pre_ping=False)
         meta = _sa.MetaData()
         pt   = _sa.Table("paytm_transactions", meta,
-                         _sa.Column("operational_date", _sa.Date))
+                         _sa.Column("operational_date", _sa.Date),
+                         _sa.Column("transaction_datetime", _sa.DateTime))
         with eng.connect() as conn:
-            count = conn.execute(
-                _sa.select(_sa.func.count()).select_from(pt)
+            count, latest = conn.execute(
+                _sa.select(_sa.func.count(),
+                           _sa.func.max(pt.c.transaction_datetime))
+                   .select_from(pt)
                    .where(pt.c.operational_date == _d)
-            ).scalar()
-        if count and count > 0:
-            print(f"  [db] Paytm  {acct_date}: {count} row(s) already in DB — COMPLETE")
+            ).one()
+        if not count:
+            print(f"  [db] Paytm  {acct_date}: no rows in paytm_transactions — MISSING")
+            return 'MISSING'
+        cutoff = datetime.combine(_d, dt_time(20, 0))
+        if latest is not None and latest >= cutoff:
+            print(f"  [db] Paytm  {acct_date}: {count} row(s), latest {latest} — COMPLETE")
             return 'COMPLETE'
-        print(f"  [db] Paytm  {acct_date}: no rows in paytm_transactions — MISSING")
-        return 'MISSING'
+        print(f"  [db] Paytm  {acct_date}: {count} row(s) but latest is {latest} "
+              f"(< {cutoff:%H:%M}) — INCOMPLETE, will re-scrape")
+        return 'INCOMPLETE'
     except Exception as e:
         print(f"  [db] WARNING: could not check paytm_transactions for {acct_date}: {e}")
         return 'MISSING'
