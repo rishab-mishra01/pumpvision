@@ -1079,6 +1079,20 @@ async def run(
                 await dl_report.wait_for(state="visible", timeout=5_000)
                 await dl_report.click()
                 await page.wait_for_timeout(3_000)
+
+                # Paytm rejects some report requests server-side with a toast
+                # (observed July 2026). Fail fast instead of polling for a
+                # report that was never queued.
+                try:
+                    toast = page.locator("text=Something went wrong").first
+                    if await toast.is_visible(timeout=2_000):
+                        print("  [ERROR] Paytm rejected the report request: "
+                              "'Something went wrong...' — server-side failure, retry later")
+                        if _dbg:
+                            await _dbg.capture(page, "step6_request_rejected")
+                        return False
+                except Exception:
+                    pass
                 print("  [OK] 'Download Report' clicked — CSV generating on server")
 
                 if _dbg:
@@ -1091,181 +1105,89 @@ async def run(
 
             await page.wait_for_timeout(1_000)
 
-            # ── Step 6b: Expand "Files to Download" panel ─────────────────────
-            # Paytm shows a collapsed panel at the bottom — clicking it reveals
-            # the ready-to-download file links in the DOM.
-            for _attempt in range(3):
-                try:
-                    panel = page.locator(
-                        "text=Files to Download, "
-                        "[class*='fileDownload'], [class*='file-download'], "
-                        "[class*='downloadPanel'], [class*='download-panel']"
-                    ).first
-                    if await panel.count() > 0 and await panel.is_visible(timeout=4_000):
-                        await panel.click()
-                        await page.wait_for_timeout(600)
-                        print("  [step 6b] Opened 'Files to Download' panel")
-                        break
-                except Exception:
-                    pass
-                await asyncio.sleep(2)
-
-            # ── Step 7: Poll for the NEW download link ─────────────────────────
-            # Paytm appends a new entry to the Files to Download panel when ready.
-            # Re-open the panel every 10s in case it collapsed, and look for any
-            # S3 / CSV href that wasn't present before the Download Report click.
+            # ── Step 7: Poll the Reports page for the generated CSV ────────────
+            # July 2026: Paytm removed the inline "Files to Download" panel.
+            # Generated reports now appear at Reports & Invoices > Reports
+            # (/next/reports?type=payments) — one row per request, showing the
+            # requested DURATION and a presigned S3 CSV link when ready.
+            # Match our exact duration text so stale rows are never picked up.
             #
             # poll_timeout arg (seconds): None → use module POLL_TIMEOUT (900 s default)
             #                             0    → wait indefinitely (Ctrl-C to abort)
             #                             N>0  → wait at most N seconds
+            dur_from    = start_dt.strftime("%d %b %Y")
+            dur_to      = end_dt.strftime("%d %b %Y")
+            reports_url = f"{PAYTM_DASHBOARD}/next/reports?type=payments"
+
             _poll_timeout_eff = POLL_TIMEOUT if poll_timeout is None else poll_timeout
             if _poll_timeout_eff == 0:
-                print(f"[step 7] Polling indefinitely (Ctrl-C to abort) for new S3 download link...")
+                print(f"[step 7] Polling Reports page indefinitely for duration '{dur_from} - {dur_to}'...")
             else:
-                print(f"[step 7] Polling up to {_poll_timeout_eff}s for new S3 download link...")
+                print(f"[step 7] Polling Reports page up to {_poll_timeout_eff}s for duration '{dur_from} - {dur_to}'...")
+
             download_href   = None
             _poll_start     = time.time()
-            _last_expand    = _poll_start
             _next_heartbeat = _poll_start + HEARTBEAT_INTERVAL
-            _expand_count   = 0   # how many times the panel was successfully re-clicked
+            _last_status    = "no matching row yet"
 
             while True:
-                _now     = time.time()
-                _elapsed = _now - _poll_start
-
-                # Timeout check — skipped when polling indefinitely
+                _elapsed = time.time() - _poll_start
                 if _poll_timeout_eff > 0 and _elapsed >= _poll_timeout_eff:
                     break
 
-                # Re-expand "Files to Download" panel every 10s in case it auto-collapsed
-                if _elapsed > 0 and (_now - _last_expand) >= 10:
-                    try:
-                        panel = page.locator(
-                            "text=Files to Download, "
-                            "[class*='fileDownload'], [class*='file-download'], "
-                            "[class*='downloadPanel'], [class*='download-panel']"
-                        ).first
-                        if await panel.count() > 0:
-                            await panel.click()
-                            await page.wait_for_timeout(300)
-                            _expand_count += 1
-                    except Exception:
-                        pass
-                    _last_expand = _now
-
                 try:
-                    result = await page.evaluate(f'''() => {{
-                        const known = new Set({list(pre_href_set)!r});
-                        const sels = [
-                            'a[download]',
-                            'a[href*="s3.amazonaws.com"]',
-                            'a[href*="s3-ap-southeast"]',
-                            'a[href*="s3-us-east"]',
-                            'a[href*=".csv"]',
-                        ];
-                        for (const sel of sels) {{
-                            for (const a of document.querySelectorAll(sel)) {{
-                                const href = a.getAttribute('href') || a.href;
-                                if (href && href.startsWith('http') && !known.has(href)) return href;
-                            }}
+                    await page.goto(reports_url, wait_until="domcontentloaded", timeout=30_000)
+                    await page.wait_for_timeout(4_000)
+                    row = await page.evaluate(f'''() => {{
+                        const from = {dur_from!r}, to = {dur_to!r};
+                        for (const tr of document.querySelectorAll("tr")) {{
+                            const t = tr.innerText || "";
+                            if (!t.includes(from) || !t.includes(to)) continue;
+                            const a = tr.querySelector("a[href*='.csv'], a[href*='amazonaws']");
+                            const href = a ? (a.getAttribute('href') || a.href) : null;
+                            return {{ text: t.trim().replace(/\\s+/g, ' ').slice(0, 160),
+                                      href: href && href.startsWith('http') ? href : null }};
                         }}
                         return null;
                     }}''')
-                    if result:
-                        download_href = result
-                        print(f"  [OK] New download link appeared after ~{int(_elapsed)}s")
-                        break
-                except Exception:
-                    pass
+                    if row:
+                        _last_status = f"row: {row['text']!r}"
+                        if row["href"]:
+                            download_href = row["href"]
+                            print(f"  [OK] Report ready after ~{int(_elapsed)}s — {row['text']}")
+                            break
+                        if "Failed" in row["text"]:
+                            print(f"  [ERROR] Paytm report generation FAILED: {row['text']}")
+                            break
+                except Exception as _e:
+                    _last_status = f"(poll error: {_e})"
 
-                await asyncio.sleep(POLL_INTERVAL)
+                await asyncio.sleep(max(POLL_INTERVAL, 15))
 
                 # ── Heartbeat ─────────────────────────────────────────────────
-                # Always: elapsed time + lightweight DOM status query.
-                # Debug only: full screenshot/HTML capture.
                 _now = time.time()
                 if _now >= _next_heartbeat:
                     _int_elapsed = int(_now - _poll_start)
-
-                    # Lightweight DOM query — panel row count, newest row text,
-                    # new candidate link count. Runs in all modes (cheap at 60s interval).
-                    _status_str = ""
-                    try:
-                        _hb = await page.evaluate(f'''() => {{
-                            const known = new Set({list(pre_href_set)!r});
-                            let panel = null;
-                            const panelSels = ["[class*='fileDownload']","[class*='file-download']",
-                                               "[class*='downloadPanel']","[class*='download-panel']"];
-                            for (const sel of panelSels) {{
-                                panel = document.querySelector(sel);
-                                if (panel) break;
-                            }}
-                            if (!panel) {{
-                                for (const el of document.querySelectorAll("div,section,aside,footer")) {{
-                                    if (el.textContent.includes("Files to Download")) {{
-                                        panel = el; break;
-                                    }}
-                                }}
-                            }}
-                            let rowCount = 0, lastRow = "";
-                            if (panel) {{
-                                const rows = panel.querySelectorAll(
-                                    "tr,li,[class*='row'],[class*='item']");
-                                rowCount = rows.length;
-                                if (rows.length)
-                                    lastRow = rows[rows.length-1].innerText.trim().slice(0,120);
-                            }}
-                            let newLinks = 0;
-                            const dlSels = ['a[download]','a[href*="s3.amazonaws.com"]',
-                                            'a[href*="s3-ap-southeast"]','a[href*="s3-us-east"]',
-                                            'a[href*=".csv"]'];
-                            for (const sel of dlSels) {{
-                                for (const a of document.querySelectorAll(sel)) {{
-                                    const href = a.getAttribute("href") || a.href;
-                                    if (href && href.startsWith("http") && !known.has(href))
-                                        newLinks++;
-                                }}
-                            }}
-                            return {{ panelFound: panel !== null, rowCount, lastRow, newLinks }};
-                        }}''')
-                        _status_str = (
-                            f"panel={'yes' if _hb['panelFound'] else 'NO'}  "
-                            f"rows={_hb['rowCount']}  "
-                            f"new_links={_hb['newLinks']}  "
-                            f"re-expanded={_expand_count}x"
-                        )
-                        if _hb["lastRow"]:
-                            _status_str += f"  last_row={_hb['lastRow']!r}"
-                    except Exception:
-                        _status_str = f"(DOM query failed)  re-expanded={_expand_count}x"
-
                     if _poll_timeout_eff == 0:
-                        print(f"  [Paytm] Still waiting... elapsed {_int_elapsed}s  {_status_str}")
+                        print(f"  [Paytm] Still waiting... elapsed {_int_elapsed}s  {_last_status}")
                     else:
                         _remaining = max(0, _poll_timeout_eff - _int_elapsed)
                         print(
                             f"  [Paytm] Still waiting... elapsed {_int_elapsed}s "
-                            f"({_remaining}s remaining)  {_status_str}"
+                            f"({_remaining}s remaining)  {_last_status}"
                         )
-
                     if _dbg:
                         await _dbg.capture(page, f"poll_{_int_elapsed}s")
-
                     _next_heartbeat = _now + HEARTBEAT_INTERVAL
 
             if not download_href:
-                # Last resort: if Paytm reused the one pre-existing link, use it
-                if len(pre_hrefs) == 1:
-                    print(f"  [WARN] No new link — using pre-existing link (Paytm may have reused it)")
-                    download_href = pre_hrefs[0]
-                else:
-                    try:
-                        await page.screenshot(path=str(OUTPUT_DIR / "debug_step7_timeout.png"))
-                    except Exception:
-                        pass
-                    if _dbg:
-                        await _dbg.capture(page, "final_failure")
-                        _dbg.log("[debug] FINAL FAILURE — no new download link detected")
+                try:
+                    await page.screenshot(path=str(OUTPUT_DIR / "debug_step7_timeout.png"))
+                except Exception:
+                    pass
+                if _dbg:
+                    await _dbg.capture(page, "final_failure")
+                    _dbg.log("[debug] FINAL FAILURE — report not ready or failed on Reports page")
 
             # ── Step 8: Download the CSV directly via S3 presigned URL ─────────
             downloaded = False
