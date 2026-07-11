@@ -24,6 +24,14 @@ import os
 import subprocess
 import sys
 
+# Load repo-root .env so cron/VPS runs get DATABASE_URL without shell-exporting
+# secrets. Same pattern as every scraper. No-op if the file does not exist
+# (e.g. Railway, where variables come from the service environment).
+from dotenv import load_dotenv
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(_REPO_ROOT, ".env"))
+
 # Fixed IST offset: UTC+05:30. Does not require zoneinfo or pytz.
 _IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
