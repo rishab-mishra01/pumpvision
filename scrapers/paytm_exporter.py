@@ -202,6 +202,32 @@ async def is_logged_in(page) -> bool:
     return False
 
 
+async def handle_merchant_config_modal(page, context) -> bool:
+    """
+    Detect and clear Paytm's 'Merchant Configuration Issue — Please login
+    again to continue' modal (observed July 2026). It overlays a blank
+    dashboard, so MID/filter selectors never appear. Clicking 'Login again'
+    ends the session; a fresh do_login() is required after it.
+
+    Returns True if the modal was seen (and a re-login was attempted).
+    """
+    try:
+        modal = page.locator("text=Merchant Configuration Issue").first
+        if not await modal.is_visible(timeout=2_000):
+            return False
+    except Exception:
+        return False
+    print("  [modal] 'Merchant Configuration Issue' detected — clicking 'Login again'")
+    try:
+        await page.locator("button:has-text('Login again')").first.click()
+        await page.wait_for_timeout(4_000)
+    except Exception as e:
+        print(f"  [modal] Could not click 'Login again': {e}")
+    if not await do_login(page, context):
+        print("  [modal] Re-login after modal failed")
+    return True
+
+
 # ─────────────────────────────────────────────
 # LOGIN
 # ─────────────────────────────────────────────
@@ -950,6 +976,17 @@ async def run(
 
             await page.wait_for_timeout(3_000)
             print(f"  [step 2] URL after nav: {page.url}")
+
+            # A 'Merchant Configuration Issue' modal can overlay a blank
+            # dashboard here; clear it (forces re-login) and re-navigate.
+            if await handle_merchant_config_modal(page, context):
+                await page.goto(
+                    f"{PAYTM_DASHBOARD}/next/transactions",
+                    wait_until="domcontentloaded",
+                    timeout=20_000,
+                )
+                await page.wait_for_timeout(3_000)
+                print(f"  [step 2] URL after modal re-login: {page.url}")
 
             # The transactions SPA can take far longer than the per-element
             # timeouts below to hydrate on low-RAM hosts (Chromium in swap).
