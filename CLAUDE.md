@@ -587,9 +587,14 @@ op_date 2026-07-09 from the VPS wrote all four streams to Railway Postgres.
 (VPS clock is UTC):
 
 ```
-0 1 * * *    /home/ubuntu/pumpvision/scripts/vps_run_completed_shift.sh   # 06:30 IST
-*/30 * * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh
+0 1 * * *     /home/ubuntu/pumpvision/scripts/vps_run_completed_shift.sh  # 06:30 IST
+30 0-18 * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh    # hourly, IST 06:00-00:00
 ```
+
+ATG runs hourly on the IST hour (UTC :30) with a deliberate blackout 01:00–05:00 IST —
+the outlet is closed, tanks are static, and the Tanks screen keeps showing the latest
+`tank_readings` row with its "AS OF" timestamp (midnight snapshot) until 06:00. Owner
+decision, 11 Jul 2026.
 
 Both wrappers share a flock on `/data/locks/daily_scrape.lock` so two
 `daily_scrape.py` processes never overlap: completed-shift waits up to 25 min for the
