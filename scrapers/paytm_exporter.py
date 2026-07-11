@@ -951,6 +951,18 @@ async def run(
             await page.wait_for_timeout(3_000)
             print(f"  [step 2] URL after nav: {page.url}")
 
+            # The transactions SPA can take far longer than the per-element
+            # timeouts below to hydrate on low-RAM hosts (Chromium in swap).
+            # Gate on the filter bar once, generously, before steps 3-4.
+            try:
+                await page.wait_for_selector(
+                    '[data-testid="select-trigger"], [data-select-container="true"]',
+                    timeout=90_000,
+                )
+                print("  [step 2] Transactions page ready (filter bar rendered)")
+            except PlaywrightTimeout:
+                print("  [WARN] Filter bar not rendered after 90s — proceeding anyway")
+
             # ── Step 3: Set Status filter to "All" ─────────────────────────────
             # Status trigger: [data-testid="select-trigger"]
             # "All" option:   li[data-item-value=""] inside [data-testid="select-ul-status"]
