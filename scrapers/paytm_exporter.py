@@ -178,9 +178,15 @@ def fmt_display(dt: datetime) -> str:
 # ─────────────────────────────────────────────
 
 async def is_logged_in(page) -> bool:
-    """Return True if the merchant dashboard is loaded (MID visible on page)."""
+    """Return True if the merchant dashboard is loaded.
+
+    Primary signal: the MID text visible on the page. Fallback: an
+    authenticated dashboard URL — Paytm serves /next/* routes only to a
+    logged-in session and bounces anonymous visits to /login, and the MID
+    text can render slowly (or not at all on some layouts) on low-RAM hosts.
+    """
     try:
-        await page.wait_for_selector("text=SHRIPE69428535177091", timeout=5_000)
+        await page.wait_for_selector("text=SHRIPE69428535177091", timeout=15_000)
         return True
     except PlaywrightTimeout:
         pass
@@ -189,6 +195,10 @@ async def is_logged_in(page) -> bool:
             return True
     except Exception:
         pass
+    url = page.url
+    if "dashboard.paytm.com" in url and "/next/" in url and "/login" not in url:
+        print(f"  [login] MID text not found, but URL is an authenticated route: {url}")
+        return True
     return False
 
 
