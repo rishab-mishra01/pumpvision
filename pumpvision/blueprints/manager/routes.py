@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-from flask import Blueprint, render_template
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from pumpvision.decorators import manager_required
 from pumpvision.services.operational import get_operational_date
+
+DEFAULT_EXPENSE_CATEGORIES = ["Staff", "Maintenance", "Utilities", "Supplies", "Misc"]
 
 manager_bp = Blueprint("manager", __name__)
 
@@ -92,25 +94,161 @@ def lube():
     return render_template("manager/coming_soon.html", feature="Log Lube Sale")
 
 
-@manager_bp.route("/expense/")
+def _expense_categories():
+    from pumpvision.models import AppSetting
+
+    setting = AppSetting.query.get("expense_categories")
+    if not setting or not setting.value.strip():
+        return list(DEFAULT_EXPENSE_CATEGORIES)
+    cats = [c.strip() for c in setting.value.split(",") if c.strip()]
+    return cats or list(DEFAULT_EXPENSE_CATEGORIES)
+
+
+@manager_bp.route("/expense/", methods=["GET", "POST"])
 @login_required
 @manager_required
 def expense():
-    return render_template("manager/coming_soon.html", feature="Log Expense")
+    from pumpvision.models import Expense, db
+
+    categories = _expense_categories()
+    today_op = get_operational_date()
+
+    form_values = {
+        "amount": "",
+        "category": categories[0] if categories else "",
+        "description": "",
+        "op_date": today_op.isoformat(),
+    }
+
+    if request.method == "POST":
+        raw_amount = request.form.get("amount", "").strip()
+        category = request.form.get("category", "").strip()
+        description = request.form.get("description", "").strip()[:200]
+        op_date_str = request.form.get("op_date", "").strip()
+
+        form_values.update({
+            "amount": raw_amount,
+            "category": category,
+            "description": description,
+            "op_date": op_date_str or today_op.isoformat(),
+        })
+
+        error = None
+        try:
+            amount = float(raw_amount)
+        except ValueError:
+            amount = None
+        if amount is None or amount <= 0:
+            error = "Enter a valid amount greater than zero."
+        elif category not in categories:
+            error = "Choose a valid category."
+        else:
+            try:
+                op_date = date.fromisoformat(op_date_str) if op_date_str else today_op
+            except ValueError:
+                op_date = today_op
+
+        if error:
+            flash(error, "error")
+        else:
+            db.session.add(Expense(
+                amount=amount,
+                category=category,
+                description=description or None,
+                op_date=op_date,
+                logged_by=current_user.id,
+            ))
+            db.session.commit()
+            flash(f"Expense logged: ₹{amount:,.2f} — {category}", "ok")
+            return redirect(url_for("manager.home"))
+
+    return render_template(
+        "manager/expense.html",
+        categories=categories,
+        values=form_values,
+    )
 
 
-@manager_bp.route("/fleet/")
-@login_required
-@manager_required
-def fleet():
-    return render_template("manager/coming_soon.html", feature="Log Fleet Card")
-
-
-@manager_bp.route("/payment/")
+@manager_bp.route("/payment/", methods=["GET", "POST"])
 @login_required
 @manager_required
 def payment():
-    return render_template("manager/coming_soon.html", feature="Record Payment")
+    from pumpvision.models import Customer, PaymentReceived, db
+
+    customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
+
+    form_values = {
+        "customer_id": "",
+        "amount": "",
+        "payment_mode": "Cash",
+        "reference_number": "",
+        "notes": "",
+    }
+
+    if request.method == "POST":
+        customer_id_raw = request.form.get("customer_id", "").strip()
+        raw_amount = request.form.get("amount", "").strip()
+        payment_mode = request.form.get("payment_mode", "").strip()
+        reference_number = request.form.get("reference_number", "").strip()[:50]
+        notes = request.form.get("notes", "").strip()
+
+        form_values.update({
+            "customer_id": customer_id_raw,
+            "amount": raw_amount,
+            "payment_mode": payment_mode or "Cash",
+            "reference_number": reference_number,
+            "notes": notes,
+        })
+
+        error = None
+        customer = None
+        try:
+            customer_id = int(customer_id_raw)
+        except ValueError:
+            customer_id = None
+        if customer_id is not None:
+            customer = Customer.query.filter_by(customer_id=customer_id, is_active=True).first()
+
+        try:
+            amount = float(raw_amount)
+        except ValueError:
+            amount = None
+
+        if not customer:
+            error = "Choose a valid customer."
+        elif amount is None or amount <= 0:
+            error = "Enter a valid amount greater than zero."
+        elif payment_mode not in ("Cash", "Cheque", "Bank Transfer"):
+            error = "Choose a valid payment mode."
+
+        if error:
+            flash(error, "error")
+        else:
+            status = "pending_verification" if payment_mode == "Bank Transfer" else "confirmed"
+            db.session.add(PaymentReceived(
+                invoice_id=None,
+                customer_id=customer.customer_id,
+                amount=amount,
+                payment_date=date.today(),
+                payment_mode=payment_mode,
+                reference_number=reference_number or None,
+                notes=notes or None,
+                status=status,
+            ))
+            if status == "confirmed":
+                customer.outstanding_balance = max(0.0, (customer.outstanding_balance or 0.0) - amount)
+            db.session.commit()
+            if status == "confirmed":
+                flash(f"Payment recorded: ₹{amount:,.2f} from {customer.company_name}", "ok")
+            else:
+                flash("Bank transfer recorded — awaiting owner verification", "ok")
+            return redirect(url_for("manager.home"))
+
+    return render_template(
+        "manager/payment.html",
+        customers=customers,
+        values=form_values,
+    )
 
 
 @manager_bp.route("/invoice/")

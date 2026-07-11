@@ -182,6 +182,9 @@ def _seed_data():
         # a valid RSP and was only seeded by a prior coding error.
         _cng_setting.value = "93.40"
 
+    if db.session.get(AppSetting, "expense_categories") is None:
+        db.session.add(AppSetting(key="expense_categories", value="Staff,Maintenance,Utilities,Supplies,Misc"))
+
     for nozzle_no in [7, 11, 15, 16, 17, 18]:
         key = f"pump_test_nozzle_{nozzle_no}"
         if db.session.get(AppSetting, key) is None:

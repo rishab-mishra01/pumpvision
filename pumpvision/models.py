@@ -110,7 +110,9 @@ class PaymentReceived(db.Model):
     __tablename__ = "payments_received"
 
     payment_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    invoice_id = db.Column(db.Integer, db.ForeignKey("invoices.invoice_id"), nullable=False)
+    # Nullable: manager-recorded payments (Stage 1) are customer-scoped, not tied to
+    # an invoice. Invoice-linked payments are a Stage 2 owner-side workflow.
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoices.invoice_id"), nullable=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.customer_id"), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     payment_date = db.Column(db.Date, nullable=False)
