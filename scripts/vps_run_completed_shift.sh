@@ -8,6 +8,10 @@
 # Serializes against every other daily_scrape.py run via a shared flock --
 # concurrent runs interleave portal sessions and can fail each other.
 # Waits up to 25 minutes for an in-flight ATG snapshot to finish.
+#
+# On failure, retries up to 2 more times after a 10-minute pause. IRAS CAPTCHA
+# rejections are transient and a fresh session usually succeeds; re-runs are
+# cheap because already-complete sources skip via the DB existence checks.
 set -u
 
 REPO="$HOME/pumpvision"
@@ -20,15 +24,27 @@ mkdir -p "$LOG_DIR" "$LOCK_DIR"
 OP_DATE="$(TZ=Asia/Kolkata date -d 'yesterday' +%F)"
 LOG="$LOG_DIR/completed_shift_${OP_DATE}.log"
 
+MAX_TRIES=3
+RETRY_DELAY_S=600
+
 {
-    echo "[wrapper] start $(date -u +'%F %T') UTC"
-    /usr/bin/flock -w 1500 "$LOCK" \
-        "$REPO/.venv/bin/python" -X utf8 "$REPO/scripts/run_completed_shift.py" "$@"
-    rc=$?
-    if [ "$rc" -ne 0 ]; then
-        echo "[wrapper] FAILED exit=$rc $(date -u +'%F %T') UTC (rc=1 with no scrape output above means the lock wait timed out)"
-    else
-        echo "[wrapper] done $(date -u +'%F %T') UTC"
-    fi
+    rc=1
+    for try in $(seq 1 "$MAX_TRIES"); do
+        echo "[wrapper] start try ${try}/${MAX_TRIES} $(date -u +'%F %T') UTC"
+        /usr/bin/flock -w 1500 "$LOCK" \
+            "$REPO/.venv/bin/python" -X utf8 "$REPO/scripts/run_completed_shift.py" "$@"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            echo "[wrapper] done $(date -u +'%F %T') UTC"
+            break
+        fi
+        echo "[wrapper] FAILED try ${try}/${MAX_TRIES} exit=$rc $(date -u +'%F %T') UTC (rc=1 with no scrape output above means the lock wait timed out)"
+        if [ "$try" -lt "$MAX_TRIES" ]; then
+            echo "[wrapper] retrying in $((RETRY_DELAY_S / 60)) min — already-complete sources will skip"
+            sleep "$RETRY_DELAY_S"
+        else
+            echo "[wrapper] giving up after ${MAX_TRIES} tries"
+        fi
+    done
     exit "$rc"
 } >> "$LOG" 2>&1

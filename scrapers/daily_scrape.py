@@ -266,9 +266,12 @@ async def _autonomous_login(
     """
     print(f"\n[login] Autonomous login — up to {MAX_LOGIN_ATTEMPTS} attempts")
 
-    # ── Inner: fill and submit the login form ─────────────────────────────────
-    async def _fill_and_submit(captcha_text: str) -> None:
-        """Fill Dealer role, credentials, captcha field and click submit."""
+    # ── Inner: fill role + credentials (everything except the CAPTCHA) ───────
+    # Kept separate from the CAPTCHA fill so the CAPTCHA image can be captured
+    # and solved AFTER these slow steps (dealer dropdown, password wait) — the
+    # image must be read as close to submit as possible or it can rotate stale.
+    async def _fill_credentials() -> None:
+        """Fill Dealer role, username and password (no CAPTCHA, no submit)."""
         await page.wait_for_timeout(800)
         try:
             native = page.locator("select").first
@@ -307,6 +310,12 @@ async def _autonomous_login(
         except Exception:
             print("  [login] WARNING: password fill failed (exception)")
 
+    # ── Inner: fill CAPTCHA text and click submit ─────────────────────────────
+    # Returns a screenshot of captcha_img taken immediately before the submit
+    # click (None if unavailable) so callers can detect a stale-CAPTCHA race:
+    # if these bytes differ from the image that was solved, the CAPTCHA rotated
+    # between solve and submit and the rejection is not a misread.
+    async def _fill_captcha_and_submit(captcha_text: str, captcha_img=None) -> "bytes | None":
         cap_input = await _find(page, [
             "input[name*='captcha']", "input[name*='Captcha']",
             "input[id*='captcha']", "input[id*='Captcha']",
@@ -326,12 +335,21 @@ async def _autonomous_login(
             "button:has-text('Login')", "button:has-text('Sign In')",
             "[role='button']:has-text('Login')",
         ])
+
+        at_submit_bytes = None
+        if captcha_img is not None:
+            try:
+                at_submit_bytes = await captcha_img.screenshot()
+            except Exception:
+                pass
+
         if submit:
             await submit.click()
         else:
             await page.keyboard.press("Enter")
 
         await page.wait_for_timeout(3000)
+        return at_submit_bytes
 
     # ── Inner: check if login succeeded (URL left /login) ────────────────────
     async def _check_success() -> bool:
@@ -536,6 +554,12 @@ async def _autonomous_login(
                 except PlaywrightTimeout:
                     print(f"  [login] Attempt {attempt}: WARNING — password field still not visible after retry")
 
+        # Fill role + credentials BEFORE touching the CAPTCHA. These steps take
+        # several seconds (dropdown, password wait) and any form re-render during
+        # them can rotate the CAPTCHA — solving it first risks submitting a stale
+        # answer that IRAS rejects as "Invalid capcha" even when read correctly.
+        await _fill_credentials()
+
         # Screenshot CAPTCHA image only.
         # Selector list is tried in order; first visible match wins.
         # "canvas" covers CAPTCHA implementations that render to canvas rather than <img>.
@@ -711,7 +735,11 @@ async def _autonomous_login(
         captcha_text = _solve_captcha(img_bytes)
         print(f"  [login] CAPTCHA solved: {captcha_text}")
 
-        await _fill_and_submit(captcha_text)
+        at_submit_bytes = await _fill_captcha_and_submit(captcha_text, captcha_img)
+        captcha_rotated = at_submit_bytes is not None and at_submit_bytes != img_bytes
+        if captcha_rotated:
+            print("  [login] WARNING: CAPTCHA image changed between solve and submit "
+                  "(stale-CAPTCHA race) — rejection is not a misread")
 
         if await _check_success():
             print("  [login] SUCCESS")
@@ -730,8 +758,13 @@ async def _autonomous_login(
                 f"attempt: {attempt}/{MAX_LOGIN_ATTEMPTS}\n"
                 f"timestamp: {_ts}\n"
                 f"predicted: {captcha_text}\n"
+                f"captcha_rotated_before_submit: {captcha_rotated}\n"
                 f"result: FAILED\n",
             )
+            if at_submit_bytes is not None:
+                _save_login_artifact(
+                    debug_dir, f"attempt_{attempt:02d}_captcha_at_submit.png",
+                    at_submit_bytes)
             try:
                 _after = await page.screenshot()
                 _save_login_artifact(
@@ -794,7 +827,8 @@ async def _autonomous_login(
             return False
 
         print(f"  [login] Submitting manual CAPTCHA: {manual_text}")
-        await _fill_and_submit(manual_text)
+        await _fill_credentials()
+        await _fill_captcha_and_submit(manual_text)
 
         if await _check_success():
             print("  [login] Manual CAPTCHA SUCCESS")
