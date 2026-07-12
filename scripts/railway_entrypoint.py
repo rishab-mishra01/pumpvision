@@ -57,18 +57,28 @@ def _dispatch_web() -> None:
         )
         sys.exit(1)
 
+    # 1 gthread worker, 4 threads: actual traffic is 2-3 known users, and RAM is
+    # what Railway bills — one app process with threads gives more concurrency
+    # than two sync workers at roughly half the resident memory.
+    # --timeout 60 gives headroom for ReportLab PDF generation and cold Postgres
+    # reconnects; with a single worker a timeout kill briefly drops the service.
+    gunicorn_args = [
+        "gunicorn", "wsgi:app",
+        "--bind", f"0.0.0.0:{port}",
+        "--worker-class", "gthread",
+        "--workers", "1",
+        "--threads", "4",
+        "--timeout", "60",
+        "--preload",
+    ]
+
     print("[railway_entrypoint] role=web")
     print(f"  port    : {port}")
-    print(f"  command : gunicorn wsgi:app --bind 0.0.0.0:{port} --workers 2 --preload")
+    print(f"  command : {' '.join(gunicorn_args)}")
     sys.stdout.flush()
 
     # Replace this process with gunicorn. Does not return on success.
-    os.execvp("gunicorn", [
-        "gunicorn", "wsgi:app",
-        "--bind", f"0.0.0.0:{port}",
-        "--workers", "2",
-        "--preload",
-    ])
+    os.execvp("gunicorn", gunicorn_args)
 
     # If execvp returns, the exec failed.
     print("[ERROR] os.execvp(gunicorn) failed -- is gunicorn installed?", file=sys.stderr)
