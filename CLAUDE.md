@@ -886,7 +886,16 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 Last updated: 11 July 2026.
 
-### op_date 2026-07-10 — complete except Price
+### op_date 2026-07-11 — fully complete (first automatic VPS cron day)
+
+Cron fired on schedule 12 Jul 06:30 IST: Paytm + SDMS succeeded; IRAS failed 3/3 CAPTCHAs
+(transient — attempts 2–3 were read correctly but rejected; stale-CAPTCHA race suspected
+and fixed same day, commit `818bf9c`). Same-day manual re-run of the wrapper filled Price
++ closing boundary 2026-07-12. All four streams verified in DB. SDMS note: fleet ₹2,240
+(3 txns), **no CGD/CNG billing row for 2026-07-11 on the PAD statement** — dashboard CNG
+for this date shows nothing until/unless SDMS posts it.
+
+### op_date 2026-07-10 — fully complete
 
 | Item | Status |
 |------|--------|
@@ -894,7 +903,7 @@ Last updated: 11 July 2026.
 | Closing boundary 2026-07-11 | ✓ All 6 nozzles |
 | SDMS PAD 2026-07-10 | ✓ Fleet ₹15,395.80 (4 txns) · CNG 1,951.46 kg |
 | Paytm 2026-07-10 | ✓ 556 rows (06:09→23:31) + 187 spillover rows on op_date 07-11; no duplicates |
-| Price 2026-07-10 | ✗ **OPEN** — IRAS PRM portal returned an empty table twice; retry `--price-only --date 2026-07-10`. Rates static since 18 Jun (HS 101.16 · MS 116.02 · X2 125.36 · XG 106.41); without the row, `get_rsp()` falls back to LocalPrice |
+| Price 2026-07-10 | ✓ Resolved 12 Jul — all 4 products in DB (landed alongside the 07-11 Price scrape). Rates static since 18 Jun (HS 101.16 · MS 116.02 · X2 125.36 · XG 106.41) |
 
 The 187 Paytm rows on op_date 2026-07-11 are correct per the 06:00 rule (post-midnight
 transactions belong to the next op_date's CSV window) and will NOT block the 07-11 cron
