@@ -884,7 +884,17 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ## Production Data Status (Railway PostgreSQL)
 
-Last updated: 11 July 2026.
+Last updated: 13 July 2026.
+
+### op_date 2026-07-12 — fully complete (first fully hands-off cron day)
+
+Cron fired 13 Jul 06:30 IST and finished 06:44 IST with zero manual intervention — the
+first clean end-to-end automatic day. The stale-CAPTCHA fix (commit `818bf9c`) is verified:
+IRAS login succeeded on **attempt 1**. All four streams confirmed directly in Railway
+Postgres: closing boundary 2026-07-13 all 6 nozzles · Price all 4 products · Paytm 403 rows
+(latest txn 23:00) · SDMS fleet ₹9,806.40 (3 txns). **No CGD/CNG billing row for the second
+day running** (07-11 and 07-12) — dashboard CNG shows nothing for these dates; watch whether
+CGD posts late or has stopped appearing on the PAD statement.
 
 ### op_date 2026-07-11 — fully complete (first automatic VPS cron day)
 
