@@ -954,9 +954,10 @@ for this date shows nothing until/unless SDMS posts it.
 | Paytm 2026-07-10 | ✓ 556 rows (06:09→23:31) + 187 spillover rows on op_date 07-11; no duplicates |
 | Price 2026-07-10 | ✓ Resolved 12 Jul — all 4 products in DB (landed alongside the 07-11 Price scrape). Rates static since 18 Jun (HS 101.16 · MS 116.02 · X2 125.36 · XG 106.41) |
 
-The 187 Paytm rows on op_date 2026-07-11 are correct per the 06:00 rule (post-midnight
-transactions belong to the next op_date's CSV window) and will NOT block the 07-11 cron
-download thanks to the hardened existence check.
+The 187 Paytm rows on op_date 2026-07-11 are correctly dated: they are next-day daytime
+(≥ 06:00 on 11 Jul) spillover included because Paytm's report filter ignores the requested
+time-of-day (see the closed observation under op_date 2026-07-09). They will NOT block the
+07-11 cron download thanks to the hardened existence check.
 
 ### op_date 2026-07-09 — fully complete (first India VPS run)
 
@@ -971,10 +972,17 @@ verified directly in Railway Postgres:
 | SDMS PAD for 2026-07-09 | ✓ Fleet ₹10,590.60 · CNG 2,120.41 kg |
 | Paytm | ✓ 592 rows imported (414 op_date 07-09 + 178 op_date 07-10) |
 
-Open observation: 178 of the 592 Paytm rows were assigned `operational_date = 2026-07-10`
-although the CSV covered the 2026-07-09 shift window (06:00 → 05:59). This is the importer's
-existing date-assignment logic, not a VPS issue — review if cash reconciliation ever looks
-off by roughly the post-midnight POS amount.
+Observation CLOSED (14 Jul 2026): 178 of the 592 Paytm rows were assigned
+`operational_date = 2026-07-10`. Explained — Paytm's custom-range report filter honours the
+dates but not the time-of-day component, so a report requested for "09 Jul 06:00 →
+10 Jul 05:59" and downloaded during the day on 10 Jul also included genuine 10-Jul daytime
+(≥ 06:00) transactions. `_parse_paytm_csv` applied the 06:00 rule correctly and filed them
+under op_date 07-10. Benign for cash reconciliation: post-midnight (00:00–05:59) rows
+correctly stay on the prior op_date, spillover rows are correctly dated for the next
+op_date, and the importer dedupes by `paytm_txn_id` when that day's own scrape runs. The
+one real risk this exposed — early spillover rows making `COUNT(*) > 0` and permanently
+skipping the next day's real download — was fixed 11 Jul 2026 by the hardened existence
+check (`max(transaction_datetime) >= op_date 20:00`). No further action needed.
 
 ### op_date 2026-05-21 — fully verified
 
