@@ -95,7 +95,11 @@ def tanks():
             "lit_count": lit_count,
         })
 
-    refresh_time = latest_ts.strftime("%H:%M") if latest_ts else None
+    # scraped_at is UTC (IRAS Stock tab reports UTC) — convert to IST for display
+    refresh_time = (
+        (latest_ts + timedelta(hours=5, minutes=30)).strftime("%H:%M")
+        if latest_ts else None
+    )
 
     return render_template(
         "owner/tanks.html",
