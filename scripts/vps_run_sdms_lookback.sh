@@ -24,6 +24,10 @@ LOCK="$LOCK_DIR/daily_scrape.lock"
 LOG_DIR="/data/logs"
 mkdir -p "$LOG_DIR" "$LOCK_DIR"
 
+# The SDMS DB-save step resolves the migrations/ folder relative to the cwd;
+# cron starts in $HOME, so run from the repo root.
+cd "$REPO" || exit 1
+
 # One log file per IST calendar day; the day's probes append to it.
 LOG="$LOG_DIR/sdms_lookback_$(TZ=Asia/Kolkata date +%F).log"
 find "$LOG_DIR" -name 'sdms_lookback_*.log' -mtime +30 -delete 2>/dev/null
