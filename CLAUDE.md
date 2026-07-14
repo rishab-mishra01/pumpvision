@@ -234,8 +234,9 @@ Full 48-window scrape deferred to Stage 3.
 `scrapers/iras_atg_exporter.py`. Scrapes IRAS Stock tab. Stores snapshots in `tank_readings`
 table every 30 minutes. Integrated into `daily_scrape.py` as Job 5.
 XG data: stored with `is_reliable = False`.
-**Production data backfill pending** — `tank_readings` has 0 rows on Railway until scraper
-is run locally against the Railway PostgreSQL `DATABASE_URL`.
+Production `tank_readings` is populated hourly by the India VPS ATG cron (live since
+11 Jul 2026). Note: IRAS reports the Stock date/time columns in **UTC** — `scraped_at`
+stores that value verbatim, so it is UTC, not IST.
 
 ### Paytm for Business
 `scrapers/paytm_exporter.py` — headless Playwright, stealth. Job 0 in `daily_scrape.py`.
