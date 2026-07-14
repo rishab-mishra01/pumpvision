@@ -917,12 +917,13 @@ check treats a zero-CNG row as `INCOMPLETE` for `SDMS_CNG_LOOKBACK_DAYS = 3`, an
 `cng_shift_readings` is empty — attendants never submit CNG readings at shift close, so
 there is no independent CNG cross-check until that habit starts.
 
-### op_date 2026-07-13 — complete except CNG (awaiting late CGD posting)
+### op_date 2026-07-13 — fully complete
 
 Cron fired 14 Jul 06:30 IST, finished 06:43 IST, fully hands-off (third clean day; IRAS
 attempt-1 login). Closing boundary 2026-07-14 all 6 nozzles · Price all 4 products · Paytm
-SUCCEEDED · SDMS fleet ₹3,880 (2 txns), no CGD row yet — the new lookback will pick up the
-CNG figure automatically within 3 days.
+SUCCEEDED · SDMS fleet ₹3,880 (2 txns). CNG (1,994.78 kg = ₹186,312) was captured the same
+afternoon by the first live SDMS lookback probe — the bill posted between 06:30 and 13:28
+IST, validating the probe design end-to-end.
 
 ### op_date 2026-07-12 — fully complete (first fully hands-off cron day)
 
