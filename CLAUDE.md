@@ -340,7 +340,16 @@ with `--dry-run`.
 |--------|--------------|-------------------|
 | Paytm | `paytm_transactions` | `COUNT(*) WHERE operational_date = D > 0` |
 | Price | `iras_prices` | `SELECT DISTINCT product` set = `{HS, MS, X2, XG}` |
-| SDMS | `sdms_summaries` | `COUNT(*) WHERE op_date = D > 0` |
+| SDMS | `sdms_summaries` | Row exists AND (`cng_kg_total > 0` OR date older than `SDMS_CNG_LOOKBACK_DAYS = 3`) |
+
+**SDMS CNG lookback (added 14 Jul 2026):** CGD Rewa posts its CNG billing row to the PAD
+statement **days after** the op_date (observed: 07-11 empty on 12 Jul, populated by 14 Jul).
+A `sdms_summaries` row with no CNG figure is `INCOMPLETE` for 3 days and re-scraped
+(idempotent upsert refreshes it); after 3 days a zero-CNG day is accepted as final →
+`COMPLETE`. `--completed-shift` additionally re-checks the 3 prior op_dates each run
+(lookback re-scrapes appear in the final summary; already-complete lookback dates are
+silent). To force a re-scrape of an older date, call
+`sdms_pad_exporter.run(target_date='YYYY-MM-DD')` directly — there is no CLI date flag.
 
 **Price completeness uses set logic, not row count.** A date with only HS and MS rows
 is `INCOMPLETE`, not `COMPLETE`. Duplicate rows do not cause a false pass.
@@ -589,7 +598,19 @@ op_date 2026-07-09 from the VPS wrote all four streams to Railway Postgres.
 ```
 0 1 * * *     /home/ubuntu/pumpvision/scripts/vps_run_completed_shift.sh  # 06:30 IST
 30 0-18 * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh    # hourly, IST 06:00-00:00
+0 7 * * 1-6   /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 12:30 IST CNG probe
+0 10 * * 1-6  /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 15:30 IST CNG probe
+35 11 * * 1-6 /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 17:05 IST CNG probe
 ```
+
+**SDMS CNG lookback probes (added 14 Jul 2026):** CGD Rewa posts op_date D's CNG billing
+row on D+1 between ~11:00–16:00 IST — never on Sunday (billing offices closed; Saturday's
+and Sunday's rows both post Monday). Three probes (12:30 / 15:30 / 17:05 IST, Mon–Sat)
+run `--sdms-only` over the last 3 op_dates so the CNG number lands at the earliest posting.
+Once a date's CNG figure is in DB (or a zero-CNG row ages past `SDMS_CNG_LOOKBACK_DAYS = 3`),
+the existence check reports COMPLETE and the probe costs three SELECTs — no browser.
+The 17:05 slot is deliberately offset from the 11:30 UTC ATG snapshot to avoid lock races.
+The morning completed-shift run also re-checks the same 3-day window as a safety net.
 
 ATG runs hourly on the IST hour (UTC :30) with a deliberate blackout 01:00–05:00 IST —
 the outlet is closed, tanks are static, and the Tanks screen keeps showing the latest
@@ -884,7 +905,24 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ## Production Data Status (Railway PostgreSQL)
 
-Last updated: 13 July 2026.
+Last updated: 14 July 2026.
+
+### CGD/CNG late-posting mystery RESOLVED (14 Jul 2026)
+
+The missing CNG rows for 07-11/07-12 were **late posting by CGD Rewa**, not a supply stop:
+direct re-scrapes on 14 Jul found CNG 2,340.58 kg (07-11) and 2,347.11 kg (07-12) — both
+now upserted in `sdms_summaries`. Permanent fix shipped in `daily_scrape.py`: SDMS existence
+check treats a zero-CNG row as `INCOMPLETE` for `SDMS_CNG_LOOKBACK_DAYS = 3`, and
+`--completed-shift` re-checks the 3 prior op_dates each run. Also learned:
+`cng_shift_readings` is empty — attendants never submit CNG readings at shift close, so
+there is no independent CNG cross-check until that habit starts.
+
+### op_date 2026-07-13 — complete except CNG (awaiting late CGD posting)
+
+Cron fired 14 Jul 06:30 IST, finished 06:43 IST, fully hands-off (third clean day; IRAS
+attempt-1 login). Closing boundary 2026-07-14 all 6 nozzles · Price all 4 products · Paytm
+SUCCEEDED · SDMS fleet ₹3,880 (2 txns), no CGD row yet — the new lookback will pick up the
+CNG figure automatically within 3 days.
 
 ### op_date 2026-07-12 — fully complete (first fully hands-off cron day)
 

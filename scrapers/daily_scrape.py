@@ -1227,10 +1227,20 @@ def _acct_status_price(acct_date: str) -> str:
         return 'MISSING'
 
 
+# CGD Rewa posts its CNG billing row to the PAD statement days after the op_date
+# (observed July 2026: 07-11 was empty on 12 Jul, populated by 14 Jul). A row with
+# no CNG figure is therefore re-scraped for this many days before zero is accepted.
+SDMS_CNG_LOOKBACK_DAYS = 3
+
+
 def _acct_status_sdms(acct_date: str) -> str:
     """
-    Return 'COMPLETE' if an SdmsSummary row already exists for acct_date
-    (matched on op_date column), 'MISSING' otherwise.
+    Return the DB status of the SdmsSummary row for acct_date (op_date column):
+      COMPLETE   — row exists with a CNG figure, or the date is older than
+                   SDMS_CNG_LOOKBACK_DAYS (zero-CNG day accepted as final)
+      INCOMPLETE — row exists but has no CNG figure and the date is recent;
+                   CGD posts late, so the PAD statement must be re-scraped
+      MISSING    — no row
     """
     import sqlalchemy as _sa
 
@@ -1243,17 +1253,26 @@ def _acct_status_sdms(acct_date: str) -> str:
         eng  = _sa.create_engine(db_url, pool_pre_ping=False)
         meta = _sa.MetaData()
         ss   = _sa.Table("sdms_summaries", meta,
-                         _sa.Column("op_date", _sa.Date))
+                         _sa.Column("op_date", _sa.Date),
+                         _sa.Column("cng_kg_total", _sa.Float))
         with eng.connect() as conn:
-            count = conn.execute(
-                _sa.select(_sa.func.count()).select_from(ss)
-                   .where(ss.c.op_date == _d)
-            ).scalar()
-        if count and count > 0:
-            print(f"  [db] SDMS   {acct_date}: row already in DB — COMPLETE")
+            row = conn.execute(
+                _sa.select(ss.c.cng_kg_total).where(ss.c.op_date == _d)
+            ).first()
+        if row is None:
+            print(f"  [db] SDMS   {acct_date}: no row in sdms_summaries — MISSING")
+            return 'MISSING'
+        _cng_kg = row[0] or 0.0
+        if _cng_kg > 0:
+            print(f"  [db] SDMS   {acct_date}: row in DB with CNG {_cng_kg:.2f} kg — COMPLETE")
             return 'COMPLETE'
-        print(f"  [db] SDMS   {acct_date}: no row in sdms_summaries — MISSING")
-        return 'MISSING'
+        _age_days = (datetime.now().date() - _d).days
+        if _age_days > SDMS_CNG_LOOKBACK_DAYS:
+            print(f"  [db] SDMS   {acct_date}: row in DB, no CNG, {_age_days} days old "
+                  f"— COMPLETE (zero-CNG day accepted)")
+            return 'COMPLETE'
+        print(f"  [db] SDMS   {acct_date}: row in DB but no CNG yet (CGD posts late) — INCOMPLETE")
+        return 'INCOMPLETE'
     except Exception as e:
         print(f"  [db] WARNING: could not check sdms_summaries for {acct_date}: {e}")
         return 'MISSING'
@@ -1918,11 +1937,29 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
             print(f"\n  [SKIP] IRAS session: Price and all boundaries already in DB")
 
         # ── SDMS — runs regardless of IRAS outcome ────────────────────────────
-        for acct_date in dates:
-            if _src_db.get(('sdms', acct_date)) == 'COMPLETE':
-                print(f"\n  [SKIP] SDMS {acct_date}: already in DB")
-                _acct_results[('sdms', acct_date)] = 'skipped'
+        # CGD Rewa posts its CNG billing row days late, so in addition to the
+        # requested op_date(s), re-check prior dates within the lookback window
+        # whose rows are still missing a CNG figure. Upsert is idempotent.
+        _sdms_dates = list(dates)
+        for _d in dates:
+            _base = datetime.strptime(_d, "%Y-%m-%d")
+            for _k in range(1, SDMS_CNG_LOOKBACK_DAYS + 1):
+                _lb = (_base - timedelta(days=_k)).strftime("%Y-%m-%d")
+                if _lb not in _sdms_dates:
+                    _sdms_dates.append(_lb)
+        for acct_date in sorted(_sdms_dates):
+            _st = _src_db.get(('sdms', acct_date))
+            if _st is None:
+                _st = _acct_status_sdms(acct_date)
+                _src_db[('sdms', acct_date)] = _st
+            if _st == 'COMPLETE':
+                if acct_date in dates:
+                    print(f"\n  [SKIP] SDMS {acct_date}: already in DB")
+                    _acct_results[('sdms', acct_date)] = 'skipped'
+                # Lookback dates that are COMPLETE stay out of the summary.
             else:
+                if acct_date not in dates:
+                    print(f"\n  [LOOKBACK] SDMS {acct_date}: no CNG figure yet — re-scraping")
                 ok = await _job_sdms(dry_run=dry_run, target_date=acct_date)
                 _acct_results[('sdms', acct_date)] = 'succeeded' if ok else 'failed'
 
