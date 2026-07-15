@@ -1500,11 +1500,42 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 
 ## Agentic Routing (project override)
 
-The fable-advisor orchestration skill is active — all rules apply except one substitution:
-- Routine lane: `implementer` (Sonnet 4.6) replaces `grok-implementer` (Grok CLI not installed)
-- Subtle lane: `implementer-opus` (Opus 4.8) for tasks where a Sonnet miss is expensive
-- Cross-vendor lane: `codex-implementer` (GPT-5.6 Sol) — unchanged
-- Judgment lane: `fable-advisor` (Fable 5) — unchanged
+The fable-advisor orchestration skill is active. Grok is permanently out of rotation for
+this project (not a missing-credential gap — do not reinstall/retry it). Lanes:
+
+- **Routine + cross-vendor lane (default for all implementation): `codex-implementer`**
+  (GPT-5.6 Sol). This replaces `grok-implementer` outright. Every well-specified
+  implementation task — the spec fully determines the outcome — goes here first.
+- **Subtle Claude-family lane: `implementer-opus`** (Opus 4.8). Use only when a Codex miss
+  would be expensive AND the task benefits from Claude-family judgment (concurrency,
+  security-sensitive code, subtle debugging) rather than a second vendor's opinion. Not
+  a default — codex-implementer is.
+- **Judgment lane: `fable-advisor`** (Fable 5). Read-only, verdict only, never implements.
+  Consult at commitment boundaries regardless of session model — a consult is a few
+  hundred words and costs cents; it is not the credential spend you are saving on.
+
+### Two operating modes — check session model before starting any nontrivial task
+
+**Session on Fable or Opus (full architect mode):** never type implementation code
+directly. Every task with a determinable outcome gets a five-part spec and goes to
+`codex-implementer`. Escalate to `implementer-opus` only with a stated reason. Consult
+`fable-advisor` before architecture/migration/refactor decisions and after two failed
+attempts on the same problem.
+
+**Session on Sonnet (cost-saving mode, current default — Fable credits reserved):** this
+session *is* the cheap lane; typing directly is correct, not a violation. The rule that
+still applies unconditionally: consult `fable-advisor` before committing to an
+architecture decision, a schema/migration, a refactor touching 3+ files, or after two
+failed attempts — a Sonnet session gets these judgment calls wrong more often, so this is
+where the discipline actually earns its keep. Do not skip it because "the session is
+already cheap."
+
+### Forcing function
+
+Before writing any code block longer than an interface signature: state out loud which
+mode is active and why this task is/isn't being delegated. If the answer is "I'm just
+going to type it" while on a Fable/Opus session, that is the exact failure this section
+exists to prevent — stop and delegate instead.
 
 Spec contract (all five required on every delegation):
 Objective · Files · Interfaces · Constraints · Verification command
