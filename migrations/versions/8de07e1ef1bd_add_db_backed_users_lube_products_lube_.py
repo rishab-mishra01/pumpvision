@@ -22,6 +22,8 @@ def upgrade():
         batch_op.add_column(sa.Column('status', sa.String(length=30), nullable=True, server_default='confirmed'))
         batch_op.add_column(sa.Column('verified_by', sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column('verified_at', sa.DateTime(), nullable=True))
+
+    with op.batch_alter_table('payments_received', schema=None) as batch_op:
         batch_op.create_foreign_key('fk_payments_received_verified_by_users', 'users', ['verified_by'], ['id'])
 
     # ### end Alembic commands ###
