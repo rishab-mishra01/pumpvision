@@ -87,11 +87,109 @@ def home():
     )
 
 
-@manager_bp.route("/lube/")
+@manager_bp.route("/lube/", methods=["GET", "POST"])
 @login_required
 @manager_required
 def lube():
-    return render_template("manager/coming_soon.html", feature="Log Lube Sale")
+    from pumpvision.models import Customer, LubeProduct, LubeTransaction, db
+
+    products = LubeProduct.query.filter_by(is_active=True).order_by(LubeProduct.name).all()
+    customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
+
+    form_values = {
+        "product_id": "",
+        "quantity": "",
+        "unit_price": "",
+        "payment_mode": "cash",
+        "customer_id": "",
+    }
+
+    if request.method == "POST":
+        product_id_raw = request.form.get("product_id", "").strip()
+        raw_quantity = request.form.get("quantity", "").strip()
+        raw_unit_price = request.form.get("unit_price", "").strip()
+        payment_mode = request.form.get("payment_mode", "").strip()
+        customer_id_raw = request.form.get("customer_id", "").strip()
+
+        form_values.update({
+            "product_id": product_id_raw,
+            "quantity": raw_quantity,
+            "unit_price": raw_unit_price,
+            "payment_mode": payment_mode or "cash",
+            "customer_id": customer_id_raw,
+        })
+
+        error = None
+        product = None
+        customer = None
+        try:
+            product_id = int(product_id_raw)
+        except ValueError:
+            product_id = None
+        if product_id is not None:
+            product = LubeProduct.query.filter_by(id=product_id, is_active=True).first()
+
+        try:
+            quantity = float(raw_quantity)
+        except ValueError:
+            quantity = None
+
+        try:
+            unit_price = float(raw_unit_price)
+        except ValueError:
+            unit_price = None
+
+        if not product:
+            error = "Choose a valid product."
+        elif quantity is None or quantity <= 0:
+            error = "Enter a valid quantity greater than zero."
+        elif unit_price is None or unit_price <= 0:
+            error = "Enter a valid unit price greater than zero."
+        elif payment_mode not in ("cash", "credit"):
+            error = "Choose a valid payment mode."
+        elif payment_mode == "credit":
+            try:
+                customer_id = int(customer_id_raw)
+            except ValueError:
+                customer_id = None
+            if customer_id is not None:
+                customer = Customer.query.filter_by(
+                    customer_id=customer_id,
+                    is_active=True,
+                ).first()
+            if not customer:
+                error = "Choose a valid customer for credit sale."
+
+        if error:
+            flash(error, "error")
+        else:
+            amount = round(quantity * unit_price, 2)
+            db.session.add(LubeTransaction(
+                product_id=product.id,
+                quantity=quantity,
+                unit_price=unit_price,
+                amount=amount,
+                payment_mode=payment_mode,
+                customer_id=customer.customer_id if customer else None,
+                op_date=get_operational_date(),
+                transaction_time=datetime.now(),
+                logged_by=current_user.id,
+            ))
+            if customer:
+                customer.outstanding_balance = (customer.outstanding_balance or 0.0) + amount
+            db.session.commit()
+            message = f"Lube sale logged: ₹{amount:,.2f} — {product.name}"
+            if customer:
+                message += f" ({customer.company_name})"
+            flash(message, "ok")
+            return redirect(url_for("manager.home"))
+
+    return render_template(
+        "manager/lube.html",
+        products=products,
+        customers=customers,
+        values=form_values,
+    )
 
 
 def _expense_categories():
