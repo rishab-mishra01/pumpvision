@@ -124,11 +124,17 @@ def create_app():
             return {"unread_notification_count": count}
         return {"unread_notification_count": 0}
 
-    with app.app_context():
-        db.create_all()
-        from flask_migrate import upgrade
-        upgrade()
-        _seed_data()
+    # Boot-time schema bootstrap + seeding. Skipped when PUMPVISION_SKIP_BOOTSTRAP
+    # is truthy, so a dev machine can point DATABASE_URL at an existing (e.g.
+    # production) database and read from it without create_all/upgrade/_seed_data
+    # mutating that database's schema or inserting local seed users into it.
+    # Unset by default: Railway and normal local runs are unchanged.
+    if os.environ.get("PUMPVISION_SKIP_BOOTSTRAP", "").strip().lower() not in ("1", "true", "yes"):
+        with app.app_context():
+            db.create_all()
+            from flask_migrate import upgrade
+            upgrade()
+            _seed_data()
 
     return app
 
