@@ -104,6 +104,32 @@ def _solve_captcha(image_bytes: bytes) -> str:
     return msg.content[0].text.strip()
 
 
+# Portal replaced the image CAPTCHA with a plain arithmetic question in Aug 2026
+# ("12 x 8 = ?", "27 + 5 = ?", "36 - 8 = ?"), re-randomised on every page load.
+_MATH_RE = re.compile(r"(\d+)\s*([x×*+\-/÷])\s*(\d+)\s*=")
+
+
+async def _solve_math_challenge(page):
+    """Return the answer to the security-verification sum, or None if absent."""
+    try:
+        text = await page.eval_on_selector("body", "e => e.innerText")
+    except Exception:
+        return None
+    m = _MATH_RE.search(text or "")
+    if not m:
+        return None
+    a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
+    if op in ("x", "×", "*"):
+        return a * b
+    if op == "+":
+        return a + b
+    if op == "-":
+        return a - b
+    if op in ("/", "÷"):
+        return a // b if b and a % b == 0 else None
+    return None
+
+
 # ─────────────────────────────────────────────
 # SESSION CHECK
 # ─────────────────────────────────────────────
@@ -230,24 +256,32 @@ async def do_login(page, context) -> bool:
 
         await page.wait_for_timeout(400)
 
-        # ── Solve CAPTCHA ─────────────────────────────────────────────────
-        captcha_img = await _find(page, [
-            "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
-            "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
-            "img[alt*='aptcha']", "img[name*='captcha']", "form img",
-        ])
-        if captcha_img is None:
-            print(f"  [login] ERROR: CAPTCHA image not found on attempt {attempt}")
-            if attempt == MAX_CAPTCHA_ATTEMPTS:
-                await page.screenshot(path=str(OUTPUT_DIR / "debug_login_no_captcha.png"))
-            continue
+        # ── Security verification ─────────────────────────────────────────
+        # Prefer the arithmetic question the portal switched to in Aug 2026;
+        # fall back to the image CAPTCHA if it ever returns.
+        math_answer = await _solve_math_challenge(page)
+        if math_answer is not None:
+            captcha_text = str(math_answer)
+            print(f"  [login] Math challenge solved: {captcha_text}")
+        else:
+            captcha_img = await _find(page, [
+                "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
+                "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
+                "img[alt*='aptcha']", "img[name*='captcha']", "form img",
+            ])
+            if captcha_img is None:
+                print(f"  [login] ERROR: no math question and no CAPTCHA image on attempt {attempt}")
+                if attempt == MAX_CAPTCHA_ATTEMPTS:
+                    await page.screenshot(path=str(OUTPUT_DIR / "debug_login_no_captcha.png"))
+                continue
 
-        img_bytes = await captcha_img.screenshot()
-        captcha_text = _solve_captcha(img_bytes)
-        print(f"  [login] CAPTCHA solved: {captcha_text!r}")
+            img_bytes = await captcha_img.screenshot()
+            captcha_text = _solve_captcha(img_bytes)
+            print(f"  [login] CAPTCHA solved: {captcha_text!r}")
 
         # ── Fill CAPTCHA input ────────────────────────────────────────────
         cap_input = await _find(page, [
+            "input[placeholder*='math question']", "input[placeholder*='answer']",
             "input[name*='captcha']", "input[name*='Captcha']",
             "input[id*='captcha']", "input[id*='Captcha']",
             "input[placeholder*='aptcha']", "input[placeholder*='APTCHA']",
