@@ -502,6 +502,25 @@ async def set_date_and_view(page, dd_mm_yyyy: str):
     """
     print(f"[date] Setting date range: {dd_mm_yyyy} → {dd_mm_yyyy}")
 
+    # Wait for the date inputs to exist before touching them. Without this the
+    # fill is skipped on a slow render, View is clicked with whatever range the
+    # page defaulted to, and step 4 then burns its full 30s waiting for a table
+    # that was never requested. One reload retry covers a lost/partial render.
+    for probe in (1, 2):
+        try:
+            await page.wait_for_selector("#fromdate", state="attached", timeout=15_000)
+            break
+        except PlaywrightTimeout:
+            if probe == 1:
+                print("  [date] date inputs absent — reloading page once")
+                try:
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(2_000)
+                except Exception as e:
+                    print(f"  [date] reload failed: {e}")
+            else:
+                print("  [date] WARN: date inputs still absent after reload")
+
     for field_id, label in [("fromdate", "From Date"), ("todate", "To Date")]:
         filled = False
 
