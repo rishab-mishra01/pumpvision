@@ -9,6 +9,33 @@ scraper architecture) and is considered required reading before making changes.
 
 ---
 
+## 0. Credentials & access checklist
+
+This is every credential or access item this setup could ask for, gathered in
+one place so you can request what you need up front instead of discovering
+gaps mid-step. **No actual secret values are in this file** — this is a list
+of what to obtain, not the values themselves. Each row says which step needs
+it and where it comes from.
+
+| # | Credential / access | Needed for | Source |
+|---|---|---|---|
+| 1 | GitHub access to `rishab-mishra01/pumpvision` | Step 2 (clone) | You already have this |
+| 2 | None — you invent these yourself | Step 4 (`.env` basics: `SECRET_KEY`, `OWNER_PASSWORD`, etc.) | Self-generated, no need to ask anyone |
+| 3 | `IRAS_USERNAME` / `IRAS_PASSWORD` | Step 4, scraper-only block | Ask Rishab — real IndianOil dealer portal login |
+| 4 | `ANTHROPIC_API_KEY` | Step 4, scraper-only block (CAPTCHA solving) | Ask Rishab, or use your own Anthropic key if you have one |
+| 5 | `PAYTM_EMAIL` / `PAYTM_PASSWORD` | Step 4, scraper-only block | Ask Rishab — real Paytm for Business login |
+| 6 | `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` | Step 4, scraper-only block (auto-reads Paytm OTP) | Ask Rishab — Google App Password, not the regular Gmail password |
+| 7 | `SDMS_USERNAME` / `SDMS_PASSWORD` | Step 4, scraper-only block | Ask Rishab — real SDMS PAD portal login |
+| 8 | Copy of `instance/pumpvision.db` (optional) | Step 5, only if you want populated dashboards instead of empty states | Ask Rishab |
+| 9 | Railway team invite | Step 8, only if deploying/checking production | Ask Rishab |
+| 10 | VPS SSH access (India Lightsail server) | Step 8, only if touching scraper cron jobs | Ask Rishab |
+
+Rows 3–7 (all scraper credentials) are only needed together, and only if
+you're actually working on scraper code — skip them entirely for app/UI work.
+Rows 9–10 are production-infrastructure access, not needed to develop locally.
+
+---
+
 ## 1. Prerequisites to install
 
 | Tool | Why | Check with |
@@ -32,6 +59,8 @@ Skip this if you're only doing app/UI work — not needed to run the Flask app i
 ---
 
 ## 2. Get the code
+
+> **Before this step:** you need GitHub access to `rishab-mishra01/pumpvision` (checklist item 1).
 
 ```
 git clone https://github.com/rishab-mishra01/pumpvision.git
@@ -64,6 +93,11 @@ pip install -r requirements.txt
 ---
 
 ## 4. Set up your `.env` file
+
+> **Before this step:** decide whether you're doing app/UI work or scraper work.
+> App/UI work needs nothing but values you invent yourself (checklist item 2).
+> Scraper work needs items 3–7 from you or Rishab before you can fill this file in fully —
+> request those now if you'll need them, so you're not blocked partway through.
 
 Copy the template:
 ```
@@ -113,6 +147,10 @@ out-of-band (not committed anywhere, ever — `.env` is gitignored).
 ---
 
 ## 5. Set up the database
+
+> **Before this step (optional):** if you want populated screens instead of
+> empty "no data" states, request a copy of `instance/pumpvision.db` from
+> Rishab now (checklist item 8) — otherwise skip straight to the command below.
 
 Local dev uses SQLite by default (no separate DB server needed). Apply the
 existing migrations:
@@ -181,6 +219,11 @@ server in a visible terminal you can kill cleanly — never detached/background.
 ---
 
 ## 8. Production / infrastructure access (not required to start developing)
+
+> **Before this step (only if relevant to you):** request a Railway team invite
+> (checklist item 9) if you'll deploy or inspect production, and/or VPS SSH
+> access (checklist item 10) if you'll touch scraper cron jobs. Neither is
+> needed just to develop and test locally.
 
 You don't need any of this to write code and test locally. Only relevant once
 you're deploying or debugging live data:
