@@ -578,8 +578,12 @@ The Bright Data proxy (`IRAS_PROXY_*` vars) is an emergency fallback only — ne
 | DB | Railway Postgres via **public** endpoint `hopper.proxy.rlwy.net:28578` (`railway.internal` does not resolve off-Railway) |
 | RAM | 911 MiB + 2G swap — Chromium swaps; scrapes are slow but complete |
 
-`.env` on the VPS holds all scraper secrets (verified identical to Railway's
-`completed-shift-cron` service variables, July 2026). `PAYTM_HEADLESS=true` on the VPS.
+`.env` on the VPS is the **only** home for scraper secrets. It was once verified
+identical to Railway's `completed-shift-cron` service variables (July 2026), but that
+service was deleted in Phase 3 — Railway runs only `web` + Postgres, and the `web`
+service carries no `SDMS_*`/`IRAS_*`/`PAYTM_*`/`GMAIL_*` variables at all (confirmed
+19 Aug 2026). Do not go looking for a second copy to keep in sync; there isn't one.
+`PAYTM_HEADLESS=true` on the VPS.
 
 Run commands are identical to the local ones below, executed on the VPS with
 `.venv/bin/python`. **Phase 1 verified (10 Jul 2026):** full `--completed-shift` run for
