@@ -26,7 +26,7 @@ import base64
 import io
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import openpyxl
@@ -54,6 +54,25 @@ PRODUCT_TANK_MAP = {
 
 TABLE_LOAD_TIMEOUT = 30   # seconds
 DOWNLOAD_TIMEOUT   = 30   # seconds
+
+# ── Stock tab date-time window ───────────────────────────────────────────────
+# The Stock tab filters on a date-time range that the portal pre-fills from the
+# BROWSER's clock. The VPS runs UTC while the portal's own Stock Date/Time values
+# are IST, so the default range asks for a slice 5h30m in the past. It returns
+# rows only when the site happened to post a reading in that stale window; the
+# rest of the time the grid renders its no-rows overlay and the snapshot records
+# nothing. Always set the range explicitly, in IST.
+IST                  = timezone(timedelta(hours=5, minutes=30))
+STOCK_DT_FMT         = "%d-%m-%Y %I:%M:%S %p"       # 22-08-2026 04:30:45 pm
+STOCK_DT_PLACEHOLDER = "DD-MM-YYYY hh:mm:ss aa"
+
+# How far back each snapshot looks. An hourly run only needs the newest reading,
+# but a window wider than the cron interval means a run that finds the portal
+# empty is healed by the next one rather than leaving a permanent hole — the
+# (scraped_at, tank_id) unique constraint makes the overlap a no-op.
+# Kept small on purpose: ag-Grid virtualises rows out of the DOM, and
+# _read_ag_grid only sees rendered ones. ~8 rows/hour at 4 tanks.
+ATG_WINDOW_HOURS = float(os.environ.get("ATG_WINDOW_HOURS", "2"))
 
 
 # ─────────────────────────────────────────────
@@ -121,6 +140,45 @@ async def navigate_to_stock(page):
 
     await page.wait_for_timeout(1500)
     print("[OK] Navigated to FCC Data > Stock")
+
+
+async def set_stock_window(page, hours: float | None = None) -> bool:
+    """
+    Set the Stock tab's from/to range explicitly, in IST.
+
+    Returns True if both fields were set and stuck. On any failure the portal's
+    own (UTC-derived, usually empty) default is left in place and False is
+    returned — the caller still tries, so a portal redesign degrades to the old
+    behaviour instead of aborting the run.
+    """
+    hours = ATG_WINDOW_HOURS if hours is None else hours
+    now_ist = datetime.now(IST)
+    # Small lead on the upper bound so a reading posted mid-run is still inside.
+    frm_s = (now_ist - timedelta(hours=hours)).strftime(STOCK_DT_FMT).lower()
+    to_s  = (now_ist + timedelta(minutes=10)).strftime(STOCK_DT_FMT).lower()
+
+    fields = page.locator(f"input[placeholder='{STOCK_DT_PLACEHOLDER}']")
+    try:
+        await fields.first.wait_for(state="visible", timeout=10_000)
+        n = await fields.count()
+        if n < 2:
+            print(f"  [ATG] WARNING: expected 2 date fields, found {n} — "
+                  f"leaving the portal default window")
+            return False
+        await fields.nth(0).fill(frm_s)
+        await fields.nth(1).fill(to_s)
+        got_frm = await fields.nth(0).input_value()
+        got_to  = await fields.nth(1).input_value()
+        if got_frm != frm_s or got_to != to_s:
+            print(f"  [ATG] WARNING: window did not stick — "
+                  f"asked {frm_s!r}..{to_s!r}, got {got_frm!r}..{got_to!r}")
+            return False
+        print(f"  [ATG] Window (IST, {hours:g}h): {got_frm} -> {got_to}")
+        return True
+    except Exception as exc:
+        print(f"  [ATG] WARNING: could not set date window "
+              f"({type(exc).__name__}) — using the portal default")
+        return False
 
 
 # ─────────────────────────────────────────────
@@ -378,7 +436,11 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
 
     await navigate_to_stock(page)
 
-    # Click Show to load the table (Stock tab may not need date inputs)
+    # The Stock tab IS date-filtered; the portal's default range is derived from
+    # the browser clock (UTC here) and does not match its IST data. Set it first.
+    await set_stock_window(page)
+
+    # Click Show to run the query for that range.
     try:
         show_btn = page.locator("button:has-text('Show')").first
         await show_btn.wait_for(state="visible", timeout=5_000)
@@ -403,6 +465,10 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
         return []
 
     print(f"  [ATG] {row_count} row(s) in Stock table")
+    if row_count >= 20:
+        print(f"  [ATG] WARNING: {row_count} rows rendered — ag-Grid virtualises "
+              f"long result sets, so some rows may not be in the DOM. "
+              f"Lower ATG_WINDOW_HOURS (currently {ATG_WINDOW_HOURS:g}).")
 
     # Strategy 1: read ag-Grid cells directly
     raw_rows = await _read_ag_grid(page)

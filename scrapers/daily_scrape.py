@@ -940,16 +940,25 @@ async def _job_paytm(dry_run: bool = False, target_date: str | None = None, payt
 # JOB 5 — ATG STOCK SNAPSHOT
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_atg(page, dry_run: bool = False):
+async def _job_atg(page, dry_run: bool = False) -> bool:
     """
     Scrape the current ATG tank level snapshot from FCC Data > Stock.
 
     Runs inside the existing IRAS browser session (after ISS, before close)
     so no additional CAPTCHA solve is needed.
     Writes one TankReading row per tank to the database.
+
+    Returns False when the scrape produced no readings. A live snapshot that
+    comes back empty is an outage, not a success — reporting SUCCESS here is
+    what let a silent gap run for hours before anyone noticed.
     """
     atg_dir = _data_root / "ATG"
-    await _atg.run_atg(page, output_dir=atg_dir, dry_run=dry_run)
+    readings = await _atg.run_atg(page, output_dir=atg_dir, dry_run=dry_run)
+    if not readings:
+        print("  [ATG] FAILED — no readings scraped. Either the Stock window "
+              "returned nothing or the site stopped posting; both need a look.")
+        return False
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1508,6 +1517,8 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
     # Key: (source, acct_date) → 'succeeded' | 'skipped' | 'failed'
     # Populated only for modes that run accounting sources.
     _acct_results: dict[tuple[str, str], str] = {}
+    # Set when the ATG snapshot scrapes nothing; fails the run at the end.
+    _atg_failed = False
 
     # ── Header log ───────────────────────────────────────────────────────────
     print()
@@ -1627,9 +1638,19 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                 await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
 
             if mode in ('all', 'atg'):
-                await _job_atg(page, dry_run=dry_run)
+                _atg_ok = await _job_atg(page, dry_run=dry_run)
+            else:
+                _atg_ok = True
 
             await browser.close()
+
+            # atg-only exists to capture this one reading, so an empty scrape
+            # ends the run. In 'all' mode the other jobs still stand: record the
+            # failure and let the run finish, then report it at the end.
+            if not _atg_ok:
+                if mode == 'atg':
+                    return False
+                _atg_failed = True
 
     # ── Job 4: SDMS PAD — all mode (implicit yesterday) ──────────────────────
     if mode == 'all':
@@ -2037,6 +2058,10 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
 
     # Return False if any requested source failed.
     # Skipped (already in DB) counts as success — no re-work needed.
+    if _atg_failed:
+        print("\n[DONE] ATG snapshot returned no readings — run marked FAILED.")
+        return False
+
     if _acct_results and any(v == 'failed' for v in _acct_results.values()):
         print("\n[DONE] One or more sources failed — see ACCOUNTING SOURCE SUMMARY above.")
         return False
