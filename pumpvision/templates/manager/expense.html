@@ -7,7 +7,7 @@
   <!-- Top bar -->
   <div class="flex items-center px-5 pt-5 pb-3" style="gap:12px;">
     <a href="{{ url_for('manager.home') }}"
-       style="background:none;border:none;cursor:pointer;color:#6b7280;padding:8px;margin-left:-8px;text-decoration:none;display:flex;"
+       style="background:none;border:none;cursor:pointer;color:#9199a6;padding:8px;margin-left:-8px;text-decoration:none;display:flex;"
        aria-label="Back">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -43,12 +43,12 @@
     <!-- Amount -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
         Amount
       </label>
       <div style="position:relative;">
         <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);
-                     font-family:'Manrope',sans-serif;font-weight:600;font-size:20px;color:#6b7280;">₹</span>
+                     font-family:'Manrope',sans-serif;font-weight:600;font-size:20px;color:#9199a6;">₹</span>
         <input type="number" name="amount" inputmode="decimal" step="0.01" min="0.01" required
                value="{{ values.amount }}"
                style="width:100%;padding:16px 16px 16px 34px;border-radius:16px;
@@ -61,7 +61,7 @@
     <!-- Category -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
         Category
       </label>
       <select name="category" required
@@ -78,7 +78,7 @@
     <!-- Description -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
         Description <span style="text-transform:none;font-weight:400;">(optional)</span>
       </label>
       <input type="text" name="description" maxlength="200"
@@ -92,7 +92,7 @@
     <!-- Date -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
         Date
       </label>
       <input type="date" name="op_date"
@@ -120,25 +120,25 @@
 
   <a href="{{ url_for('manager.home') }}"
      style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
+            text-decoration:none;color:#9aa3b1;min-height:72px;">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+    <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
                  letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">HOME</span>
   </a>
 
   <a href="{{ url_for('manager.lube') }}"
      style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
+            text-decoration:none;color:#9aa3b1;min-height:72px;">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 3h2l.4 2M7 13h10l4-8H5.4"/>
       <circle cx="9" cy="19" r="1"/><circle cx="20" cy="19" r="1"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+    <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
                  letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">LUBE</span>
   </a>
 
@@ -152,19 +152,19 @@
       <line x1="16" y1="13" x2="8" y2="13"/>
       <line x1="16" y1="17" x2="8" y2="17"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+    <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
                  letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">EXPENSE</span>
   </a>
 
   <a href="{{ url_for('manager.payment') }}"
      style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-            text-decoration:none;color:#4b5563;min-height:72px;">
+            text-decoration:none;color:#9aa3b1;min-height:72px;">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <line x1="12" y1="1" x2="12" y2="23"/>
       <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
     </svg>
-    <span style="font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+    <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
                  letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">PAYMENT</span>
   </a>
 
