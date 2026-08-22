@@ -30,7 +30,11 @@ integration, distinct visual identity. Market: ~100,000 petrol pumps in India.
 ## Version Control
 
 Hosted at **github.com/rishab-mishra01/pumpvision** (private). Default branch: `main`.
-Every push to `main` auto-deploys to Railway.
+
+> **Push to `main` no longer deploys anything.** It used to auto-deploy to Railway;
+> Railway was removed in August 2026 (see *Deployment* below). Deploying now means
+> `git pull` on the host that runs the code — the evo for the web app, the India VPS
+> for the scrapers.
 
 Daily workflow:
 ```
@@ -41,17 +45,38 @@ git push
 
 ---
 
-## Deployment (Live — May 2026)
+## Deployment (Live — August 2026, self-hosted)
+
+**Railway is gone.** It became unreachable on 2026-08-20 ~11:00 UTC (app 404s with
+`x-railway-fallback`, Postgres drops the handshake, the API token is rejected) and the
+whole stack was moved onto owned hardware rather than restored. Nothing in this project
+depends on Railway any more.
 
 | Item | Value |
 |------|-------|
-| Platform | Railway (paid tier) |
-| Live URL | `pumpvision.up.railway.app` (old `web-production-a1322` domain is dead — 404) |
-| Database | PostgreSQL on Railway (SQLite locally) |
-| Auto-deploy | Every push to `main` |
+| Web app | gunicorn on **the evo** (`EVO-X3`, WSL2), port **8002**, started by `~/pumpvision-web.sh` |
+| Kept alive by | `start_if_dead "Pumpvision Web"` in `~/start-all.sh`, which cron runs every 5 min |
+| Live URL | `http://100.87.158.40:8002/` — Tailscale only, no public ingress |
+| Database | PostgreSQL 17 on the evo, database `pumpvision`, same cluster as PIOS's `mea_kb` |
+| DB from the VPS | `postgresql://pumpvision@100.87.158.40:5432/pumpvision` over Tailscale |
+| DB from the app | `127.0.0.1:5432` — loopback on purpose, so the web app does not depend on tailscaled |
+| Backups | `~/pg_backup.sh`, nightly 03:00, `-Fc` dumps to `~/pg_backups`, **90-day** retention |
+| Scrapers | unchanged — India VPS (see *India VPS Scraper Runner*), now writing to the evo |
 | PWA | manifest.json + icons at `pumpvision/static/` |
 | Owner login | `admin` / `shreeadmin2026` |
 | Attendant login | `operations` / `shreeoperations2026` |
+
+**Access is via Tailscale**, exactly like PIOS on :8001 — if the phone shows nothing,
+check Tailscale is on before suspecting the app.
+
+**Two things not to re-derive:**
+- Postgres binds `listen_addresses='*'` (drop-in `/etc/postgresql/17/main/conf.d/10-pv.conf`),
+  **not** the tailscale address. `postgresql.service` is not ordered after `tailscaled`, so
+  binding `100.87.158.40` makes Postgres fail to start after a host reset. `*` is safe here
+  because WSL2 is in default NAT mode — eth0 (172.27.x) is not routable from the LAN.
+- A single `pg_hba` line — `host pumpvision pumpvision 100.64.0.0/10 scram-sha-256` — scopes
+  tailnet access to this database only. `mea_kb` is refused over the tailnet even for the
+  superuser. Do not broaden it to `host all all`.
 
 29 customers + 66 vehicles migrated to production PostgreSQL (May 2026).
 
@@ -575,7 +600,7 @@ The Bright Data proxy (`IRAS_PROXY_*` vars) is an emergency fallback only — ne
 | Repo | `~/pumpvision` (read-only deploy key `pumpvision-vps`) |
 | Venv | `~/pumpvision/.venv` |
 | Data / logs | `/data` tree · logs at `/data/logs/` |
-| DB | Railway Postgres via **public** endpoint `hopper.proxy.rlwy.net:28578` (`railway.internal` does not resolve off-Railway) |
+| DB | Postgres on the evo over Tailscale: `postgresql://pumpvision@100.87.158.40:5432/pumpvision`. The VPS must be joined to the tailnet (`tailscale up`) or every DB write spools instead of landing — see *DB Write Spool*. Was `hopper.proxy.rlwy.net:28578` until Railway was removed in August 2026. |
 | RAM | 911 MiB + 2G swap — Chromium swaps; scrapes are slow but complete |
 
 `.env` on the VPS is the **only** home for scraper secrets. It was once verified
@@ -653,25 +678,21 @@ spillover rows assigned to the next op_date would otherwise permanently skip the
 real full-shift download in scheduled runs. Earlier/partial data reports
 `INCOMPLETE` and is re-scraped (safe — import dedupes by `paytm_txn_id`).
 
-**Railway cron (historical / superseded for scrapers):**
-`railway.json` sets `python -X utf8 scripts/railway_entrypoint.py` as the start command
-for all Railway services. The service role is controlled by `PUMPVISION_SERVICE_ROLE`:
+**Railway cron — REMOVED (August 2026).** `railway.json`, `Procfile` and
+`scripts/railway_entrypoint.py` were deleted along with the platform; the
+`PUMPVISION_SERVICE_ROLE` dispatch they implemented no longer exists. Nothing replaced
+it because nothing needed to: the VPS cron wrappers already invoked
+`scripts/run_completed_shift.py` and `scripts/run_atg_snapshot.py` directly, and the web
+app is now a plain gunicorn line in `~/pumpvision-web.sh`.
 
-| Role | Purpose |
-|------|---------|
-| `web` | Flask app via gunicorn (default if var not set) |
-| `completed-shift` | Daily accounting scrape cron |
-| `atg` | ATG tank snapshot cron (every 30 min) |
-| `iras-probe` | Diagnostic: opens IRAS login page, prints DOM/network report, exits 0. No login. |
+`Dockerfile` is kept but **nothing deploys from it**. It survives only because it pins a
+known-good Playwright/Python/Chromium triple matching `requirements.txt`
+(`mcr.microsoft.com/playwright/python:v1.58.0-noble`, Ubuntu 24.04 + Python 3.12), which
+is genuinely painful to reconstruct. Its `CMD` now runs gunicorn directly.
 
-`railway.json` uses **DOCKERFILE** builder (switched from Nixpacks May 2026 to resolve
-`libstdc++.so.6` missing on Railway Linux). Base image:
-`mcr.microsoft.com/playwright/python:v1.58.0-noble` — Ubuntu 24.04 + Python 3.12 +
-Chromium pre-installed. `railway.json` contains only `builder` + `startCommand` in its
-`build`/`deploy` blocks — healthcheck and restart-policy settings are intentionally omitted
-because `railway.json` is shared by all services and those settings are web-only (cron
-services do not serve HTTP). Configure them per-service in the Railway dashboard.
-Railway cron has **not yet been configured** in the Railway dashboard.
+`docs/scrape_scheduling_runbook.md` still describes the Railway-era layout throughout and
+is retained as history — read *India VPS Scraper Runner* and *Deployment* for what
+actually runs.
 
 | Schedule | Railway start command | Cron (UTC) | Notes |
 |----------|-----------------------|------------|-------|

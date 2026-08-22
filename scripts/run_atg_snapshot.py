@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Railway-friendly ATG tank stock snapshot cron entrypoint.
+ATG tank stock snapshot cron entrypoint.
 
 Delegates to:
     python -X utf8 scrapers/daily_scrape.py --atg-only
@@ -9,7 +9,8 @@ ATG is a live/current reading of what is in the tanks right now.
 It is NOT historical accounting data. No date argument is used or needed.
 Run on a separate schedule from completed-shift (every 30 or 60 minutes).
 
-The Railway cron schedule */30 * * * * runs every 30 minutes.
+Run from the India VPS every 30 minutes (*/30 * * * *, UTC) via
+scripts/vps_run_atg_snapshot.sh.
 
 Usage:
     python -X utf8 scripts/run_atg_snapshot.py
@@ -26,7 +27,7 @@ import sys
 
 # Load repo-root .env so cron/VPS runs get DATABASE_URL without shell-exporting
 # secrets. Same pattern as every scraper. No-op if the file does not exist
-# (e.g. Railway, where variables come from the service environment).
+# (e.g. a host where variables come from the service environment, not a file).
 from dotenv import load_dotenv
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,7 +45,7 @@ def main() -> int:
     # Guard: DATABASE_URL must be set but is never printed.
     if not os.environ.get("DATABASE_URL"):
         print("[ERROR] DATABASE_URL is not set in the environment.", file=sys.stderr)
-        print("        Set it in Railway service variables (or .env locally).", file=sys.stderr)
+        print("        Set it in the VPS .env (see CLAUDE.md > Deployment).", file=sys.stderr)
         print("        Do not paste the value into this script.", file=sys.stderr)
         return 1
 
@@ -66,7 +67,7 @@ def main() -> int:
     # Header.
     now_ist = _ist_now()
     print("=======================================================")
-    print("  Pumpvision - ATG tank snapshot (Railway cron)")
+    print("  Pumpvision - ATG tank snapshot (VPS cron)")
     print("=======================================================")
     print(f"  mode        : --atg-only (live/current - no date)")
     print(f"  IST now     : {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
