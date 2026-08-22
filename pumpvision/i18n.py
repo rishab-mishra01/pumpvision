@@ -232,4 +232,14 @@ HI = {
     "title_activity": "गतिविधि",
     "title_profile": "प्रोफ़ाइल",
     "title_day_close": "दिन का हिसाब",
+
+    # ── Field-First skin toggle (Option B, per-device trial) ────────────
+    "ff_heading": "बड़ा दिखाओ",
+    "ff_explain": "धूप में पढ़ने के लिए बड़े अक्षर और बड़े बटन। सिर्फ़ इसी फ़ोन पर लागू।",
+    "ff_on_label": "चालू है",
+    "ff_off_label": "बंद है",
+    "ff_turn_on": "चालू करें",
+    "ff_turn_off": "बंद करें",
+    "ff_enabled": "बड़ा दिखाओ चालू हो गया।",
+    "ff_disabled": "बड़ा दिखाओ बंद हो गया।",
 }

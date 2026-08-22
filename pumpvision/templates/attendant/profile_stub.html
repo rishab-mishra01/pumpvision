@@ -36,6 +36,43 @@
       {{ hi.attendant_word }}
     </p>
 
+    <!-- Field-First skin: per-device trial toggle (Option B) -->
+    <div style="width:100%;max-width:280px;margin-bottom:20px;text-align:left;
+                background:rgba(255,255,255,0.05);
+                border:1px solid rgba(255,255,255,0.12);
+                border-radius:14px;padding:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h3 style="font-family:'Manrope','Noto Sans Devanagari',sans-serif;
+                   font-weight:600;font-size:1rem;color:#fff;margin:0;">
+          {{ hi.ff_heading }}
+        </h3>
+        {# Rule 6: state is icon AND word AND colour, never colour alone. #}
+        <span style="display:inline-flex;align-items:center;gap:6px;flex:none;
+                     font-family:'Inter','Noto Sans Devanagari',sans-serif;
+                     font-size:13px;font-weight:600;
+                     color:{{ '#86efac' if ff_on else '#9199a6' }};">
+          <span aria-hidden="true">{{ '✓' if ff_on else '○' }}</span>
+          {{ hi.ff_on_label if ff_on else hi.ff_off_label }}
+        </span>
+      </div>
+      <p style="font-family:'Inter','Noto Sans Devanagari',sans-serif;font-size:13px;
+                color:#9199a6;margin:8px 0 14px;line-height:1.6;">
+        {{ hi.ff_explain }}
+      </p>
+      <form method="post" action="{{ url_for('attendant.toggle_field_first') }}" style="margin:0;">
+        <input type="hidden" name="enable" value="{{ '0' if ff_on else '1' }}">
+        <button type="submit"
+                style="width:100%;height:56px;border-radius:12px;cursor:pointer;
+                       background:{{ 'rgba(255,255,255,0.10)' if ff_on else '#e8a11c' }};
+                       border:1px solid {{ 'rgba(255,255,255,0.22)' if ff_on else '#c9860e' }};
+                       color:{{ '#e8eaed' if ff_on else '#241a05' }};
+                       font-family:'Manrope','Noto Sans Devanagari',sans-serif;
+                       font-weight:700;font-size:15px;">
+          {{ hi.ff_turn_off if ff_on else hi.ff_turn_on }}
+        </button>
+      </form>
+    </div>
+
     <!-- Sign out -->
     <a href="{{ url_for('auth.logout') }}"
        style="display:inline-flex;align-items:center;justify-content:center;gap:8px;
