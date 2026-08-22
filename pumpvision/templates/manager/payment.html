@@ -14,9 +14,9 @@
         <path d="m15 18-6-6 6-6"/>
       </svg>
     </a>
-    <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.1rem;color:#fff;">
+    <h1 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.1rem;color:#fff;margin:0;">
       Record Payment
-    </span>
+    </h1>
   </div>
 
   <!-- Flash messages -->
@@ -43,10 +43,11 @@
     <!-- Customer -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="pay-customer">
         Customer
       </label>
-      <select name="customer_id" required
+      <select id="pay-customer" name="customer_id" required
               style="width:100%;padding:16px;border-radius:16px;
                      background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);
                      color:#fff;font-family:'Inter',sans-serif;font-size:15px;box-sizing:border-box;
@@ -63,13 +64,14 @@
     <!-- Amount -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="pay-amount">
         Amount
       </label>
       <div style="position:relative;">
         <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);
                      font-family:'Manrope',sans-serif;font-weight:600;font-size:20px;color:#9199a6;">₹</span>
-        <input type="number" name="amount" inputmode="decimal" step="0.01" min="0.01" required
+        <input type="number" id="pay-amount" name="amount" inputmode="decimal" step="0.01" min="0.01" required
                value="{{ values.amount }}"
                style="width:100%;padding:16px 16px 16px 34px;border-radius:16px;
                       background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);
@@ -105,10 +107,11 @@
     <!-- Reference number -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="pay-reference">
         Reference Number <span style="text-transform:none;font-weight:400;">(optional)</span>
       </label>
-      <input type="text" name="reference_number" maxlength="50"
+      <input type="text" id="pay-reference" name="reference_number" maxlength="50"
              value="{{ values.reference_number }}"
              placeholder="Cheque no. / UTR"
              style="width:100%;padding:16px;border-radius:16px;
@@ -119,10 +122,11 @@
     <!-- Notes -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="pay-notes">
         Notes <span style="text-transform:none;font-weight:400;">(optional)</span>
       </label>
-      <input type="text" name="notes"
+      <input type="text" id="pay-notes" name="notes"
              value="{{ values.notes }}"
              style="width:100%;padding:16px;border-radius:16px;
                     background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);

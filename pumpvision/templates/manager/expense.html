@@ -14,9 +14,9 @@
         <path d="m15 18-6-6 6-6"/>
       </svg>
     </a>
-    <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.1rem;color:#fff;">
+    <h1 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.1rem;color:#fff;margin:0;">
       Log Expense
-    </span>
+    </h1>
   </div>
 
   <!-- Flash messages -->
@@ -43,13 +43,14 @@
     <!-- Amount -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="exp-amount">
         Amount
       </label>
       <div style="position:relative;">
         <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);
                      font-family:'Manrope',sans-serif;font-weight:600;font-size:20px;color:#9199a6;">₹</span>
-        <input type="number" name="amount" inputmode="decimal" step="0.01" min="0.01" required
+        <input type="number" id="exp-amount" name="amount" inputmode="decimal" step="0.01" min="0.01" required
                value="{{ values.amount }}"
                style="width:100%;padding:16px 16px 16px 34px;border-radius:16px;
                       background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);
@@ -61,10 +62,11 @@
     <!-- Category -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="exp-category">
         Category
       </label>
-      <select name="category" required
+      <select id="exp-category" name="category" required
               style="width:100%;padding:16px;border-radius:16px;
                      background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);
                      color:#fff;font-family:'Inter',sans-serif;font-size:15px;box-sizing:border-box;
@@ -78,10 +80,11 @@
     <!-- Description -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="exp-description">
         Description <span style="text-transform:none;font-weight:400;">(optional)</span>
       </label>
-      <input type="text" name="description" maxlength="200"
+      <input type="text" id="exp-description" name="description" maxlength="200"
              value="{{ values.description }}"
              placeholder="e.g. Diesel generator fuel"
              style="width:100%;padding:16px;border-radius:16px;
@@ -92,10 +95,11 @@
     <!-- Date -->
     <div>
       <label style="display:block;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;
-                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;">
+                    letter-spacing:0.08em;text-transform:uppercase;color:#9199a6;margin-bottom:8px;"
+             for="exp-date">
         Date
       </label>
-      <input type="date" name="op_date"
+      <input type="date" id="exp-date" name="op_date"
              value="{{ values.op_date }}"
              style="width:100%;padding:16px;border-radius:16px;
                     background:rgba(28,28,30,0.7);border:1px solid rgba(255,255,255,0.08);
