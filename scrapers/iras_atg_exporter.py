@@ -144,20 +144,17 @@ async def navigate_to_stock(page):
     print("[OK] Navigated to FCC Data > Stock")
 
 
-async def set_stock_window(page, hours: float | None = None) -> bool:
+async def set_stock_range(page, frm: datetime, to: datetime) -> bool:
     """
-    Set the Stock tab's from/to range explicitly, in IST.
+    Set the Stock tab's from/to fields to an explicit range.
 
     Returns True if both fields were set and stuck. On any failure the portal's
     own (UTC-derived, usually empty) default is left in place and False is
     returned — the caller still tries, so a portal redesign degrades to the old
     behaviour instead of aborting the run.
     """
-    hours = ATG_WINDOW_HOURS if hours is None else hours
-    now_ist = datetime.now(IST)
-    # Small lead on the upper bound so a reading posted mid-run is still inside.
-    frm_s = (now_ist - timedelta(hours=hours)).strftime(STOCK_DT_FMT).lower()
-    to_s  = (now_ist + timedelta(minutes=10)).strftime(STOCK_DT_FMT).lower()
+    frm_s = frm.strftime(STOCK_DT_FMT).lower()
+    to_s  = to.strftime(STOCK_DT_FMT).lower()
 
     fields = page.locator(f"input[placeholder='{STOCK_DT_PLACEHOLDER}']")
     try:
@@ -175,12 +172,22 @@ async def set_stock_window(page, hours: float | None = None) -> bool:
             print(f"  [ATG] WARNING: window did not stick — "
                   f"asked {frm_s!r}..{to_s!r}, got {got_frm!r}..{got_to!r}")
             return False
-        print(f"  [ATG] Window (IST, {hours:g}h): {got_frm} -> {got_to}")
+        print(f"  [ATG] Window (IST): {got_frm} -> {got_to}")
         return True
     except Exception as exc:
         print(f"  [ATG] WARNING: could not set date window "
               f"({type(exc).__name__}) — using the portal default")
         return False
+
+
+async def set_stock_window(page, hours: float | None = None) -> bool:
+    """Set a rolling window of the last `hours` (default ATG_WINDOW_HOURS), IST."""
+    hours = ATG_WINDOW_HOURS if hours is None else hours
+    now_ist = datetime.now(IST)
+    # Small lead on the upper bound so a reading posted mid-run is still inside.
+    return await set_stock_range(page,
+                                 now_ist - timedelta(hours=hours),
+                                 now_ist + timedelta(minutes=10))
 
 
 async def _pager_total(page) -> int | None:
