@@ -116,6 +116,12 @@ def create_app():
             return '—'
         return f"{d.day} {d.strftime('%b %Y')}"
 
+    # Hindi glossary for the attendant app — one dict, reviewable in i18n.py.
+    # Exposed to every template as `hi`; attendant templates read their labels
+    # from it. Owner/manager templates simply never reference it.
+    from .i18n import HI
+    app.jinja_env.globals["hi"] = HI
+
     @app.context_processor
     def inject_notification_count():
         from flask_login import current_user

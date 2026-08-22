@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Log Sale — Pumpvision{% endblock %}
+{% block title %}{{ hi.title_log_sale }} — Pumpvision{% endblock %}
 
 {% block page %}
 <style>
@@ -95,9 +95,9 @@
 
   <!-- Heading -->
   <div style="padding:4px 20px 16px;">
-    <p class="eyebrow" style="color:var(--saffron-600);margin-bottom:6px;">New Transaction</p>
+    <p class="eyebrow" style="color:var(--saffron-600);margin-bottom:6px;">{{ hi.new_transaction }}</p>
     <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.875rem;
-               letter-spacing:-0.01em;color:var(--ink-900);margin:0;">Log sale details</h2>
+               letter-spacing:-0.01em;color:var(--ink-900);margin:0;">{{ hi.log_sale_details }}</h2>
   </div>
 
   <!-- Flash messages -->
@@ -137,24 +137,24 @@
           ID: {{ account_id }}
         </div>
       </div>
-      <span class="chip chip-ok">Active</span>
+      <span class="chip chip-ok">{{ hi.active }}</span>
     </div>
 
     <!-- Vehicle section -->
     <div style="padding:0 20px 20px;">
-      <p class="eyebrow" style="margin-bottom:10px;">Vehicle Registration Number</p>
+      <p class="eyebrow" style="margin-bottom:10px;">{{ hi.vehicle_reg_number }}</p>
 
       <!-- Quick-select chips -->
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <button type="button" onclick="setVehicleChip('UNREGISTERED')"
                 class="chip chip-neutral"
                 style="cursor:pointer;border:none;font-size:12px;padding:6px 14px;">
-          Unregistered
+          {{ hi.unregistered }}
         </button>
         <button type="button" onclick="setVehicleChip('CONTAINER')"
                 class="chip chip-neutral"
                 style="cursor:pointer;border:none;font-size:12px;padding:6px 14px;">
-          Container
+          {{ hi.container }}
         </button>
       </div>
 
@@ -174,7 +174,7 @@
                 onchange="updateConfirmButton()"
                 class="field-input"
                 style="padding-left:40px;">
-          <option value="">Select vehicle</option>
+          <option value="">{{ hi.select_vehicle }}</option>
           <option value="UNREGISTERED">UNREGISTERED</option>
           <option value="CONTAINER">CONTAINER</option>
           {% for v in vehicles %}
@@ -186,15 +186,15 @@
 
     <!-- Product grid -->
     <div style="padding:0 20px 20px;">
-      <p class="eyebrow" style="margin-bottom:10px;">Select Product</p>
+      <p class="eyebrow" style="margin-bottom:10px;">{{ hi.select_product }}</p>
       <input type="hidden" name="product" id="product-hidden">
 
       <div class="grid-2">
         {% set products = [
-          ('HS', 'HS', 'hsd', 'High Speed Diesel'),
-          ('MS', 'MS', 'ms',  'Motor Spirit'),
-          ('X2', 'X2', 'x2',  'Xtra Premium 95'),
-          ('XG', 'XG', 'xg',  'Xtra Green'),
+          ('HS', 'HS', 'hsd', hi.prod_hs_full),
+          ('MS', 'MS', 'ms',  hi.prod_ms_full),
+          ('X2', 'X2', 'x2',  hi.prod_x2_full),
+          ('XG', 'XG', 'xg',  hi.prod_xg_full),
         ] %}
         {% for code, label, cls, full in products %}
         <button type="button" id="card-{{ code }}" onclick="selectProduct('{{ code }}')"
@@ -211,12 +211,12 @@
     <!-- Quantity section -->
     <div style="padding:0 20px 16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <p class="eyebrow">Dispensed Quantity</p>
+        <p class="eyebrow">{{ hi.dispensed_quantity }}</p>
         <div class="mode-toggle">
           <button type="button" id="btn-amount" onclick="setMode('amount')"
-                  class="mode-btn active">Amount (₹)</button>
+                  class="mode-btn active">{{ hi.amount_rupees }}</button>
           <button type="button" id="btn-litres" onclick="setMode('litres')"
-                  class="mode-btn">Litres (L)</button>
+                  class="mode-btn">{{ hi.litres_L }}</button>
         </div>
       </div>
       <input type="hidden" name="input_mode" id="input-mode-hidden" value="amount">
@@ -234,7 +234,7 @@
         <p id="rate-subtext"
            style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);
                   text-align:center;margin:6px 0 0;">
-          Select a product to see rate
+          {{ hi.select_to_see_rate }}
         </p>
       </div>
     </div>
@@ -251,7 +251,7 @@
           disabled
           class="btn btn-saffron btn-full"
           style="opacity:0.4;transition:opacity 0.2s;">
-    Confirm &amp; Log Sale &rarr;
+    {{ hi.confirm_log_sale }} &rarr;
   </button>
 </div>
 
@@ -263,7 +263,7 @@
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    Home
+    {{ hi.nav_home }}
   </a>
   <a href="{{ url_for('attendant.activity') }}" class="bottom-nav__item bottom-nav__item--active">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -272,7 +272,7 @@
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    Activity
+    {{ hi.nav_activity }}
   </a>
   <a href="{{ url_for('attendant.profile') }}" class="bottom-nav__item">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -280,7 +280,7 @@
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
       <circle cx="12" cy="7" r="4"/>
     </svg>
-    Profile
+    {{ hi.nav_profile }}
   </a>
 </nav>
 
@@ -317,7 +317,7 @@ function setMode(mode) {
 
   if (cur > 0 && (!rate || rate <= 0)) {
     var sub = document.getElementById('rate-subtext');
-    sub.textContent = 'Select a product before switching units.';
+    sub.textContent = {{ hi.select_product_first_units|tojson }};
     sub.style.color = 'var(--warn-600)';
     setTimeout(updateRateDisplay, 2000);
     return;
@@ -344,20 +344,20 @@ function setMode(mode) {
 function updateRateDisplay() {
   var sub = document.getElementById('rate-subtext');
   if (!selectedProduct) {
-    sub.textContent = 'Select a product to see rate';
+    sub.textContent = {{ hi.select_to_see_rate|tojson }};
     sub.style.color = 'var(--ink-500)';
     return;
   }
   var rate = PRICE_MAP[selectedProduct];
   if (rate === null || rate === undefined) {
-    sub.textContent = 'No rate available for ' + selectedProduct + '. Contact owner.';
+    sub.textContent = selectedProduct + ' ' + {{ hi.no_rate_for|tojson }};
     sub.style.color = 'var(--error-600)';
     return;
   }
   sub.style.color = 'var(--ink-500)';
   var qty   = parseFloat(document.getElementById('quantity-input').value) || 0;
   var total = inputMode === 'amount' ? qty : qty * rate;
-  sub.textContent = 'Rate: ₹' + rate.toFixed(2) + '/L · Total: ₹' + total.toFixed(2);
+  sub.textContent = {{ hi.rate_label|tojson }} + ': ₹' + rate.toFixed(2) + '/L · ' + {{ hi.total_label|tojson }} + ': ₹' + total.toFixed(2);
 }
 
 function updateConfirmButton() {

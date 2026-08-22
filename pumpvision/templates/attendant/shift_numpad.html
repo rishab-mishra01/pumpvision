@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Enter Closing Reading — {{ nozzle }}{% endblock %}
+{% block title %}{{ hi.title_enter_reading }} — {{ nozzle }}{% endblock %}
 
 {% block page %}
 <style>
@@ -38,7 +38,7 @@
       </svg>
     </a>
     <span style="font-family:var(--font-sans);font-weight:600;font-size:15px;
-                 color:var(--ink-900);">Shift Settlement</span>
+                 color:var(--ink-900);">{{ hi.shift_settlement }}</span>
     <a href="{{ url_for('attendant.profile') }}"
        style="display:flex;align-items:center;justify-content:center;
               width:36px;height:36px;color:var(--ink-500);text-decoration:none;">
@@ -54,10 +54,10 @@
   <div style="display:flex;align-items:flex-start;justify-content:space-between;
               padding:4px 20px 14px;">
     <div>
-      <p class="eyebrow" style="margin-bottom:5px;">Enter Reading</p>
+      <p class="eyebrow" style="margin-bottom:5px;">{{ hi.enter_reading }}</p>
       {% if opening is not none %}
       <p style="font-family:var(--font-sans);font-size:13px;color:var(--ink-600);margin:0;">
-        Opening:
+        {{ hi.opening_label }}
         <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;
                      font-weight:600;color:var(--ink-900);">
           {{ "{:,.2f}".format(opening) }}
@@ -65,12 +65,12 @@
       </p>
       {% else %}
       <p style="font-family:var(--font-sans);font-size:13px;color:var(--error-600);margin:0;">
-        No opening reading on file
+        {{ hi.no_opening_on_file }}
       </p>
       {% endif %}
     </div>
     <span class="chip chip-neutral" style="white-space:nowrap;">
-      Nozzle: {{ nozzle }}
+      {{ hi.nozzle_label }}: {{ nozzle }}
     </span>
   </div>
 
@@ -131,7 +131,7 @@
     <button id="save-btn" type="submit"
             class="btn btn-saffron btn-full"
             style="opacity:0.4;" disabled>
-      Save &amp; Confirm
+      {{ hi.save_confirm }}
     </button>
   </form>
 </div>
@@ -144,7 +144,7 @@
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    Home
+    {{ hi.nav_home }}
   </a>
   <a href="{{ url_for('attendant.activity') }}" class="bottom-nav__item">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -153,7 +153,7 @@
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    Activity
+    {{ hi.nav_activity }}
   </a>
   <a href="{{ url_for('attendant.shift_select_product') }}"
      class="bottom-nav__item bottom-nav__item--active">
@@ -163,7 +163,7 @@
       <rect x="9" y="3" width="6" height="4" rx="1" ry="1"/>
       <path d="m9 12 2 2 4-4"/>
     </svg>
-    Shift
+    {{ hi.nav_shift }}
   </a>
 </nav>
 
@@ -209,14 +209,14 @@ function render() {
   if (openingValue !== null && openingValue !== undefined && displayStr) {
     var delta = Math.round((val - openingValue) * 1000) / 1000;
     if (delta < 0) {
-      deltaEl.textContent = "Reading must be higher than opening";
+      deltaEl.textContent = {{ hi.reading_must_be_higher|tojson }};
       deltaEl.style.color = "var(--error-600)";
       deltaEl.style.background = "var(--error-100)";
       btn.disabled = true;
       btn.style.opacity = "0.4";
       btn.style.cursor = "not-allowed";
     } else if (delta === 0) {
-      deltaEl.textContent = "⚠ Confirm no fuel was dispensed";
+      deltaEl.textContent = {{ hi.confirm_no_fuel|tojson }};
       deltaEl.style.color = "var(--warn-600)";
       deltaEl.style.background = "var(--warn-100)";
       btn.disabled = false;
@@ -224,7 +224,7 @@ function render() {
       btn.style.cursor = "pointer";
     } else {
       var decimals = unit === "kg" ? 1 : 2;
-      var label = unit === "kg" ? "kg sold" : "Litres dispensed";
+      var label = unit === "kg" ? {{ hi.kg_sold|tojson }} : {{ hi.litres_dispensed|tojson }};
       deltaEl.textContent = "↗ " + label + ": +" + delta.toFixed(decimals) + " " + unit;
       deltaEl.style.color = "var(--ok-600)";
       deltaEl.style.background = "var(--ok-100)";
