@@ -25,7 +25,9 @@ import asyncio
 import base64
 import io
 import os
+import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -70,8 +72,8 @@ STOCK_DT_PLACEHOLDER = "DD-MM-YYYY hh:mm:ss aa"
 # but a window wider than the cron interval means a run that finds the portal
 # empty is healed by the next one rather than leaving a permanent hole — the
 # (scraped_at, tank_id) unique constraint makes the overlap a no-op.
-# Kept small on purpose: ag-Grid virtualises rows out of the DOM, and
-# _read_ag_grid only sees rendered ones. ~8 rows/hour at 4 tanks.
+# Row count is not a constraint: results spanning multiple pages are read via
+# the Excel export, not the rendered DOM.
 ATG_WINDOW_HOURS = float(os.environ.get("ATG_WINDOW_HOURS", "2"))
 
 
@@ -179,6 +181,61 @@ async def set_stock_window(page, hours: float | None = None) -> bool:
         print(f"  [ATG] WARNING: could not set date window "
               f"({type(exc).__name__}) — using the portal default")
         return False
+
+
+async def _pager_total(page) -> int | None:
+    """
+    Total row count the Stock grid reports ("1 to 10 of 124"), or None.
+
+    The grid paginates at 10 rows and renders only the current page, so this is
+    the only way to know whether a read saw the whole result set.
+    """
+    try:
+        loc = page.locator(".ag-paging-row-summary-panel").first
+        if await loc.count() == 0:
+            return None
+        txt = " ".join(((await loc.text_content()) or "").split())
+        m = re.search(r"of\s+([\d,]+)", txt)
+        return int(m.group(1).replace(",", "")) if m else None
+    except Exception:
+        return None
+
+
+def _prune_excel_exports(output_dir, keep_days: int = 7) -> None:
+    """Drop ATG_Stock_*.xlsx older than keep_days; one lands per run."""
+    cutoff = time.time() - keep_days * 86_400
+    try:
+        for f in Path(output_dir).glob("ATG_Stock_*.xlsx"):
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+async def _download_excel_rows(page, output_dir) -> list[dict]:
+    """
+    Export the current Stock query to Excel and parse it.
+
+    The export honours the active date window and returns every matching row,
+    which is what makes it the right read for a result set spanning pages.
+    """
+    fname = f"ATG_Stock_{datetime.now(IST).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    fpath = Path(output_dir) / fname
+    try:
+        async with page.expect_download(timeout=DOWNLOAD_TIMEOUT * 1000) as dl_info:
+            await page.locator("button.export-excel-button").first.click()
+        download = await dl_info.value
+        await download.save_as(str(fpath))
+        rows = _parse_excel(fpath)
+        print(f"  [ATG] Excel export: {fname} -> {len(rows)} row(s)")
+        _prune_excel_exports(output_dir)
+        return rows
+    except Exception as exc:
+        print(f"  [ATG] Excel download failed: {type(exc).__name__}: {exc}")
+        return []
 
 
 # ─────────────────────────────────────────────
@@ -465,29 +522,31 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
         return []
 
     print(f"  [ATG] {row_count} row(s) in Stock table")
-    if row_count >= 20:
-        print(f"  [ATG] WARNING: {row_count} rows rendered — ag-Grid virtualises "
-              f"long result sets, so some rows may not be in the DOM. "
-              f"Lower ATG_WINDOW_HOURS (currently {ATG_WINDOW_HOURS:g}).")
 
-    # Strategy 1: read ag-Grid cells directly
-    raw_rows = await _read_ag_grid(page)
+    # The grid paginates at 10 rows and renders only the current page, and that
+    # page is not ordered by reading time — so whenever the result set is larger
+    # than what is rendered, reading the DOM would store an arbitrary subset.
+    # The Excel export honours the same date window and returns every row.
+    total = await _pager_total(page)
+    raw_rows: list[dict] = []
 
-    # Strategy 2: fallback to Excel download
+    if total is not None and total > row_count:
+        pages = (total + row_count - 1) // max(row_count, 1)
+        print(f"  [ATG] {total} rows across ~{pages} pages "
+              f"({row_count} rendered) — reading via Excel export")
+        raw_rows = await _download_excel_rows(page, output_dir)
+        if not raw_rows:
+            print("  [ATG] Excel export unusable — falling back to the rendered page "
+                  "(this page only, not the full result)")
+
+    # Single page, or the export failed: read the rendered cells.
+    if not raw_rows:
+        raw_rows = await _read_ag_grid(page)
+
+    # Last resort: the grid read came back empty even though rows are present.
     if not raw_rows:
         print("  [ATG] Grid read empty — trying Excel download")
-        now = datetime.now()
-        fname = f"ATG_Stock_{now.strftime('%Y%m%d_%H%M')}.xlsx"
-        fpath = output_dir / fname
-        try:
-            async with page.expect_download(timeout=DOWNLOAD_TIMEOUT * 1000) as dl_info:
-                await page.locator("button.export-excel-button").click()
-            download = await dl_info.value
-            await download.save_as(str(fpath))
-            print(f"  [ATG] Downloaded: {fname}")
-            raw_rows = _parse_excel(fpath)
-        except Exception as e:
-            print(f"  [ATG] Excel download failed: {e}")
+        raw_rows = await _download_excel_rows(page, output_dir)
 
     if not raw_rows:
         print("  [ATG] Could not read Stock table by any method")
