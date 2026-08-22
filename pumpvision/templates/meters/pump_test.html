@@ -24,9 +24,10 @@
 <form method="POST" class="space-y-3">
   {% for nozzle_no, label in labels.items() %}
   <div class="bg-white rounded-xl shadow px-4 py-4 flex items-center justify-between gap-4">
-    <label class="text-sm font-semibold text-gray-700 flex-1">{{ label }}</label>
+    <label class="text-sm font-semibold text-gray-700 flex-1" for="pt-{{ nozzle_no }}">{{ label }}</label>
     <div class="flex items-center gap-2">
       <input type="number"
+             id="pt-{{ nozzle_no }}"
              name="nozzle_{{ nozzle_no }}"
              value="{{ settings[nozzle_no] }}"
              step="0.1"

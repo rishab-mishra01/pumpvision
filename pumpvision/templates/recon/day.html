@@ -3,15 +3,20 @@
 
 {% block content %}
 
+<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">
+  Reconcile {{ op_date.strftime('%d %b %Y') }}
+</h1>
+
 <!-- Date navigation -->
 <div class="flex items-center justify-between mb-4">
   <a href="{{ url_for('recon.day', date_str=prev_date.strftime('%Y-%m-%d')) }}"
-     class="text-indigo-600 text-2xl font-light px-2">‹</a>
+     class="text-indigo-600 text-2xl font-light px-2" aria-label="Previous day">‹</a>
   <input type="date" value="{{ op_date.strftime('%Y-%m-%d') }}"
+         aria-label="Operational date"
          onchange="window.location='/recon/'+this.value"
          class="text-base font-bold text-gray-800 text-center border-0 bg-transparent cursor-pointer focus:outline-none">
   <a href="{{ url_for('recon.day', date_str=next_date.strftime('%Y-%m-%d')) }}"
-     class="text-indigo-600 text-2xl font-light px-2">›</a>
+     class="text-indigo-600 text-2xl font-light px-2" aria-label="Next day">›</a>
 </div>
 
 <!-- Checklist -->
