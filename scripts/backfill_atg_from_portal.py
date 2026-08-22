@@ -97,12 +97,14 @@ async def _backfill_day(page, day: date, out_dir: Path, dry_run: bool) -> dict:
             readings.append(parsed)
     stat["parsed"] = len(readings)
 
-    # A day's export must not leak into a neighbouring day's totals.
-    readings = [r for r in readings if r["scraped_at"].date() == day]
-    if len(readings) != stat["parsed"]:
+    # The window filters on the row's UPDATE timestamp, so a day's export can
+    # carry readings stamped on a neighbouring day. Keep them: that neighbour's
+    # own query filters on ITS update stamps and may never return them, so
+    # dropping here would lose the row outright. (scraped_at, tank_id) dedupes.
+    outside = sum(1 for r in readings if r["scraped_at"].date() != day)
+    if outside:
         stat["note"] = (stat["note"] + "; " if stat["note"] else "") + \
-            f"dropped {stat['parsed'] - len(readings)} row(s) outside the day"
-        stat["parsed"] = len(readings)
+            f"{outside} row(s) stamped outside the day (kept)"
 
     if dry_run:
         stat["note"] = (stat["note"] + "; " if stat["note"] else "") + "dry-run"
