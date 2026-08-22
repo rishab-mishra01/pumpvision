@@ -1,8 +1,9 @@
 """
 Import customers + authorized_vehicles into production PostgreSQL.
-Run against the live DB after Railway deployment:
+Run against the live DB (the evo, reached over Tailscale):
 
-  DATABASE_URL=<railway-postgres-url> python scripts/import_customers.py
+  DATABASE_URL=postgresql://pumpvision@100.87.158.40:5432/pumpvision \
+      python scripts/import_customers.py
 
 Idempotent: skips any customer_id or vehicle_id that already exists.
 """
@@ -21,7 +22,8 @@ database_url = os.environ.get("DATABASE_URL")
 if not database_url:
     raise RuntimeError("Set DATABASE_URL environment variable before running this script.")
 
-# Railway sometimes gives postgres:// — psycopg2 needs postgresql://
+# Some providers hand out postgres:// — psycopg2 needs postgresql://. Kept because
+# hand-pasted URLs still show up in this form, not because of any one platform.
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 

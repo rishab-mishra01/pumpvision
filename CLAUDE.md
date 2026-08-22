@@ -578,19 +578,20 @@ It is not historical completed-shift accounting data.
 
 ### Recommended Operational Runbook
 
-> **Production target changed (July 2026): India VPS, not Railway cron.** See *India VPS
-> Scraper Runner* below. The Railway-cron material in this section is retained for the web
-> service and as historical reference — do not configure new scraper crons on Railway.
+> **Production target: India VPS cron for scrapers, the evo for web + database.** See
+> *India VPS Scraper Runner* below. Railway was removed entirely in August 2026 — there is
+> no Railway cron, web service or database left to configure.
 
-> **Full runbook (Railway-first, historical):** `docs/scrape_scheduling_runbook.md`
-> **Shared Railway start command:** `scripts/railway_entrypoint.py` — dispatches on `PUMPVISION_SERVICE_ROLE`
+> **Full runbook:** `docs/scrape_scheduling_runbook.md`
+> **VPS cron wrappers:** `scripts/vps_run_completed_shift.sh` · `scripts/vps_run_atg_snapshot.sh` · `scripts/vps_run_sdms_lookback.sh`
 > **Windows local fallback:** `scripts/run_completed_shift.ps1` · `scripts/run_atg_snapshot.ps1`
 
 #### India VPS Scraper Runner (July 2026 — production path)
 
 IRAS, Paytm and SDMS are India-geo-restricted and fail from Railway's US egress IP
 (diagnosed July 2026; probe evidence in `scripts/vps_probe.py` runs). All scraper workloads
-run from an AWS Lightsail Mumbai VPS; Railway keeps only the Flask web app + PostgreSQL.
+run from an AWS Lightsail Mumbai VPS. (Railway originally kept the Flask web app +
+PostgreSQL; both moved to the evo in August 2026 when Railway was dropped.)
 The Bright Data proxy (`IRAS_PROXY_*` vars) is an emergency fallback only — never the default.
 
 | Item | Value |
@@ -1508,9 +1509,12 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `pumpvision/templates/owner/summary.html` — daily summary (screen 15)
 
 ### Scheduler scripts
-- `scripts/railway_entrypoint.py` — **shared Railway start command**; reads `PUMPVISION_SERVICE_ROLE` (`web`/`completed-shift`/`atg`/`iras-probe`)
-- `scripts/run_completed_shift.py` — completed-shift logic (IST op\_date auto-calc); called by entrypoint
-- `scripts/run_atg_snapshot.py` — ATG snapshot logic; called by entrypoint
+- `scripts/vps_run_completed_shift.sh` — VPS cron wrapper; `flock` + per-day log, calls the script below
+- `scripts/vps_run_atg_snapshot.sh` — VPS cron wrapper; shares the `daily_scrape` lock, non-blocking
+- `scripts/vps_run_sdms_lookback.sh` — VPS cron wrapper; CNG lookback probes, Mon–Sat
+- `scripts/run_completed_shift.py` — completed-shift logic (IST op\_date auto-calc); called by the wrapper
+- `scripts/run_atg_snapshot.py` — ATG snapshot logic; called by the wrapper
+- `scripts/recover_atg_from_logs.py` — rebuilds ATG readings from cron logs when DB writes were lost
 - `scripts/run_iras_probe.py` — IRAS login-page diagnostic probe; no login, no credentials, exits 0
 - `scripts/run_completed_shift.ps1` — Windows local/manual fallback for completed-shift
 - `scripts/run_atg_snapshot.ps1` — Windows local/manual fallback for ATG snapshot
