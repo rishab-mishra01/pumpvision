@@ -40,6 +40,8 @@ load_dotenv(_PROJECT_ROOT / ".env")
 import anthropic
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
+from scrapers import db_spool
+
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
@@ -835,7 +837,16 @@ def save_summary_to_db(date_iso: str, metadata: dict,
         print(f"  [db] SdmsSummary upserted for {date_iso}")
         return True
     except Exception as e:
-        print(f"  [db] WARNING: could not save to DB: {e}")
+        print(f"  [db] ERROR: could not save to DB: {e}")
+        db_spool.spool("sdms_summary", date_iso, {
+            "date_iso": date_iso,
+            "metadata": metadata,
+            "fleet_total": fleet_total,
+            "fleet_count": fleet_count,
+            "cng_kg": cng_kg,
+            "cng_revenue": cng_revenue,
+            "cng_count": cng_count,
+        }, error=e)
         return False
 
 
@@ -984,11 +995,14 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
             )
 
             # ── Step 7: Persist summary to DB ──────────────────────────────
+            # None = no write attempted (dry-run / local-only); False = attempted
+            # and failed, payload spooled.
+            db_saved = None
             if dry_run:
                 print("[step 7] [dry-run] DB write skipped")
             elif os.environ.get("DATABASE_URL"):
                 print("[step 7] Saving summary to DB...")
-                save_summary_to_db(
+                db_saved = save_summary_to_db(
                     date_iso, metadata,
                     fleet_total, fleet_count,
                     cng_kg, cng_revenue, cng_count,
@@ -998,7 +1012,7 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
 
             print()
             print("=" * 55)
-            print("  SUCCESS")
+            print("  SCRAPED OK — BUT NOT SAVED TO DB" if db_saved is False else "  SUCCESS")
             print(f"  Date              : {date_ddmmyyyy}")
             print(f"  Opening balance   : Rs. {metadata['opening_balance']:,.2f}")
             print(f"  Closing balance   : Rs. {metadata['closing_balance']:,.2f}")
@@ -1011,7 +1025,10 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
             print(f"  CSV               : {csv_path.name}")
             print(f"  Summary JSON      : {json_path.name}")
             print("=" * 55)
-            return True
+            # A scrape whose DB write failed is NOT a success: the payload is
+            # spooled, and the caller must surface the failure so the run exits
+            # non-zero rather than logging SUCCESS over a lost write.
+            return db_saved is not False
 
         except Exception as e:
             print(f"\n[ERROR] Unexpected error: {e}")

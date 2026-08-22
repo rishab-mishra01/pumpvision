@@ -721,6 +721,62 @@ python -X utf8 scrapers/import_paytm_csv.py data/paytm/paytm_YYYY-MM-DD.csv
 
 ---
 
+## DB Write Spool (outage safety)
+
+Every scraper used to wrap its DB write in a `try/except` that printed a warning
+and returned a value the caller ignored. When Railway's Postgres went unreachable
+on **2026-08-20 11:00 UTC**, the scrapers logged `SUCCESS` and `[DONE] All jobs
+complete` for 40 hours while nothing reached a database.
+
+Now a failed DB write is parked on disk and the run goes red:
+
+```
+data/spool/<kind>/<key>.json        pending
+data/spool/_done/<kind>/<key>.json  applied (audit trail, never deleted)
+```
+
+- **`scrapers/db_spool.py`** — `spool()` writes the payload atomically and records
+  it in `spooled_this_run()`.
+- **Five write sites spool**: `sdms_summary`, `atg_readings`, `nozzle_totalizers`,
+  `iras_prices`, `paytm_import`.
+- **`daily_scrape.run()` drains the spool before scraping** (subprocess, inside the
+  caller's flock) and **fails the run** if anything is spooled during it or still
+  pending after it. An outage therefore heals on the next scheduled run.
+- **`scrapers/replay_spool.py`** re-applies the queue by hand:
+
+```bash
+python scrapers/replay_spool.py --list      # what is queued
+python scrapers/replay_spool.py --dry-run   # probe the DB only
+python scrapers/replay_spool.py             # apply everything pending
+```
+
+All five handlers wrap the same upserts the scrapers use, so replay is idempotent.
+Replay refuses to touch the spool at all when the DB is unreachable.
+
+### Recovering ATG readings from cron logs
+
+ATG is the one source with **no file artifact** — IRAS shows only the current tank
+state and the scraper writes straight to the DB, so a lost write is a lost hour.
+Every other source is re-scrapable by date (SDMS, Paytm, prices and ISS boundaries
+are all date-parameterised, and the portals keep history) — for those, just re-run
+`--completed-shift --date YYYY-MM-DD` once the DB is back and the existence checks
+will fill the gaps.
+
+For ATG, `run_atg()` prints each parsed reading before saving it, so the readings
+can be read back out of the logs:
+
+```bash
+python scripts/recover_atg_from_logs.py --log-dir /data/logs --since YYYY-MM-DD --dry-run
+python scripts/recover_atg_from_logs.py --log-dir /data/logs --since YYYY-MM-DD
+python scrapers/replay_spool.py
+```
+
+Recovered rows carry exact `tank_id`/`product`/`capacity_litres`/`is_reliable`
+(from the static tank map) and exact `scraped_at`; `volume_litres` is accurate to
+0.5 L because the log rounds it, and **`level_mm` is unrecoverable and stays NULL**.
+
+---
+
 ## Critical Business Logic
 
 ### Operational Day: 06:00 to 05:59

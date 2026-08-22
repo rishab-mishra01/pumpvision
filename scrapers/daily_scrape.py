@@ -87,6 +87,7 @@ import asyncio
 import base64
 import io
 import os
+import subprocess
 import sys
 from datetime import datetime, timedelta, time as dt_time
 from pathlib import Path
@@ -139,6 +140,8 @@ CAPTCHA_PROMPT = (
 # Both modules exist in multiple locations (project root has old copies); using
 # importlib with the scrapers/ path guarantees we always get the current version
 # regardless of how sys.path is ordered or mutated by the modules themselves.
+from scrapers import db_spool
+
 import importlib.util as _ilu
 
 def _load_scraper(name: str):
@@ -890,6 +893,7 @@ async def _job_paytm(dry_run: bool = False, target_date: str | None = None, payt
         return True
 
     # Import the downloaded CSV into the DB automatically
+    op_date = csv_path = None
     try:
         from pumpvision import create_app as _create_app
         from pumpvision.models import db as _db, PaytmTransaction as _PT
@@ -921,7 +925,14 @@ async def _job_paytm(dry_run: bool = False, target_date: str | None = None, payt
                 print(f"  [db] {len(warnings)} parse warnings")
         return True
     except Exception as e:
-        print(f"  [WARN] Paytm DB import failed: {e}")
+        print(f"  [ERROR] Paytm DB import failed: {e}")
+        # The CSV is already on disk; spool the path so replay re-imports it
+        # without another Paytm login.
+        if op_date is not None and csv_path is not None:
+            db_spool.spool("paytm_import", op_date.isoformat(), {
+                "op_date": op_date,
+                "csv_path": str(csv_path),
+            }, error=e)
         return False
 
 
@@ -1038,6 +1049,8 @@ def _save_prices_to_db(records: list[dict]) -> bool:
         return True
     except Exception as e:
         print(f"  [db] ERROR saving prices: {e}")
+        _key = min((r["effective_from"] for r in records), default="unknown")
+        db_spool.spool("iras_prices", _key, {"records": records}, error=e)
         return False
 
 
@@ -1422,6 +1435,24 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                     attempts fail. Blocks until input is received. Never use for
                     unattended/scheduled runs.
     """
+    # ── Drain the spool first ────────────────────────────────────────────────
+    # Anything parked by an earlier run (DB unreachable) is re-applied before we
+    # scrape, so an outage heals on the next scheduled run instead of waiting for
+    # someone to notice. Runs in a subprocess: replay_spool loads scraper modules
+    # by file path and would collide with the ones already in sys.modules here.
+    # Held inside the caller's flock, so two runs can never replay concurrently.
+    if not dry_run and db_spool.pending():
+        print(f"\n{'='*55}")
+        print(f"  SPOOL REPLAY — {len(db_spool.pending())} payload(s) from an earlier run")
+        print(f"{'='*55}")
+        try:
+            subprocess.run(
+                [sys.executable, "-X", "utf8", str(_SCRAPERS_DIR / "replay_spool.py")],
+                cwd=str(_PROJECT_ROOT), timeout=900,
+            )
+        except Exception as _e:
+            print(f"  [replay] could not run replay_spool.py: {_e}")
+
     shift_dates = dates  # clear alias — only meaningful for boundary/all modes
 
     # Derive op_dates (shift_date − 1) for Shift Totalizer downloads
@@ -1982,10 +2013,37 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                     print(f"    {_src.ljust(8)}: {_status_labels.get(_st, _st.upper())}")
         print(f"{'='*55}")
 
+    # ── DB-write gate ────────────────────────────────────────────────────────
+    # A scrape that could not reach the database is a failed run, whatever the
+    # per-source results say. Without this, an unreachable DB looked exactly
+    # like a clean run: every portal scraped fine and only a swallowed
+    # exception marked the difference (Railway outage, 2026-08-20 → 08-22).
+    # Fails on anything still unpersisted — writes that failed during this run
+    # AND anything an earlier run spooled that the replay at startup could not
+    # drain. The run stays red until the data is actually in the database.
+    _spooled = db_spool.spooled_this_run()
+    _still_pending = db_spool.pending()
+    if _spooled or _still_pending:
+        print(f"\n{'='*55}")
+        print("  DATABASE WRITE FAILED — DATA NOT PERSISTED")
+        print(f"{'='*55}")
+        for _kind, _key in _spooled:
+            print(f"    this run:  {_kind.ljust(18)} {_key}")
+        for _p in _still_pending:
+            if (_p.parent.name, _p.stem) not in [(k, key) for k, key in _spooled]:
+                print(f"    pending :  {_p.parent.name.ljust(18)} {_p.stem}")
+        print(f"\n  {db_spool.pending_summary()}")
+        print(f"{'='*55}")
+
     # Return False if any requested source failed.
     # Skipped (already in DB) counts as success — no re-work needed.
     if _acct_results and any(v == 'failed' for v in _acct_results.values()):
         print("\n[DONE] One or more sources failed — see ACCOUNTING SOURCE SUMMARY above.")
+        return False
+
+    if _spooled or _still_pending:
+        print("\n[DONE] Scrapes completed but data is not in the database — "
+              "payloads spooled, run marked FAILED.")
         return False
 
     print("\n[DONE] All jobs complete.")

@@ -27,6 +27,9 @@ import openpyxl
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 from iras_proxy import iras_proxy_cfg, IRAS_PROXY_ENABLED, safe_exc_name
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from scrapers import db_spool
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # Add project root to path so we can import the Flask app and models
@@ -1305,7 +1308,7 @@ def lookup_carry_forward(nozzles: set, shift_date: str) -> dict:
         return {}
 
 
-def save_totalizers_to_db(shift_date: str, totalizers: dict, xg_check: dict = None):
+def save_totalizers_to_db(shift_date: str, totalizers: dict, xg_check: dict = None) -> bool:
     """
     Write boundary totalizer results to the pumpvision DB.
     Creates or updates NozzleTotalizer rows for the given operational date.
@@ -1314,10 +1317,14 @@ def save_totalizers_to_db(shift_date: str, totalizers: dict, xg_check: dict = No
     carry-forward (resolved=True), its pump_test_litres come from the Shift
     Totalizer movement — not from the ISS scan — and are applied here as an
     override so we don't incorrectly store 0 for nozzle 11's pump test.
+
+    Returns True when the rows are committed, False when the DB write failed
+    (the payload is then spooled to data/spool/nozzle_totalizers/ for replay)
+    or when there was nothing to save.
     """
     if not totalizers:
         print("  [db] Nothing to save.")
-        return
+        return False
 
     try:
         from pumpvision import create_app
@@ -1367,8 +1374,15 @@ def save_totalizers_to_db(shift_date: str, totalizers: dict, xg_check: dict = No
                 saved += 1
             db.session.commit()
             print(f"  [db] Saved {saved} nozzle totalizer readings for {shift_date}")
+        return True
     except Exception as e:
         print(f"  [db] ERROR writing to DB: {e}")
+        db_spool.spool("nozzle_totalizers", shift_date, {
+            "shift_date": shift_date,
+            "totalizers": totalizers,
+            "xg_check": xg_check,
+        }, error=e)
+        return False
 
 
 if __name__ == "__main__":

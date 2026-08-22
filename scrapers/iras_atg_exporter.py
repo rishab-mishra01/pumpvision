@@ -33,6 +33,9 @@ import openpyxl
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 from iras_proxy import iras_proxy_cfg, IRAS_PROXY_ENABLED, safe_exc_name
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from scrapers import db_spool
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # ─────────────────────────────────────────────
@@ -299,7 +302,10 @@ def save_readings_to_db(readings: list[dict]) -> int:
 
     Uses the UniqueConstraint (scraped_at, tank_id) — skips if a row already
     exists for that snapshot time + tank to keep reruns idempotent.
-    Returns the count of rows inserted.
+
+    Returns the count of rows inserted, or -1 if the DB write failed — the
+    readings are then spooled to data/spool/atg_readings/ for replay.  A tank
+    snapshot exists nowhere else on disk, so losing this write loses the data.
     """
     if not readings:
         print("  [db] No ATG readings to save.")
@@ -344,7 +350,11 @@ def save_readings_to_db(readings: list[dict]) -> int:
 
     except Exception as e:
         print(f"  [db] ERROR saving ATG readings: {e}")
-        return 0
+        # Key on the snapshot time so concurrent hourly runs cannot overwrite
+        # each other's spooled payloads.
+        _stamp = min(r["scraped_at"] for r in readings).strftime("%Y%m%dT%H%M%S")
+        db_spool.spool("atg_readings", _stamp, {"readings": readings}, error=e)
+        return -1
 
 
 # ─────────────────────────────────────────────
