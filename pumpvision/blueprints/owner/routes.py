@@ -1,4 +1,4 @@
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, jsonify, redirect, render_template, url_for
 from flask_login import login_required
 
 from pumpvision.decorators import owner_required
@@ -95,14 +95,52 @@ def tanks():
             "lit_count": lit_count,
         })
 
-    # scraped_at is UTC (IRAS Stock tab reports UTC) — convert to IST for display
-    refresh_time = (
-        (latest_ts + timedelta(hours=5, minutes=30)).strftime("%H:%M")
-        if latest_ts else None
-    )
+    # scraped_at is already IST: it is parsed from the Stock tab's own
+    # "stock date"/"stock time" columns, which the portal reports in IST. The
+    # date FILTER on that tab runs off the browser clock (UTC on the VPS) -- that
+    # is a different thing, and conflating the two added +5:30 here and showed
+    # every reading five and a half hours in the future.
+    refresh_time = latest_ts.strftime("%H:%M") if latest_ts else None
 
     return render_template(
         "owner/tanks.html",
         tanks=tanks_data,
         refresh_time=refresh_time,
     )
+
+
+@owner_bp.route("/more")
+@login_required
+@owner_required
+def more():
+    """The "More" tab.
+
+    This used to link straight at auth.logout, so tapping ⋯ signed you out with
+    no menu and no confirmation. It is now a real menu, and the natural home for
+    actions that are not a screen.
+    """
+    from pumpvision.models import TankReading
+
+    latest = TankReading.query.order_by(TankReading.scraped_at.desc()).first()
+    # Already IST -- see the note in tanks(); do not add an offset here either.
+    last_scan = (
+        latest.scraped_at.strftime("%d %b, %H:%M")
+        if latest and latest.scraped_at else None
+    )
+    return render_template("owner/more.html", last_scan=last_scan)
+
+
+@owner_bp.route("/scan", methods=["POST"])
+@login_required
+@owner_required
+def scan_start():
+    from pumpvision import scan
+    return jsonify(scan.start())
+
+
+@owner_bp.route("/scan/status")
+@login_required
+@owner_required
+def scan_status():
+    from pumpvision import scan
+    return jsonify(scan.status())

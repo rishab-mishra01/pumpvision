@@ -34,8 +34,22 @@
       {% if refresh_time %}
       <span class="stamp">{{ refresh_time }}</span>
       {% else %}
-      <span class="stamp" style="color:rgba(244,241,232,0.35);">—</span>
+      <span class="stamp" style="color:var(--ink-500);">—</span>
       {% endif %}
+    </div>
+
+    <!-- MANUAL SCAN -->
+    <div class="scan-row">
+      <button type="button" id="scanBtn" class="scan-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M3 12a9 9 0 0 1 15.5-6.3"/><polyline points="21 3 21 9 15 9"/>
+          <path d="M21 12a9 9 0 0 1-15.5 6.3"/><polyline points="3 21 3 15 9 15"/>
+        </svg>
+        <span id="scanLabel">Scan now</span>
+      </button>
+      <p class="scan-note" id="scanNote" role="status" aria-live="polite">
+        Reads the tanks from IRAS right now. Takes about two minutes.
+      </p>
     </div>
 
     <!-- 2×2 GAUGE GRID -->
@@ -120,7 +134,7 @@
       </svg>
       <span class="nav-label">Summary</span>
     </a>
-    <a href="{{ url_for('auth.logout') }}" class="nav-tab">
+    <a href="{{ url_for('owner.more') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <circle cx="5" cy="12" r="1.6"/>
         <circle cx="12" cy="12" r="1.6"/>
@@ -131,4 +145,52 @@
   </nav>
 
 </div>
+
+<script>
+(function () {
+  var btn   = document.getElementById('scanBtn');
+  var label = document.getElementById('scanLabel');
+  var note  = document.getElementById('scanNote');
+  if (!btn) return;
+
+  var poll = null;
+
+  function busy(on, text) {
+    btn.disabled = on;
+    btn.classList.toggle('is-busy', on);
+    label.textContent = on ? 'Scanning…' : 'Scan now';
+    if (text) note.textContent = text;
+  }
+
+  function finish(state) {
+    clearInterval(poll); poll = null;
+    busy(false, state.message);
+    note.className = 'scan-note ' + (state.status === 'done' ? 'ok' : 'bad');
+    // A finished scan wrote new rows; reload so the gauges show them.
+    if (state.status === 'done') setTimeout(function () { location.reload(); }, 900);
+  }
+
+  function check() {
+    fetch('{{ url_for('owner.scan_status') }}', {credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (s) { if (s.status !== 'running') finish(s); })
+      .catch(function () { /* transient: keep polling */ });
+  }
+
+  btn.addEventListener('click', function () {
+    busy(true, 'Contacting the pump…');
+    note.className = 'scan-note';
+    fetch('{{ url_for('owner.scan_start') }}', {method: 'POST', credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        if (s.status !== 'running') { finish(s); return; }
+        poll = setInterval(check, 4000);
+      })
+      .catch(function () {
+        busy(false, 'Could not reach the server. Check Tailscale.');
+        note.className = 'scan-note bad';
+      });
+  });
+})();
+</script>
 {% endblock %}

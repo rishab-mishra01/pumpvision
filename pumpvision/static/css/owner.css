@@ -1249,3 +1249,68 @@
   font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
   cursor: pointer; text-align: center;
 }
+
+/* ── MANUAL SCAN (Stock screen + More menu) ─────────────── */
+
+.scan-row { margin: 0 18px 14px; }
+
+.scan-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  /* 52px: this is tapped on a forecourt, often one-handed. */
+  min-height: 52px;
+  padding: 0 16px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--paper-300);
+  border-radius: var(--r-card, 6px);
+  color: var(--ink-900);
+  font-family: var(--font-sans);
+  font-size: 15px; font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(154,98,0,0.04), 0 6px 18px -12px rgba(80,50,0,0.25);
+}
+.scan-btn svg { width: 18px; height: 18px; }
+.scan-btn:active { background: var(--paper-100); }
+.scan-btn:focus-visible {
+  outline: 3px solid var(--focus-ring); outline-offset: 2px;
+}
+.scan-btn[disabled] { cursor: default; color: var(--ink-500); }
+
+/* Only the icon spins, so the label stays readable while it runs. */
+.scan-btn.is-busy svg { animation: scan-spin 1.1s linear infinite; }
+@keyframes scan-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .scan-btn.is-busy svg { animation: none; }
+}
+
+.scan-note {
+  margin: 8px 2px 0;
+  font-family: var(--font-sans); font-size: 12.5px; line-height: 1.45;
+  color: var(--ink-500);
+}
+.scan-note.ok  { color: var(--ok-600); font-weight: 600; }
+.scan-note.bad { color: var(--error-600); font-weight: 600; }
+
+/* ── MORE MENU ──────────────────────────────────────────── */
+
+.more-screen { background: var(--paper-50); }
+.more-list { margin: 0 18px; display: flex; flex-direction: column; gap: 10px; }
+.more-item {
+  display: flex; align-items: center; gap: 13px;
+  min-height: 56px; padding: 12px 15px;
+  background: #ffffff;
+  border: 1px solid var(--paper-300);
+  border-radius: var(--r-card, 6px);
+  color: var(--ink-900); text-decoration: none;
+  font-family: var(--font-sans); font-size: 15px; font-weight: 600;
+}
+.more-item:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.more-item svg { width: 20px; height: 20px; flex: none; color: var(--ink-500); }
+.more-item .sub {
+  display: block; font-size: 12.5px; font-weight: 400; color: var(--ink-500);
+  margin-top: 2px;
+}
+/* Sign out is destructive and sits in a list of harmless actions -- it gets the
+   error colour so it cannot be hit by pattern-matching on position. */
+.more-item.danger { color: var(--error-600); }
+.more-item.danger svg { color: var(--error-600); }
