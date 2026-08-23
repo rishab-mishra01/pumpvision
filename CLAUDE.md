@@ -93,8 +93,8 @@ check Tailscale is on before suspecting the app.
 | CNG | Compressed Natural Gas | Gas | SDMS PAD scraper (CGD Rewa billing row, kg) — display source |
 
 **CNG is active — not deferred.** CNG does not appear in IRAS nozzle or ISS tables.
-**Display source:** `_cng_sdms()` in dashboard routes — reads `sdms_summaries` DB table first (Railway
-production source of truth); falls back to local `data/sdms/sdms_pad_{date}_summary.json` for
+**Display source:** `_cng_sdms()` in dashboard routes — reads `sdms_summaries` DB table first (production
+source of truth); falls back to local `data/sdms/sdms_pad_{date}_summary.json` for
 local/debug compatibility. SDMS JSON files are local/debug artifacts only, not the production source.
 **Attendant entries** (`cng_shift_readings`) are still collected at shift close and stored — kept for
 future cross-checks — but are NOT used for dashboard or summary display.
@@ -186,7 +186,7 @@ No pump test deduction for CNG.
 ### Data Sources (two separate streams)
 
 **Display (dashboard + summary):** `_cng_sdms(op_date)` in `blueprints/dashboard/routes.py`.
-Queries `sdms_summaries` DB table first (Railway production source of truth).
+Queries `sdms_summaries` DB table first (production source of truth).
 Falls back to `data/sdms/sdms_pad_{date}_summary.json` for local/debug compatibility.
 Returns a `SimpleNamespace(kg_sold, rsp_per_kg, revenue)` so templates need no changes.
 Returns `None` if no SDMS data for the date or `cng_kg_total ≤ 0`.
@@ -304,7 +304,7 @@ RSP used: `CNG_RSP_PER_KG` env var (default `93.40`).
 
 **DB persistence:** After each successful run, `save_summary_to_db()` upserts a `SdmsSummary`
 row (idempotent by `op_date`). DB write is skipped if `DATABASE_URL` is not set or `--dry-run`
-is active. SDMS JSON files are local/debug artifacts — `sdms_summaries` is the Railway
+is active. SDMS JSON files are local/debug artifacts — `sdms_summaries` is the
 production source. `_fleet_total()` and `_cng_sdms()` in `dashboard/routes.py` read DB first.
 
 ---
@@ -560,8 +560,9 @@ It is not historical completed-shift accounting data.
   python -X utf8 scrapers/daily_scrape.py --atg-only
   ```
 - Ideal: every 30 minutes, or another multiple of 30 minutes, depending on operational need.
-- Railway cron entrypoint: `scripts/run_atg_snapshot.py`. Schedule `*/30 * * * *` (UTC).
-- Railway cron has **not yet been configured** in the Railway dashboard — runs are currently manual.
+- Cron entrypoint: `scripts/run_atg_snapshot.py`, run on the India VPS by
+  `scripts/vps_run_atg_snapshot.sh` (crontab `30 0-18 * * *` UTC = hourly, 06:00–00:00 IST).
+  See *India VPS Scraper Runner*. Runs are automatic — not manual.
 
 ### Mode Summary
 
@@ -986,7 +987,10 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ---
 
-## Production Data Status (Railway PostgreSQL)
+## Production Data Status
+
+> Historical snapshot from the Railway era. The live database is now
+> PostgreSQL on the evo — see *Deployment*.
 
 Last updated: 14 July 2026.
 
@@ -1148,7 +1152,7 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | Credit screens polish (12, 13, 14) | ✓ Substantially done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported via `import_paytm_csv.py` |
-| Railway cron entrypoints (`run_completed_shift.py` + `run_atg_snapshot.py`) | ✓ Built — Railway-first, cross-platform; Railway cron not yet configured in dashboard |
+| Cron entrypoints (`run_completed_shift.py` + `run_atg_snapshot.py`) | ✓ Built and live on the India VPS cron |
 | Windows fallback scripts (`run_completed_shift.ps1` + `run_atg_snapshot.ps1`) | ✓ Built — ASCII-safe, PowerShell 5 compatible; local/manual use only |
 | IRAS CAPTCHA diagnostics (auto-save on failure + `--iras-manual-captcha` fallback) | ✓ Built — artifacts at `data/iras/debug/login_<ts>/`; manual fallback optional |
 | Manager home checklist | ✓ Done — op-date-scoped checklist (dark theme), pending-payments awareness |
@@ -1190,9 +1194,10 @@ One Flask app, one DB, one deployment. Three roles via `users.role`.
 - Phase 4 — manager screens (new design from start)
 - Phase 5 — owner screens (`Owner_Screens.html` as visual reference)
 
-### Cloud Deployment
-Railway (paid tier), PostgreSQL. Mobile-first PWA. Bind `0.0.0.0` in dev.
-Auto-deploys on push to `main`.
+### Deployment
+Self-hosted: gunicorn + PostgreSQL 17 on the evo, scrapers on the India VPS.
+Mobile-first PWA. Bind `0.0.0.0` in dev. **Pushing to `main` deploys nothing** —
+deploying means `git pull` on the host. See *Deployment (Live — August 2026, self-hosted)*.
 
 ### Local Dev
 `start.bat` uses full Python path: `C:\Users\Rishab 2\AppData\Local\Python\bin\python.exe`
@@ -1553,7 +1558,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 
 | Stream | Status |
 |--------|--------|
-| Deployment | ✓ Live — Railway, PostgreSQL, PWA |
+| Deployment | ✓ Live — self-hosted on the evo (gunicorn + PostgreSQL), PWA |
 | Attendant branch | ✓ Complete — 9 screens, live data, reskinned |
 | Three-user foundation | ✓ Complete |
 | Paytm scraper | ✓ Complete — Gmail IMAP OTP, auto-import to DB, OTP not logged |
