@@ -1,7 +1,9 @@
 > Always read this entire file before starting any task in this project.
 > Visual references for every UI screen live in `docs/screens/`. Read them before
-> implementing any template. For owner screens 10 and 15, the canonical visual
-> reference is `docs/design/Owner_Screens.html` — not the design system PNG files.
+> implementing any template. **All three apps now share one parchment design system**
+> (`pumpvision/static/css/design-system.css`) — owner, manager and attendant.
+> `docs/design/Owner Screens.html` shows the pre-August-2026 dark/gold owner design and
+> is **SUPERSEDED**; do not restore that look from it.
 
 # Pumpvision — Project Briefing
 
@@ -1192,7 +1194,8 @@ One Flask app, one DB, one deployment. Three roles via `users.role`.
 - Phase 2 ✓ — login drum-roll animation
 - Phase 3 ✓ — all 9 attendant screens reskinned
 - Phase 4 — manager screens (new design from start)
-- Phase 5 — owner screens (`Owner_Screens.html` as visual reference)
+- Phase 5 — owner screens (`Owner Screens.html` as visual reference; its palette was
+  later retired in the 2026-08-23 parchment unification)
 
 ### Deployment
 Self-hosted: gunicorn + PostgreSQL 17 on the evo, scrapers on the India VPS.
@@ -1265,16 +1268,35 @@ CNG_RSP_PER_KG=93.40
 ## Design System
 
 ### Active Implementation
-Full spec: `docs/design/Pumpvision_Design_System.html`
+Full spec: `docs/design/pumpvision_design_system.html`
 CSS: `pumpvision/static/css/design-system.css`
 Macros: `pumpvision/templates/macros/ui.html`
 
-**Owner screens 10 and 15 deviate from the v0.1 design system.**
-Use `docs/design/Owner_Screens.html` as the sole visual and CSS reference for those
-two screens. Extract all tokens, colors, and component styles from that file directly.
-Login and attendant screens retain the original design system.
+### One system, three apps (unified 2026-08-23)
 
-### Design Tokens (design-system.css, used for login + attendant)
+Owner, manager and attendant all render from **one token layer**: `design-system.css`.
+Owner screens previously deviated — a black `#050505` ground with a gold hero, taken from
+`docs/design/Owner Screens.html`. That direction is **retired**; the mockup carries a
+SUPERSEDED banner and must not be used to restore it.
+
+`owner.css` is now **components only**. It must never re-declare `:root`. It used to, with
+an older copy of the same 36 token names, and since it loads *after* `design-system.css`
+(via `{% block head %}`) it silently reverted the accessibility remediation on every owner
+screen — `--ink-500` at 4.12:1 and `--warn-600` at 4.11:1, both under the 4.5:1 minimum.
+Re-adding a `:root` block there would reintroduce exactly that.
+
+Two traps found while converting, worth not repeating:
+- The decorative `radial-gradient` blooms existed to lift **dark** cards. Re-toned to paper
+  tokens they render as an opaque beige band; on light cards they should be removed.
+- Amber was the *base* gauge fill as well as the `.warn` state. Swapping the literal
+  globally made every healthy tank read as a warning — check base-vs-state before any
+  palette-wide substitution.
+
+Owner surfaces are verified at **0 WCAG AA failures** (measured in-browser across
+dashboard, summary, tanks, credit, ledger). The attendant app was byte-identical before
+and after, and Field-First's sunlight rules are untouched.
+
+### Design Tokens (design-system.css — all three apps)
 - `--paper-*` (50–500): warm substrate
 - `--ink-*` (500–900): navy
 - `--saffron-*` (100–700): energy accent — one CTA per screen max
@@ -1317,7 +1339,8 @@ totalizer_field · card · section_rule · receipt_row · back_btn · screen_top
 
 ## Screen Inventory
 
-PNG refs in `docs/screens/`. **Owner screens 10 + 15: use `docs/design/Owner_Screens.html`.**
+PNG refs in `docs/screens/`. **Owner screens 10 + 15 now follow the shared parchment
+design system** — `docs/design/Owner Screens.html` is SUPERSEDED (see *Design System*).
 
 ---
 
@@ -1396,7 +1419,9 @@ Nav: Home · Tanks · Credit · Summary · More
 
 #### `10_owner_dashboard.png` ✓
 **Route:** `GET /` (role=owner)
-**Design ref: `docs/design/Owner_Screens.html` screen 10 — implemented.**
+**Design ref: `docs/design/Owner Screens.html` screen 10 — implemented, then re-skinned
+onto the shared parchment system 2026-08-23. That mockup is SUPERSEDED for colour;
+its layout and structure still hold.**
 
 Data wiring:
 - Revenue: ISS (litres × RSP per product) + SDMS CNG (`_cng_sdms()`, kg × rsp/kg)
@@ -1437,7 +1462,9 @@ Vehicles: "+ Add vehicle" dashed button. "Suspend account" destructive: hidden i
 
 #### `15_owner_daily_summary.png` ✓
 **Route:** `GET /summary` and `GET /summary/<date_str>`
-**Design ref: `docs/design/Owner_Screens.html` screen 15 — implemented.**
+**Design ref: `docs/design/Owner Screens.html` screen 15 — implemented, then re-skinned
+onto the shared parchment system 2026-08-23. That mockup is SUPERSEDED for colour;
+its layout and structure still hold.**
 
 Data wiring (full calculation chain):
 
@@ -1449,7 +1476,7 @@ Data wiring (full calculation chain):
 2. **LUBE SALES** — cash lube from `lube_transactions` for the day.
    Show "—" + "Logging not active" until Stage 2 manager flow is live.
 
-3. **GROSS REVENUE** — fuel + lube (totalizer per Owner_Screens.html)
+3. **GROSS REVENUE** — fuel + lube (totalizer per Owner Screens.html)
 
 4. **DEDUCTIONS:**
    - Credit extended: sum of credit fuel + credit lube for the day
@@ -1542,8 +1569,9 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 ### Documentation
 - `CLAUDE.md` — this file
 - `docs/screens/` — PNG refs (01–15)
-- `docs/design/Pumpvision_Design_System.html` — design system v0.1
-- `docs/design/Owner_Screens.html` — **canonical visual ref for screens 10 and 15**
+- `docs/design/pumpvision_design_system.html` — design system v0.1
+- `docs/design/Owner Screens.html` — **SUPERSEDED** dark/gold owner design; layout still
+  useful, colours are not. Canonical palette is `design-system.css`.
 
 ---
 

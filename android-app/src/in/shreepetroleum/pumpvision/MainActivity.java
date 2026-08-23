@@ -3,7 +3,12 @@ package in.shreepetroleum.pumpvision;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowInsetsController;
 import android.view.KeyEvent;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -75,6 +80,13 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageFinished(WebView view, String url) {
+                if (!showingError) {
+                    syncStatusBarToPage();
+                }
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 // Only the main document matters -- a failed image must not
                 // replace a page that otherwise rendered.
@@ -87,8 +99,67 @@ public class MainActivity extends Activity {
         web.loadUrl(APP_URL);
     }
 
+    /**
+     * Match the status bar to the page's own <meta name="theme-color">.
+     *
+     * The three apps do not share one colour: owner/manager/attendant render on
+     * parchment (#faf6ed), while the attendant's opt-in Field-First skin is white.
+     * A single hardcoded statusBarColor is therefore wrong on one of them, and a
+     * mismatched strip above the content reads as a rendering fault. Reading the
+     * page keeps the shell honest without the shell knowing the palette.
+     */
+    private void syncStatusBarToPage() {
+        web.evaluateJavascript(
+            "(function(){var m=document.querySelector('meta[name=\"theme-color\"]');"
+            + "return m?m.content:'';})()",
+            value -> {
+                if (value == null) return;
+                String hex = value.replace("\"", "").trim();
+                if (hex.isEmpty()) return;
+                final int color;
+                try {
+                    color = Color.parseColor(hex);
+                } catch (IllegalArgumentException e) {
+                    return;   // page shipped something we cannot parse; keep the theme default
+                }
+                Window w = getWindow();
+                w.setStatusBarColor(color);
+                applyStatusBarIcons(w, isLight(color));
+            });
+    }
+
+    /** Perceived luminance: dark icons belong on a light bar, and vice versa. */
+    private static boolean isLight(int color) {
+        double r = Color.red(color) / 255.0, g = Color.green(color) / 255.0, b = Color.blue(color) / 255.0;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.5;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void applyStatusBarIcons(Window w, boolean lightBackground) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController c = w.getInsetsController();
+            if (c != null) {
+                c.setSystemBarsAppearance(
+                        lightBackground ? WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS : 0,
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+            }
+            return;
+        }
+        // minSdk is 24, so the pre-R path still has to work.
+        View d = w.getDecorView();
+        int flags = d.getSystemUiVisibility();
+        d.setSystemUiVisibility(lightBackground
+                ? flags | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                : flags & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    }
+
     private void showError() {
         showingError = true;
+        // The offline screen is parchment; pin the bar to it rather than leaving
+        // whatever the last real page happened to set.
+        Window w = getWindow();
+        w.setStatusBarColor(Color.parseColor("#faf6ed"));
+        applyStatusBarIcons(w, true);
         web.loadUrl("file:///android_asset/offline.html");
     }
 

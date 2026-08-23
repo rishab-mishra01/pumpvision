@@ -4,12 +4,12 @@
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
 <style>
-  body { margin: 0; background: #050505; }
+  body { margin: 0; background: var(--paper-50); }
 </style>
 {% endblock %}
 
 {% block page %}
-<div class="summary dark-theme" style="display:flex;flex-direction:column;height:100vh;height:100dvh;background:#050505;">
+<div class="summary" style="display:flex;flex-direction:column;height:100vh;height:100dvh;background:var(--paper-50);">
 
   <!-- Scrollable body -->
   <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
