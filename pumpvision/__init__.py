@@ -122,6 +122,23 @@ def create_app():
     from .i18n import HI
     app.jinja_env.globals["hi"] = HI
 
+    # Cache-bust every static URL with the file's mtime.
+    #
+    # Without this, /static/css/owner.css is a stable URL, and the service worker
+    # serves /static/* cache-first -- so a CSS change would keep rendering the old
+    # stylesheet on installed devices until a background revalidate happened to
+    # land. Appending ?v=<mtime> makes each edit a new URL, so a redeploy is picked
+    # up on the next load with no cache version to remember to bump.
+    @app.url_defaults
+    def _static_cache_bust(endpoint, values):
+        if endpoint != "static" or "filename" not in values:
+            return
+        try:
+            values["v"] = int(os.stat(
+                os.path.join(app.static_folder, values["filename"])).st_mtime)
+        except OSError:
+            pass   # missing file: let the normal 404 happen, unversioned
+
     # Serve the service worker from the site root. A worker fetched from
     # /static/sw.js may only control /static/*, so it could never handle page
     # navigations -- which is the whole point of it here (offline screen +

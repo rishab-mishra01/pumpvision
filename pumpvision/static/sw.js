@@ -11,13 +11,12 @@
  * after logout. Navigations are therefore network-only; only immutable static
  * assets are cached.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const STATIC_CACHE = 'pumpvision-static-' + VERSION;
 const OFFLINE_URL = '/static/offline.html';
 
 const PRECACHE = [
   OFFLINE_URL,
-  '/static/css/design-system.css',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
 ];
