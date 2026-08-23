@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Parchment status bar to match the web app's shell, so the transition from
+         splash to page has no colour jump. -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#faf6ed</item>
+        <item name="android:windowBackground">#faf6ed</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

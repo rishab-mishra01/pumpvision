@@ -71,3 +71,6 @@ scrapers/sdms_profile/
 
 # Downloaded operational data
 data/
+
+# Android shell build output (APK is rebuilt by android-app/build.sh)
+android-app/build/
