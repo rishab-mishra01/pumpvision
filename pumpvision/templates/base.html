@@ -120,5 +120,18 @@
 
   {% endblock %}
 
+  {# PWA: register the root-scoped service worker. Wrapped in the secure-context
+     check because the app is also reachable over plain http on the tailnet IP,
+     where registration would throw. #}
+  <script>
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function (e) {
+          console.warn('Service worker registration failed:', e);
+        });
+      });
+    }
+  </script>
+
 </body>
 </html>

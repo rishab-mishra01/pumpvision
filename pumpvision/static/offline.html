@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pumpvision — Offline</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background: #faf6ed; color: #1c1a17;
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  .card { max-width: 30rem; width: 100%; }
+  h1 { font-size: 1.35rem; margin: 0 0 .5rem; letter-spacing: -0.01em; }
+  p  { margin: 0 0 1rem; color: #45403a; }
+  ol { margin: 0 0 1.25rem; padding-left: 1.25rem; color: #45403a; }
+  li { margin-bottom: .4rem; }
+  .hint {
+    border-left: 3px solid #c8781e; padding: .65rem .85rem;
+    background: #f4ecdd; border-radius: 0 6px 6px 0; font-size: .93rem;
+  }
+  button {
+    margin-top: 1.25rem; width: 100%; padding: .8rem 1rem;
+    font: inherit; font-weight: 600; color: #faf6ed; background: #1c1a17;
+    border: 0; border-radius: 8px; cursor: pointer;
+  }
+  button:active { opacity: .85; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Can't reach Pumpvision</h1>
+    <p>The app is served privately over Tailscale, so it only loads when this phone is connected to the tailnet.</p>
+    <div class="hint">
+      <strong>Most likely:</strong> Tailscale is switched off on this phone. That looks identical to the server being down — check it first.
+    </div>
+    <ol style="margin-top:1rem">
+      <li>Open the <strong>Tailscale</strong> app and make sure it is connected.</li>
+      <li>Come back here and tap <strong>Try again</strong>.</li>
+    </ol>
+    <p style="font-size:.88rem;color:#6b645b">If Tailscale is on and this still fails, the app or the server on the evo may genuinely be down.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>

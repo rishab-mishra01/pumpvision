@@ -122,6 +122,19 @@ def create_app():
     from .i18n import HI
     app.jinja_env.globals["hi"] = HI
 
+    # Serve the service worker from the site root. A worker fetched from
+    # /static/sw.js may only control /static/*, so it could never handle page
+    # navigations -- which is the whole point of it here (offline screen +
+    # installability). Serving the same file from "/" gives it root scope.
+    @app.route("/sw.js")
+    def service_worker():
+        from flask import send_from_directory
+        resp = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+        # The worker must never be cached, or a stale copy pins an old asset
+        # cache on the phone until it happens to be re-fetched.
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.context_processor
     def inject_notification_count():
         from flask_login import current_user
