@@ -38,17 +38,47 @@ def _dt(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
+# ── Scraper module loading ──────────────────────────────────────────────────
+# iras_iss_exporter and sdms_pad_exporter each re-open sys.stdout as a UTF-8
+# wrapper at import time. Importing more than one of them in a single process
+# therefore leaves nested wrappers over the same fd, and when an outer wrapper is
+# garbage-collected it closes that fd -- so the next print() raises
+# "ValueError: I/O operation on closed file".
+#
+# That fired AFTER the DB write had already succeeded but BEFORE mark_done(), so
+# the payload stayed pending and the spool drained only one item per invocation
+# while logging a traceback. daily_scrape.py handles this the same way; the two
+# must stay in step.
+_stdout_fd = os.dup(1)
+_loaded = {}
+
+
+def _load_scraper(name: str):
+    """Import scrapers/<name>.py, leaving sys.stdout usable afterwards."""
+    if name in _loaded:
+        return _loaded[name]
+
+    import importlib.util as ilu
+    spec = ilu.spec_from_file_location(name, _PROJECT_ROOT / "scrapers" / f"{name}.py")
+    mod = ilu.module_from_spec(spec)
+    sys.modules[name] = mod
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        # Reset unconditionally: a partial import can leave stdout just as broken
+        # as a successful one.
+        sys.stdout = open(os.dup(_stdout_fd), "w", encoding="utf-8",
+                          errors="replace", closefd=True)
+    _loaded[name] = mod
+    return mod
+
+
 # ── Handlers ────────────────────────────────────────────────────────────────
 # Each takes the spooled payload dict and re-runs the original write.
 # Raise on failure; return a short description of what landed on success.
 
 def _apply_sdms_summary(payload: dict) -> str:
-    import importlib.util as ilu
-    spec = ilu.spec_from_file_location("sdms_pad_exporter",
-                                       _PROJECT_ROOT / "scrapers" / "sdms_pad_exporter.py")
-    mod = ilu.module_from_spec(spec)
-    sys.modules["sdms_pad_exporter"] = mod
-    spec.loader.exec_module(mod)
+    mod = _load_scraper("sdms_pad_exporter")
     ok = mod.save_summary_to_db(
         payload["date_iso"], payload["metadata"],
         payload["fleet_total"], payload["fleet_count"],
@@ -91,12 +121,7 @@ def _apply_atg_readings(payload: dict) -> str:
 
 
 def _apply_nozzle_totalizers(payload: dict) -> str:
-    import importlib.util as ilu
-    spec = ilu.spec_from_file_location("iras_iss_exporter",
-                                       _PROJECT_ROOT / "scrapers" / "iras_iss_exporter.py")
-    mod = ilu.module_from_spec(spec)
-    sys.modules["iras_iss_exporter"] = mod
-    spec.loader.exec_module(mod)
+    mod = _load_scraper("iras_iss_exporter")
     if os.environ.get("OUTPUT_FOLDER"):
         mod.OUTPUT_FOLDER = os.environ["OUTPUT_FOLDER"]
     ok = mod.save_totalizers_to_db(
