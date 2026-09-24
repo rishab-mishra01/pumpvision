@@ -2,8 +2,8 @@
 
 Until September 2026 the app was reachable only over Tailscale, so it had no
 CSRF protection, no login throttling and cookies that travelled over plain
-http. It is now published through a Cloudflare tunnel (with Cloudflare Access
-in front), and this module closes those gaps without touching every template:
+http. It is now public: Tailscale Funnel on :8443 for now (2026-09-24), a
+Cloudflare tunnel with Cloudflare Access planned. This module closes those gaps without touching every template:
 
 - CSRF: every state-changing request must carry an Origin (or, failing that,
   a Referer) naming this same host. Browsers always send Origin on cross-site
@@ -13,8 +13,8 @@ in front), and this module closes those gaps without touching every template:
   for a while. In-memory, which is correct for the single gunicorn worker
   this app runs with; a restart clears it, which is acceptable.
 - Cookies are Secure/HttpOnly when PUMPVISION_SECURE_COOKIES=1 (set by
-  ~/pumpvision-web.sh). Every real entry point is https (Cloudflare, or
-  tailscale serve on :8443), and both proxies are on loopback.
+  ~/pumpvision-web.sh). Every real entry point is https (Tailscale Funnel /
+  serve on :8443, later a Cloudflare tunnel), and every proxy is on loopback.
 - ProxyFix trusts X-Forwarded-* from one hop, so url_for and the Origin check
   see the public https host. Gunicorn binds 127.0.0.1, so only the local
   proxies can set those headers.
@@ -39,9 +39,13 @@ _fails = {}                 # key -> list of failure timestamps
 
 
 def client_ip():
-    # Cloudflare's real client address; only meaningful because gunicorn is
-    # loopback-bound, so the header can only come from our own tunnel.
-    return request.headers.get("CF-Connecting-IP") or request.remote_addr or "?"
+    # ProxyFix(x_for=1) has already replaced remote_addr with the right-most
+    # X-Forwarded-For entry, i.e. the address our own local proxy (tailscale
+    # serve/funnel or cloudflared) saw. Client-supplied headers such as
+    # CF-Connecting-IP are NOT trusted: through Funnel they pass straight
+    # through, so a caller could forge one per request and never hit the
+    # per-IP lockout.
+    return request.remote_addr or "?"
 
 
 def _recent(key, now):
