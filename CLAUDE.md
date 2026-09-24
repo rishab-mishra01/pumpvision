@@ -65,8 +65,7 @@ depends on Railway any more.
 | Backups | `~/pg_backup.sh`, nightly 03:00, `-Fc` dumps to `~/pg_backups`, **90-day** retention |
 | Scrapers | unchanged — India VPS (see *India VPS Scraper Runner*), now writing to the evo |
 | PWA | manifest.json + icons at `pumpvision/static/` |
-| Owner login | `admin` / `shreeadmin2026` |
-| Attendant login | `operations` / `shreeoperations2026` |
+| Logins | owner `admin`/`rishab`, manager `manager`, attendants `operations`, `attendant`, `attendant1-3`. Passwords are **not** kept here: the owner/manager ones were changed in production (checked 2026-09-24), so the values previously written here were stale |
 
 **Access is via Tailscale**, exactly like PIOS on :8001 — if the phone shows nothing,
 check Tailscale is on before suspecting the app.
@@ -262,8 +261,9 @@ Full 48-window scrape deferred to Stage 3.
 table every 30 minutes. Integrated into `daily_scrape.py` as Job 5.
 XG data: stored with `is_reliable = False`.
 Production `tank_readings` is populated hourly by the India VPS ATG cron (live since
-11 Jul 2026). Note: IRAS reports the Stock date/time columns in **UTC** — `scraped_at`
-stores that value verbatim, so it is UTC, not IST.
+11 Jul 2026). Note: the IRAS Stock date/time columns are **IST**, and `scraped_at` stores
+them verbatim, so `scraped_at` is IST. (Verified 2026-09-24: a run that finished at
+13:01 IST stored a 12:00 reading. An earlier version of this note said UTC, which was wrong.)
 
 ### Paytm for Business
 `scrapers/paytm_exporter.py` — headless Playwright, stealth. Job 0 in `daily_scrape.py`.
@@ -631,7 +631,8 @@ op_date 2026-07-09 from the VPS wrote all four streams to Railway Postgres.
 
 ```
 0 1 * * *     /home/ubuntu/pumpvision/scripts/vps_run_completed_shift.sh  # 06:30 IST
-30 0-18 * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh    # hourly, IST 06:00-00:00
+30 0 * * *    ATG_WINDOW_HOURS=7 /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh  # 06:00 IST, also collects the night
+30 1-18 * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh    # hourly, IST 07:00-00:00
 0 7 * * 1-6   /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 12:30 IST CNG probe
 0 10 * * 1-6  /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 15:30 IST CNG probe
 35 11 * * 1-6 /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 17:05 IST CNG probe
@@ -650,6 +651,14 @@ ATG runs hourly on the IST hour (UTC :30) with a deliberate blackout 01:00–05:
 the outlet is closed, tanks are static, and the Tanks screen keeps showing the latest
 `tank_readings` row with its "AS OF" timestamp (midnight snapshot) until 06:00. Owner
 decision, 11 Jul 2026.
+
+**The night readings are still collected (2026-09-24).** The blackout controls when runs
+happen, not which readings are kept. The portal keeps posting every 30 min overnight, but
+the default 2 h window meant the 00:30–04:00 IST readings were never read. They were then
+lost after ~8 days, when the portal drops them. The 06:00 IST run now uses
+`ATG_WINDOW_HOURS=7`, so it picks up the whole night in the same single login. That is
+~48 readings/day instead of ~42. Overnight readings matter for leak/theft checks while
+the outlet is closed. To revert, merge the two crontab lines back into `30 0-18`.
 
 Both wrappers share a flock on `/data/locks/daily_scrape.lock` so two
 `daily_scrape.py` processes never overlap: completed-shift waits up to 25 min for the
@@ -1244,9 +1253,9 @@ SECRET_KEY=<random string>
 DATABASE_URL=sqlite:///pumpvision.db
 OUTPUT_FOLDER=C:\IRAS_Data
 OWNER_USERNAME=admin
-OWNER_PASSWORD=shreeadmin2026
+OWNER_PASSWORD=<see .env>
 ATTENDANT_USERNAME=operations
-ATTENDANT_PASSWORD=shreeoperations2026
+ATTENDANT_PASSWORD=<see .env>
 MANAGER_USERNAME=<see .env>
 MANAGER_PASSWORD=<see .env>
 PAYTM_EMAIL=<see .env>

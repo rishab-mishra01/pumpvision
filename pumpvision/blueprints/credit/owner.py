@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from pumpvision.constants import PUMP_TEST_NOZZLES
 from pumpvision.decorators import owner_required
@@ -56,6 +56,7 @@ def credit_home():
             "amount": p.amount,
             "mode": p.payment_mode,
             "ref": p.reference_number,
+            "status": p.status or "confirmed",
             "obj": p,
         })
     activity.sort(key=lambda x: (x["date"], x["time"] or __import__("datetime").time.min), reverse=True)
@@ -66,9 +67,19 @@ def credit_home():
     # Invoices (recent)
     invoices = Invoice.query.order_by(Invoice.generated_at.desc()).limit(20).all()
 
+    # Manager-logged bank transfers waiting for the owner -- all ages, not just
+    # this week, since an unverified one never reduces the balance.
+    pending = (
+        PaymentReceived.query
+        .filter_by(status="pending_verification")
+        .order_by(PaymentReceived.payment_date)
+        .all()
+    )
+
     return render_template(
         "credit/owner/credit_home.html",
         activity=activity,
+        pending=pending,
         customers=customers,
         invoices=invoices,
         today=today,
@@ -221,8 +232,15 @@ def edit_customer(customer_id):
             customer.payment_terms_days = int(request.form.get("payment_terms_days", 30))
         except ValueError:
             pass
+        # The balance field is prefilled with the current balance, so a plain
+        # "edit vehicles" save would otherwise re-write it -- wiping any sale or
+        # payment logged since the form was opened. Only overwrite when the owner
+        # actually changed the number.
         try:
-            customer.outstanding_balance = float(request.form.get("opening_balance", 0))
+            entered = round(float(request.form.get("opening_balance", "")), 2)
+            shown = round(float(request.form.get("balance_before", "")), 2)
+            if entered != shown:
+                customer.outstanding_balance = entered
         except ValueError:
             pass
 
@@ -276,7 +294,8 @@ def ledger(customer_id):
         .order_by(PaymentReceived.payment_date.desc())
         .all()
     )
-    last_payment = payments[0] if payments else None
+    confirmed = [p for p in payments if (p.status or "confirmed") == "confirmed"]
+    last_payment = confirmed[0] if confirmed else None
 
     # Unified activity feed: fuel txns + payments merged and sorted
     activity = []
@@ -298,6 +317,7 @@ def ledger(customer_id):
             "amount": p.amount,
             "mode": p.payment_mode,
             "ref": p.reference_number,
+            "status": p.status or "confirmed",
         })
     activity.sort(
         key=lambda x: (x["date"], x["time"] or __import__("datetime").time.min),
@@ -311,6 +331,9 @@ def ledger(customer_id):
         invoices=invoices,
         payments=payments,
         last_payment=last_payment,
+        pending=[p for p in payments if p.status == "pending_verification"],
+        unpaid_invoices=[i for i in invoices if not i.is_paid],
+        tab=request.args.get("tab", "activity"),
         today=date.today(),
     )
 
@@ -322,40 +345,106 @@ def record_payment(customer_id):
     from pumpvision.models import Customer, Invoice, PaymentReceived, db
 
     customer = Customer.query.get_or_404(customer_id)
-    invoice_id = request.form.get("invoice_id")
-    invoice = Invoice.query.get_or_404(int(invoice_id))
+    back = redirect(url_for("credit.ledger", customer_id=customer_id, tab="receipts"))
 
     try:
-        amount = float(request.form.get("amount", 0))
+        amount = round(float(request.form.get("amount", "")), 2)
     except ValueError:
-        flash("Invalid amount.", "error")
-        return redirect(url_for("credit.ledger", customer_id=customer_id))
+        amount = 0.0
+    if amount <= 0:
+        flash("Enter a valid amount greater than zero.", "error")
+        return back
 
-    payment_date_str = request.form.get("payment_date", "")
+    payment_mode = request.form.get("payment_mode", "").strip()
+    if payment_mode not in ("Cash", "UPI", "Cheque", "Bank Transfer"):
+        flash("Choose a valid payment mode.", "error")
+        return back
+
     try:
-        payment_date = date.fromisoformat(payment_date_str)
+        payment_date = date.fromisoformat(request.form.get("payment_date", ""))
     except ValueError:
         payment_date = date.today()
 
-    payment = PaymentReceived(
-        invoice_id=invoice.invoice_id,
+    # Invoice is optional: most receipts are on account, not against one bill.
+    invoice = None
+    invoice_id = request.form.get("invoice_id", "").strip()
+    if invoice_id:
+        invoice = Invoice.query.filter_by(
+            invoice_id=int(invoice_id) if invoice_id.isdigit() else -1,
+            customer_id=customer_id,
+        ).first()
+        if invoice is None:
+            flash("That invoice does not belong to this customer.", "error")
+            return back
+
+    db.session.add(PaymentReceived(
+        invoice_id=invoice.invoice_id if invoice else None,
         customer_id=customer_id,
         amount=amount,
         payment_date=payment_date,
-        payment_mode=request.form.get("payment_mode") or None,
-        reference_number=request.form.get("reference_number", "").strip() or None,
-    )
-    db.session.add(payment)
-
+        payment_mode=payment_mode,
+        reference_number=request.form.get("reference_number", "").strip()[:50] or None,
+        notes=request.form.get("notes", "").strip() or None,
+        status="confirmed",  # the owner recording it is the verification
+        verified_by=current_user.id,
+        verified_at=datetime.utcnow(),
+    ))
     customer.outstanding_balance = max(0.0, (customer.outstanding_balance or 0.0) - amount)
-    if amount >= invoice.total_amount:
-        invoice.is_paid = True
-        invoice.paid_at = datetime.utcnow()
-        invoice.paid_amount = amount
+    if invoice:
+        db.session.flush()
+        _refresh_invoice_paid(invoice)
 
     db.session.commit()
-    flash(f"Payment of ₹{amount:,.2f} recorded.", "success")
-    return redirect(url_for("credit.ledger", customer_id=customer_id))
+    flash(f"Payment of ₹{amount:,.2f} recorded.", "ok")
+    return back
+
+
+@credit_bp.route("/payments/<int:payment_id>/verify", methods=["POST"])
+@login_required
+@owner_required
+def verify_payment(payment_id):
+    """Owner confirms (or flags) a bank transfer the manager logged.
+
+    Manager-logged bank transfers are saved as pending_verification and do NOT
+    reduce the balance until confirmed here -- the money has to be seen in the
+    bank first.
+    """
+    from pumpvision.models import Customer, PaymentReceived, db
+
+    payment = PaymentReceived.query.get_or_404(payment_id)
+    back = redirect(url_for("credit.ledger", customer_id=payment.customer_id, tab="receipts"))
+    if payment.status != "pending_verification":
+        flash("This payment is not awaiting verification.", "error")
+        return back
+
+    action = request.form.get("action")
+    if action == "confirm":
+        payment.status = "confirmed"
+        customer = db.session.get(Customer, payment.customer_id)
+        customer.outstanding_balance = max(0.0, (customer.outstanding_balance or 0.0) - payment.amount)
+        if payment.invoice:
+            _refresh_invoice_paid(payment.invoice)
+        flash(f"Bank transfer of ₹{payment.amount:,.2f} confirmed.", "ok")
+    elif action == "flag":
+        payment.status = "flagged"
+        flash(f"Bank transfer of ₹{payment.amount:,.2f} flagged — balance unchanged.", "warning")
+    else:
+        flash("Unknown action.", "error")
+        return back
+
+    payment.verified_by = current_user.id
+    payment.verified_at = datetime.utcnow()
+    db.session.commit()
+    return back
+
+
+def _refresh_invoice_paid(invoice):
+    """Mark an invoice paid once confirmed receipts against it cover the total."""
+    paid = sum(p.amount for p in invoice.payments if p.status == "confirmed")
+    invoice.paid_amount = round(paid, 2)
+    if paid + 0.005 >= invoice.total_amount and not invoice.is_paid:
+        invoice.is_paid = True
+        invoice.paid_at = datetime.utcnow()
 
 
 @credit_bp.route("/invoices")
@@ -396,6 +485,26 @@ def generate_invoice():
         CreditTransaction.transaction_date >= period_from,
         CreditTransaction.transaction_date <= period_to,
     ).all()
+
+    if period_from > period_to:
+        flash("Period start must be on or before period end.", "error")
+        return redirect(url_for("credit.invoices"))
+
+    # Refuse a period that overlaps an existing invoice for this customer --
+    # otherwise the same fuel sales are billed twice.
+    clash = Invoice.query.filter(
+        Invoice.customer_id == customer.customer_id,
+        Invoice.period_from <= period_to,
+        Invoice.period_to >= period_from,
+    ).first()
+    if clash:
+        flash(
+            f"{clash.invoice_number} already covers "
+            f"{clash.period_from:%d %b}–{clash.period_to:%d %b %Y} for this customer. "
+            "Choose dates after that invoice.",
+            "error",
+        )
+        return redirect(url_for("credit.invoices"))
 
     total_amount = sum(t.amount for t in txns)
     if total_amount == 0:
