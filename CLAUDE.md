@@ -570,7 +570,7 @@ The Bright Data proxy (`IRAS_PROXY_*` vars) is an emergency fallback only — ne
 
 | Item | Value |
 |------|-------|
-| Host | `ubuntu@65.2.38.210` (Lightsail Mumbai, ap-south-1) |
+| Host | `ubuntu@15.252.53.15` (Lightsail Mumbai, ap-south-1; STATIC IP since 2026-09-25, was 65.2.38.210; tailnet `100.96.147.27`) |
 | SSH key | `~/.ssh/LightsailDefaultKey-ap-south-1.pem` (owner's machine) |
 | Repo | `~/pumpvision` (read-only deploy key `pumpvision-vps`) |
 | Venv | `~/pumpvision/.venv` |
