@@ -11,7 +11,7 @@ India-geo-restricted.** The scrapers must run from an Indian IP; everything else
 
 | Component | Where | How it starts |
 |-----------|-------|---------------|
-| Scrapers (completed-shift, ATG, SDMS lookback) | AWS Lightsail **Mumbai VPS** — `ubuntu@65.2.38.210` | `crontab` → `scripts/vps_run_*.sh` |
+| Scrapers (completed-shift, ATG, SDMS lookback) | AWS Lightsail **Mumbai VPS** — `ubuntu@15.252.53.15` | `crontab` → `scripts/vps_run_*.sh` |
 | Flask web app | **evo** (`evo-x3-1`, `100.87.158.40`) — gunicorn on `:8002` | `~/pumpvision-web.sh`, kept alive by `~/start-all.sh` (cron every 5 min) |
 | PostgreSQL 17 | **evo**, same box as the web app | system `postgresql@17-main` service |
 

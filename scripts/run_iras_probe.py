@@ -15,7 +15,7 @@ It does NOT save cookies, session state, or screenshots.
 It always exits 0 — failure to render is reported in the log, not raised.
 
 Usage:
-    ssh ubuntu@65.2.38.210
+    ssh ubuntu@15.252.53.15
     ~/pumpvision/.venv/bin/python -X utf8 ~/pumpvision/scripts/run_iras_probe.py
 
 Optional env var (read-only — not a credential):
