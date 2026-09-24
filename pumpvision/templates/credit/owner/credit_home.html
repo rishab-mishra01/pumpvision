@@ -3,7 +3,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
-<style>body { margin: 0; background: #050505; }</style>
+<style>body { margin: 0; background: var(--paper-50); }</style>
 {% endblock %}
 
 {% block page %}
@@ -18,6 +18,24 @@
         <span class="sub">{{ customers | length }} customer{{ 's' if customers | length != 1 }}<br>as of {{ today | dshort }}</span>
       </div>
     </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="flash flash-{{ 'error' if category == 'error' else ('warning' if category == 'warning' else 'ok') }}" role="status" style="margin:12px 16px 0;">{{ message }}</div>
+    {% endfor %}
+    {% endwith %}
+
+    {% if pending %}
+    <div class="flash flash-warning" style="margin:12px 16px 0;">
+      <b>{{ pending | length }} bank transfer{{ 's' if pending | length != 1 }} to verify</b>
+      {% for p in pending %}
+      <div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;">
+        <a href="{{ url_for('credit.ledger', customer_id=p.customer_id, tab='receipts') }}" style="color:inherit;">{{ customers[p.customer_id].company_name if p.customer_id in customers else 'Customer' }} · {{ p.payment_date | dshort }}</a>
+        <span>₹ {{ p.amount | inr_full }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
 
     <!-- TABS -->
     <div class="cred-tabs" id="cred-tabs">
@@ -60,17 +78,18 @@
       {% elif item.type == 'payment' %}
       <div class="cred-feed">
         <div class="cred-feed-row first">
-          <span class="act-glyph pay">
+<span class="act-glyph pay"{% if item.status != 'confirmed' %} style="background:var(--paper-200);color:var(--c-ink-3);"{% endif %}>
+            {% if item.status != 'confirmed' %}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>{% else %}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"/>
-            </svg>
+            </svg>{% endif %}
           </span>
           <div class="body">
             <span class="cname">{{ cust.company_name if cust else '—' }}</span>
-            <span class="desc">{{ item.mode or 'Payment' }}{% if item.ref %} · {{ item.ref }}{% endif %}</span>
+            <span class="desc">{{ item.mode or 'Payment' }}{% if item.status == 'pending_verification' %} · awaiting verification{% elif item.status == 'flagged' %} · flagged{% endif %}{% if item.ref %} · {{ item.ref }}{% endif %}</span>
           </div>
           <div class="right">
-            <span class="amt credit">₹ {{ item.amount | inr }}</span>
+            <span class="amt{{ ' credit' if item.status == 'confirmed' }}"{% if item.status != 'confirmed' %} style="text-decoration:line-through;opacity:.6"{% endif %}>₹ {{ item.amount | inr }}</span>
           </div>
         </div>
       </div>
@@ -150,7 +169,7 @@
       </svg>
       <span class="nav-label">Summary</span>
     </a>
-    <a href="{{ url_for('auth.logout') }}" class="nav-tab">
+    <a href="{{ url_for('owner.more') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <circle cx="5" cy="12" r="1.6"/>
         <circle cx="12" cy="12" r="1.6"/>

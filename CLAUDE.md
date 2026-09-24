@@ -1,7 +1,9 @@
 > Always read this entire file before starting any task in this project.
 > Visual references for every UI screen live in `docs/screens/`. Read them before
-> implementing any template. For owner screens 10 and 15, the canonical visual
-> reference is `docs/design/Owner_Screens.html` — not the design system PNG files.
+> implementing any template. **All three apps now share one parchment design system**
+> (`pumpvision/static/css/design-system.css`) — owner, manager and attendant.
+> `docs/design/Owner Screens.html` shows the pre-August-2026 dark/gold owner design and
+> is **SUPERSEDED**; do not restore that look from it.
 
 # Pumpvision — Project Briefing
 
@@ -56,18 +58,31 @@ depends on Railway any more.
 |------|-------|
 | Web app | gunicorn on **the evo** (`EVO-X3`, WSL2), port **8002**, started by `~/pumpvision-web.sh` |
 | Kept alive by | `start_if_dead "Pumpvision Web"` in `~/start-all.sh`, which cron runs every 5 min |
-| Live URL | `http://100.87.158.40:8002/` — Tailscale only, no public ingress |
+| Live URL | **`https://evo-x3-1.tail863296.ts.net:8443/` — PUBLIC** via Tailscale Funnel (since 2026-09-24). gunicorn binds `127.0.0.1:8002` only; the old `http://100.87.158.40:8002` is gone |
 | Database | PostgreSQL 17 on the evo, database `pumpvision`, same cluster as PIOS's `mea_kb` |
 | DB from the VPS | `postgresql://pumpvision@100.87.158.40:5432/pumpvision` over Tailscale |
 | DB from the app | `127.0.0.1:5432` — loopback on purpose, so the web app does not depend on tailscaled |
 | Backups | `~/pg_backup.sh`, nightly 03:00, `-Fc` dumps to `~/pg_backups`, **90-day** retention |
 | Scrapers | unchanged — India VPS (see *India VPS Scraper Runner*), now writing to the evo |
 | PWA | manifest.json + icons at `pumpvision/static/` |
-| Owner login | `admin` / `shreeadmin2026` |
-| Attendant login | `operations` / `shreeoperations2026` |
+| Logins | owner `admin`/`rishab`, manager `manager`, attendants `operations`, `attendant`, `attendant1-3`. Passwords are **not** kept here: the owner/manager ones were changed in production (checked 2026-09-24), so the values previously written here were stale |
 
-**Access is via Tailscale**, exactly like PIOS on :8001 — if the phone shows nothing,
-check Tailscale is on before suspecting the app.
+**Public on the internet since 2026-09-24** (DM's decision). The app is reached through
+Tailscale Funnel on :8443, and phones no longer need Tailscale. This is interim: the plan
+is a Cloudflare tunnel with Cloudflare Access (an email-code gate) on a dedicated domain.
+`~/pumpvision-tunnel.sh` and `~/bin/cloudflared` are ready; it needs a domain that is not
+the poker one. `~/start-all.sh` re-asserts the Funnel if it goes missing. Only :8443 is
+funnelled; PIOS (:443) and the APK server (:8444) are tailnet-only.
+
+Internet hardening lives in `pumpvision/security.py`:
+- every POST must carry a same-host Origin/Referer (CSRF)
+- login lockout: 5 failures per user, 20 per IP, for 15 min
+- Secure/HttpOnly/SameSite cookies and HSTS, via `PUMPVISION_SECURE_COOKIES=1`
+- ProxyFix. The lockout IP is the right-most X-Forwarded-For entry, which is set by our
+  own proxy. Never trust client headers such as CF-Connecting-IP: through Funnel they
+  pass straight through.
+
+All passwords were rotated on 2026-09-24.
 
 **Two things not to re-derive:**
 - Postgres binds `listen_addresses='*'` (drop-in `/etc/postgresql/17/main/conf.d/10-pv.conf`),
@@ -93,8 +108,8 @@ check Tailscale is on before suspecting the app.
 | CNG | Compressed Natural Gas | Gas | SDMS PAD scraper (CGD Rewa billing row, kg) — display source |
 
 **CNG is active — not deferred.** CNG does not appear in IRAS nozzle or ISS tables.
-**Display source:** `_cng_sdms()` in dashboard routes — reads `sdms_summaries` DB table first (Railway
-production source of truth); falls back to local `data/sdms/sdms_pad_{date}_summary.json` for
+**Display source:** `_cng_sdms()` in dashboard routes — reads `sdms_summaries` DB table first (production
+source of truth); falls back to local `data/sdms/sdms_pad_{date}_summary.json` for
 local/debug compatibility. SDMS JSON files are local/debug artifacts only, not the production source.
 **Attendant entries** (`cng_shift_readings`) are still collected at shift close and stored — kept for
 future cross-checks — but are NOT used for dashboard or summary display.
@@ -186,7 +201,7 @@ No pump test deduction for CNG.
 ### Data Sources (two separate streams)
 
 **Display (dashboard + summary):** `_cng_sdms(op_date)` in `blueprints/dashboard/routes.py`.
-Queries `sdms_summaries` DB table first (Railway production source of truth).
+Queries `sdms_summaries` DB table first (production source of truth).
 Falls back to `data/sdms/sdms_pad_{date}_summary.json` for local/debug compatibility.
 Returns a `SimpleNamespace(kg_sold, rsp_per_kg, revenue)` so templates need no changes.
 Returns `None` if no SDMS data for the date or `cng_kg_total ≤ 0`.
@@ -260,8 +275,9 @@ Full 48-window scrape deferred to Stage 3.
 table every 30 minutes. Integrated into `daily_scrape.py` as Job 5.
 XG data: stored with `is_reliable = False`.
 Production `tank_readings` is populated hourly by the India VPS ATG cron (live since
-11 Jul 2026). Note: IRAS reports the Stock date/time columns in **UTC** — `scraped_at`
-stores that value verbatim, so it is UTC, not IST.
+11 Jul 2026). Note: the IRAS Stock date/time columns are **IST**, and `scraped_at` stores
+them verbatim, so `scraped_at` is IST. (Verified 2026-09-24: a run that finished at
+13:01 IST stored a 12:00 reading. An earlier version of this note said UTC, which was wrong.)
 
 ### Paytm for Business
 `scrapers/paytm_exporter.py` — headless Playwright, stealth. Job 0 in `daily_scrape.py`.
@@ -304,7 +320,7 @@ RSP used: `CNG_RSP_PER_KG` env var (default `93.40`).
 
 **DB persistence:** After each successful run, `save_summary_to_db()` upserts a `SdmsSummary`
 row (idempotent by `op_date`). DB write is skipped if `DATABASE_URL` is not set or `--dry-run`
-is active. SDMS JSON files are local/debug artifacts — `sdms_summaries` is the Railway
+is active. SDMS JSON files are local/debug artifacts — `sdms_summaries` is the
 production source. `_fleet_total()` and `_cng_sdms()` in `dashboard/routes.py` read DB first.
 
 ---
@@ -560,8 +576,9 @@ It is not historical completed-shift accounting data.
   python -X utf8 scrapers/daily_scrape.py --atg-only
   ```
 - Ideal: every 30 minutes, or another multiple of 30 minutes, depending on operational need.
-- Railway cron entrypoint: `scripts/run_atg_snapshot.py`. Schedule `*/30 * * * *` (UTC).
-- Railway cron has **not yet been configured** in the Railway dashboard — runs are currently manual.
+- Cron entrypoint: `scripts/run_atg_snapshot.py`, run on the India VPS by
+  `scripts/vps_run_atg_snapshot.sh` (crontab `30 0-18 * * *` UTC = hourly, 06:00–00:00 IST).
+  See *India VPS Scraper Runner*. Runs are automatic — not manual.
 
 ### Mode Summary
 
@@ -628,7 +645,8 @@ op_date 2026-07-09 from the VPS wrote all four streams to Railway Postgres.
 
 ```
 0 1 * * *     /home/ubuntu/pumpvision/scripts/vps_run_completed_shift.sh  # 06:30 IST
-30 0-18 * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh    # hourly, IST 06:00-00:00
+30 0 * * *    ATG_WINDOW_HOURS=7 /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh  # 06:00 IST, also collects the night
+30 1-18 * * * /home/ubuntu/pumpvision/scripts/vps_run_atg_snapshot.sh    # hourly, IST 07:00-00:00
 0 7 * * 1-6   /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 12:30 IST CNG probe
 0 10 * * 1-6  /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 15:30 IST CNG probe
 35 11 * * 1-6 /home/ubuntu/pumpvision/scripts/vps_run_sdms_lookback.sh   # 17:05 IST CNG probe
@@ -647,6 +665,14 @@ ATG runs hourly on the IST hour (UTC :30) with a deliberate blackout 01:00–05:
 the outlet is closed, tanks are static, and the Tanks screen keeps showing the latest
 `tank_readings` row with its "AS OF" timestamp (midnight snapshot) until 06:00. Owner
 decision, 11 Jul 2026.
+
+**The night readings are still collected (2026-09-24).** The blackout controls when runs
+happen, not which readings are kept. The portal keeps posting every 30 min overnight, but
+the default 2 h window meant the 00:30–04:00 IST readings were never read. They were then
+lost after ~8 days, when the portal drops them. The 06:00 IST run now uses
+`ATG_WINDOW_HOURS=7`, so it picks up the whole night in the same single login. That is
+~48 readings/day instead of ~42. Overnight readings matter for leak/theft checks while
+the outlet is closed. To revert, merge the two crontab lines back into `30 0-18`.
 
 Both wrappers share a flock on `/data/locks/daily_scrape.lock` so two
 `daily_scrape.py` processes never overlap: completed-shift waits up to 25 min for the
@@ -986,7 +1012,10 @@ Customer picker → show uninvoiced credit transactions → confirm → ReportLa
 
 ---
 
-## Production Data Status (Railway PostgreSQL)
+## Production Data Status
+
+> Historical snapshot from the Railway era. The live database is now
+> PostgreSQL on the evo — see *Deployment*.
 
 Last updated: 14 July 2026.
 
@@ -1148,7 +1177,7 @@ Sprint 1/2/3 naming retired. Use Stage 1/2/3.
 | Credit screens polish (12, 13, 14) | ✓ Substantially done |
 | Production data — op_date 2026-05-21 (dashboard proof-of-life) | ✓ All streams verified on Railway |
 | Production data — op_date 2026-05-20 (all streams) | ✓ Complete — 520 Paytm rows imported via `import_paytm_csv.py` |
-| Railway cron entrypoints (`run_completed_shift.py` + `run_atg_snapshot.py`) | ✓ Built — Railway-first, cross-platform; Railway cron not yet configured in dashboard |
+| Cron entrypoints (`run_completed_shift.py` + `run_atg_snapshot.py`) | ✓ Built and live on the India VPS cron |
 | Windows fallback scripts (`run_completed_shift.ps1` + `run_atg_snapshot.ps1`) | ✓ Built — ASCII-safe, PowerShell 5 compatible; local/manual use only |
 | IRAS CAPTCHA diagnostics (auto-save on failure + `--iras-manual-captcha` fallback) | ✓ Built — artifacts at `data/iras/debug/login_<ts>/`; manual fallback optional |
 | Manager home checklist | ✓ Done — op-date-scoped checklist (dark theme), pending-payments awareness |
@@ -1188,11 +1217,13 @@ One Flask app, one DB, one deployment. Three roles via `users.role`.
 - Phase 2 ✓ — login drum-roll animation
 - Phase 3 ✓ — all 9 attendant screens reskinned
 - Phase 4 — manager screens (new design from start)
-- Phase 5 — owner screens (`Owner_Screens.html` as visual reference)
+- Phase 5 — owner screens (`Owner Screens.html` as visual reference; its palette was
+  later retired in the 2026-08-23 parchment unification)
 
-### Cloud Deployment
-Railway (paid tier), PostgreSQL. Mobile-first PWA. Bind `0.0.0.0` in dev.
-Auto-deploys on push to `main`.
+### Deployment
+Self-hosted: gunicorn + PostgreSQL 17 on the evo, scrapers on the India VPS.
+Mobile-first PWA. Bind `0.0.0.0` in dev. **Pushing to `main` deploys nothing** —
+deploying means `git pull` on the host. See *Deployment (Live — August 2026, self-hosted)*.
 
 ### Local Dev
 `start.bat` uses full Python path: `C:\Users\Rishab 2\AppData\Local\Python\bin\python.exe`
@@ -1236,9 +1267,9 @@ SECRET_KEY=<random string>
 DATABASE_URL=sqlite:///pumpvision.db
 OUTPUT_FOLDER=C:\IRAS_Data
 OWNER_USERNAME=admin
-OWNER_PASSWORD=shreeadmin2026
+OWNER_PASSWORD=<see .env>
 ATTENDANT_USERNAME=operations
-ATTENDANT_PASSWORD=shreeoperations2026
+ATTENDANT_PASSWORD=<see .env>
 MANAGER_USERNAME=<see .env>
 MANAGER_PASSWORD=<see .env>
 PAYTM_EMAIL=<see .env>
@@ -1260,16 +1291,35 @@ CNG_RSP_PER_KG=93.40
 ## Design System
 
 ### Active Implementation
-Full spec: `docs/design/Pumpvision_Design_System.html`
+Full spec: `docs/design/pumpvision_design_system.html`
 CSS: `pumpvision/static/css/design-system.css`
 Macros: `pumpvision/templates/macros/ui.html`
 
-**Owner screens 10 and 15 deviate from the v0.1 design system.**
-Use `docs/design/Owner_Screens.html` as the sole visual and CSS reference for those
-two screens. Extract all tokens, colors, and component styles from that file directly.
-Login and attendant screens retain the original design system.
+### One system, three apps (unified 2026-08-23)
 
-### Design Tokens (design-system.css, used for login + attendant)
+Owner, manager and attendant all render from **one token layer**: `design-system.css`.
+Owner screens previously deviated — a black `#050505` ground with a gold hero, taken from
+`docs/design/Owner Screens.html`. That direction is **retired**; the mockup carries a
+SUPERSEDED banner and must not be used to restore it.
+
+`owner.css` is now **components only**. It must never re-declare `:root`. It used to, with
+an older copy of the same 36 token names, and since it loads *after* `design-system.css`
+(via `{% block head %}`) it silently reverted the accessibility remediation on every owner
+screen — `--ink-500` at 4.12:1 and `--warn-600` at 4.11:1, both under the 4.5:1 minimum.
+Re-adding a `:root` block there would reintroduce exactly that.
+
+Two traps found while converting, worth not repeating:
+- The decorative `radial-gradient` blooms existed to lift **dark** cards. Re-toned to paper
+  tokens they render as an opaque beige band; on light cards they should be removed.
+- Amber was the *base* gauge fill as well as the `.warn` state. Swapping the literal
+  globally made every healthy tank read as a warning — check base-vs-state before any
+  palette-wide substitution.
+
+Owner surfaces are verified at **0 WCAG AA failures** (measured in-browser across
+dashboard, summary, tanks, credit, ledger). The attendant app was byte-identical before
+and after, and Field-First's sunlight rules are untouched.
+
+### Design Tokens (design-system.css — all three apps)
 - `--paper-*` (50–500): warm substrate
 - `--ink-*` (500–900): navy
 - `--saffron-*` (100–700): energy accent — one CTA per screen max
@@ -1312,7 +1362,8 @@ totalizer_field · card · section_rule · receipt_row · back_btn · screen_top
 
 ## Screen Inventory
 
-PNG refs in `docs/screens/`. **Owner screens 10 + 15: use `docs/design/Owner_Screens.html`.**
+PNG refs in `docs/screens/`. **Owner screens 10 + 15 now follow the shared parchment
+design system** — `docs/design/Owner Screens.html` is SUPERSEDED (see *Design System*).
 
 ---
 
@@ -1391,7 +1442,9 @@ Nav: Home · Tanks · Credit · Summary · More
 
 #### `10_owner_dashboard.png` ✓
 **Route:** `GET /` (role=owner)
-**Design ref: `docs/design/Owner_Screens.html` screen 10 — implemented.**
+**Design ref: `docs/design/Owner Screens.html` screen 10 — implemented, then re-skinned
+onto the shared parchment system 2026-08-23. That mockup is SUPERSEDED for colour;
+its layout and structure still hold.**
 
 Data wiring:
 - Revenue: ISS (litres × RSP per product) + SDMS CNG (`_cng_sdms()`, kg × rsp/kg)
@@ -1432,7 +1485,9 @@ Vehicles: "+ Add vehicle" dashed button. "Suspend account" destructive: hidden i
 
 #### `15_owner_daily_summary.png` ✓
 **Route:** `GET /summary` and `GET /summary/<date_str>`
-**Design ref: `docs/design/Owner_Screens.html` screen 15 — implemented.**
+**Design ref: `docs/design/Owner Screens.html` screen 15 — implemented, then re-skinned
+onto the shared parchment system 2026-08-23. That mockup is SUPERSEDED for colour;
+its layout and structure still hold.**
 
 Data wiring (full calculation chain):
 
@@ -1444,7 +1499,7 @@ Data wiring (full calculation chain):
 2. **LUBE SALES** — cash lube from `lube_transactions` for the day.
    Show "—" + "Logging not active" until Stage 2 manager flow is live.
 
-3. **GROSS REVENUE** — fuel + lube (totalizer per Owner_Screens.html)
+3. **GROSS REVENUE** — fuel + lube (totalizer per Owner Screens.html)
 
 4. **DEDUCTIONS:**
    - Credit extended: sum of credit fuel + credit lube for the day
@@ -1537,8 +1592,9 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 ### Documentation
 - `CLAUDE.md` — this file
 - `docs/screens/` — PNG refs (01–15)
-- `docs/design/Pumpvision_Design_System.html` — design system v0.1
-- `docs/design/Owner_Screens.html` — **canonical visual ref for screens 10 and 15**
+- `docs/design/pumpvision_design_system.html` — design system v0.1
+- `docs/design/Owner Screens.html` — **SUPERSEDED** dark/gold owner design; layout still
+  useful, colours are not. Canonical palette is `design-system.css`.
 
 ---
 
@@ -1553,7 +1609,7 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 
 | Stream | Status |
 |--------|--------|
-| Deployment | ✓ Live — Railway, PostgreSQL, PWA |
+| Deployment | ✓ Live — self-hosted on the evo (gunicorn + PostgreSQL), PWA |
 | Attendant branch | ✓ Complete — 9 screens, live data, reskinned |
 | Three-user foundation | ✓ Complete |
 | Paytm scraper | ✓ Complete — Gmail IMAP OTP, auto-import to DB, OTP not logged |

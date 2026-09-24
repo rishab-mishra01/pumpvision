@@ -3,7 +3,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
-<style>body { margin: 0; background: #050505; }</style>
+<style>body { margin: 0; background: var(--paper-50); }</style>
 {% endblock %}
 
 {% block page %}
@@ -39,7 +39,7 @@
 
       <div class="cd-balance-v2 {{ state }}">
         <div class="lab">Outstanding</div>
-        <div class="amt"><span class="rs">₹</span>{{ customer.outstanding_balance | inr }}<span class="paise">.00</span></div>
+        <div class="amt"><span class="rs">₹</span>{{ customer.outstanding_balance | inr }}<span class="paise">.{{ (customer.outstanding_balance | inr_full)[-2:] }}</span></div>
       </div>
 
       {% if last_payment %}
@@ -76,11 +76,21 @@
 
     </div>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px 0;">
+      {% for category, message in messages %}
+      <div class="flash flash-{{ 'error' if category == 'error' else ('warning' if category == 'warning' else 'ok') }}" role="status">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <!-- TABS -->
     <div class="cred-tabs detail" id="cred-tabs">
       <button class="active" data-tab="activity">Activity</button>
       <button data-tab="invoices">Invoices <span class="ct">{{ invoices | length }}</span></button>
-      <button data-tab="receipts">Receipts <span class="ct">{{ payments | length }}</span></button>
+      <button data-tab="receipts">Receipts <span class="ct">{{ payments | length }}</span>{% if pending %} <span class="ct" style="background:var(--c-amber);color:#fff;" aria-label="{{ pending | length }} to verify">!</span>{% endif %}</button>
     </div>
 
     <!-- ACTIVITY PANEL -->
@@ -116,17 +126,18 @@
       {% elif item.type == 'payment' %}
       <div class="cred-feed">
         <div class="cred-feed-row first">
-          <span class="act-glyph pay">
+<span class="act-glyph pay"{% if item.status != 'confirmed' %} style="background:var(--paper-200);color:var(--c-ink-3);"{% endif %}>
+            {% if item.status != 'confirmed' %}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>{% else %}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"/>
-            </svg>
+            </svg>{% endif %}
           </span>
           <div class="body">
-            <span class="cname">{{ item.mode or 'Payment' }}</span>
+            <span class="cname">{{ item.mode or 'Payment' }}{% if item.status == 'pending_verification' %} · awaiting verification{% elif item.status == 'flagged' %} · flagged{% endif %}</span>
             <span class="desc">{% if item.ref %}{{ item.ref }}{% else %}—{% endif %}</span>
           </div>
           <div class="right">
-            <span class="amt credit">₹ {{ item.amount | inr }}</span>
+            <span class="amt{{ ' credit' if item.status == 'confirmed' }}"{% if item.status != 'confirmed' %} style="text-decoration:line-through;opacity:.6"{% endif %}>₹ {{ item.amount | inr_full }}</span>
           </div>
         </div>
       </div>
@@ -164,21 +175,76 @@
 
     <!-- RECEIPTS PANEL -->
     <div class="cred-panel" id="tab-receipts">
+
+      {% if pending %}
+      <div class="cred-day">Bank transfers to verify</div>
+      <div class="cred-feed">
+        {% for p in pending %}
+        <div class="cred-feed-row {{ 'first' if loop.first }}" style="display:flex;flex-direction:column;align-items:stretch;gap:8px;">
+          <div class="body">
+            <span class="cname">₹ {{ p.amount | inr_full }} · {{ p.payment_date | dshort }}</span>
+            <span class="desc">{{ p.reference_number or 'No reference' }}{% if p.notes %} · {{ p.notes }}{% endif %}</span>
+          </div>
+          <form method="post" action="{{ url_for('credit.verify_payment', payment_id=p.payment_id) }}" style="display:flex;gap:8px;">
+            <button type="submit" name="action" value="confirm" class="btn btn-primary" style="flex:1;">Confirm</button>
+            <button type="submit" name="action" value="flag" class="btn btn-secondary" style="flex:1;">Flag</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <p style="font-size:12px;color:var(--c-ink-3);padding:6px 16px 0;margin:0;">Confirm only after the money shows in the bank. Confirm reduces the balance. Flag leaves it unchanged.</p>
+      {% endif %}
+
+      <div class="cred-day">Record a payment</div>
+      <form method="post" action="{{ url_for('credit.record_payment', customer_id=customer.customer_id) }}" style="padding:0 16px;">
+        <div class="cform-field">
+          <label class="fl" for="rp-amount">Amount (₹) <span class="req">*</span></label>
+          <input type="number" id="rp-amount" name="amount" step="0.01" min="0.01" inputmode="decimal" required placeholder="0.00">
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="rp-mode">Mode</label>
+          <select id="rp-mode" name="payment_mode">
+            <option>Cash</option><option>UPI</option><option>Cheque</option><option>Bank Transfer</option>
+          </select>
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="rp-date">Date</label>
+          <input type="date" id="rp-date" name="payment_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}">
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="rp-ref">Reference</label>
+          <input type="text" id="rp-ref" name="reference_number" maxlength="50" placeholder="UTR / cheque no.">
+        </div>
+        {% if unpaid_invoices %}
+        <div class="cform-field">
+          <label class="fl" for="rp-inv">Against invoice</label>
+          <select id="rp-inv" name="invoice_id">
+            <option value="">On account (no invoice)</option>
+            {% for inv in unpaid_invoices %}<option value="{{ inv.invoice_id }}">{{ inv.invoice_number }} · ₹ {{ inv.total_amount | inr }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <button type="submit" class="btn btn-primary btn-full" style="margin:12px 0 4px;">Record payment</button>
+      </form>
+
       {% if payments %}
+      <div class="cred-day">History</div>
       <div class="cred-feed">
         {% for p in payments %}
         <div class="cred-feed-row {{ 'first' if loop.first }}">
-          <span class="act-glyph pay">
+<span class="act-glyph pay"{% if (p.status or 'confirmed') != 'confirmed' %} style="background:var(--paper-200);color:var(--c-ink-3);"{% endif %}>
+            {% if (p.status or 'confirmed') != 'confirmed' %}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>{% else %}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"/>
-            </svg>
+            </svg>{% endif %}
           </span>
           <div class="body">
-            <span class="cname">{{ p.payment_mode or 'Payment' }}</span>
+            <span class="cname">{{ p.payment_mode or 'Payment' }}{% if p.status == 'pending_verification' %} · awaiting verification{% elif p.status == 'flagged' %} · flagged{% endif %}</span>
             <span class="desc">{{ p.payment_date | dlong }}{% if p.reference_number %} · {{ p.reference_number }}{% endif %}</span>
           </div>
           <div class="right">
-            <span class="amt credit">₹ {{ p.amount | inr }}</span>
+            {% set ok = (p.status or 'confirmed') == 'confirmed' %}
+            <span class="amt{{ ' credit' if ok }}"{% if not ok %} style="text-decoration:line-through;opacity:.6"{% endif %}>₹ {{ p.amount | inr_full }}</span>
           </div>
         </div>
         {% endfor %}
@@ -218,7 +284,7 @@
       </svg>
       <span class="nav-label">Summary</span>
     </a>
-    <a href="{{ url_for('auth.logout') }}" class="nav-tab">
+    <a href="{{ url_for('owner.more') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <circle cx="5" cy="12" r="1.6"/>
         <circle cx="12" cy="12" r="1.6"/>
@@ -231,6 +297,16 @@
 </div>
 
 <script>
+  (function () {
+    var want = {{ tab | tojson }};
+    var btn = document.querySelector('#cred-tabs button[data-tab="' + want + '"]');
+    if (btn && want !== 'activity') {
+      document.querySelectorAll('#cred-tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.cred-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + want).classList.add('active');
+    }
+  })();
   document.querySelectorAll('#cred-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#cred-tabs button').forEach(b => b.classList.remove('active'));

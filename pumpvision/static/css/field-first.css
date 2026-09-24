@@ -1,0 +1,224 @@
+/* ===========================================================================
+   Field-First — the attendant app's forecourt skin (Option B)
+
+   Loaded ONLY when the device has opted in (ff_ui cookie -> <body data-ff="1">),
+   so the default attendant UI is untouched for everyone else.
+
+   The seven rules this implements:
+     1. Sunlight contrast — near-black on white, AAA (7:1), not just AA
+     2. Big type        — body 18px, actions 20px, meter ~44px; no 9-11px labels
+     3. Glove targets   — every control 56-64px tall
+     4. Picture + word  — icons keep their Hindi word (markup, see templates)
+     5. One primary     — the main action dominates; the rest recedes
+     6. Status 3 ways   — icon AND word AND colour, never colour alone
+     7. Loud focus      — high-vis gold ring, and reduced motion respected
+
+   HOW THIS WORKS WITHOUT REWRITING THE TEMPLATES
+   The attendant templates carry inline styles that reference design-system
+   custom properties (style="color:var(--ink-500)"). A custom property is
+   resolved at the element, so REDEFINING the tokens on the scope below reaches
+   inside those inline styles — colour needs no !important and no template edit.
+   Literal inline sizes (font-size:13px) cannot be reached that way, so the type
+   scale is lifted by matching the exact declaration text. That is deliberate:
+   it is precise, contained, and reversible, and it avoids touching 2,200 lines
+   of markup to change a number. If a template stops using an inline literal,
+   the matching rule simply stops applying -- it cannot break the page.
+   =========================================================================== */
+
+/* --- 1. Palette: white ground, near-black ink, gold accent ---------------- */
+body[data-ff="1"] {
+  /* Field-First's own tokens */
+  --ff-ink:       #0d1117;
+  --ff-paper:     #ffffff;
+  --ff-line:      #d7dde5;
+  --ff-gold:      #e8a11c;   /* large fills and borders only — 2:1, never text */
+  --ff-gold-ink:  #6d4109;   /* text-safe gold, 7.4:1 on white */
+  --ff-gold-ring: #ffcf33;   /* focus ring */
+  --ff-green:     #176127;
+  --ff-green-bg:  #e4f2e6;
+
+  /* Product identity (rule 6 pairs these with a word, never colour alone) */
+  --ff-hs:  #2f6b1f;
+  --ff-ms:  #b23320;
+  --ff-x2:  #6a2fa0;
+  --ff-xg:  #0f6b6b;
+  --ff-cng: #15489e;
+
+  /* --- Design-system tokens, remapped. This is what reaches inline styles. */
+  --paper-50:  #ffffff;
+  --paper-100: #f2f5f8;
+  --paper-200: #e6ebf1;
+  --paper-300: #d7dde5;
+  --paper-400: #414a5a;   /* used as muted TEXT in places — must stay AAA */
+  --paper-500: #414a5a;
+
+  --ink-900: #0d1117;
+  --ink-800: #141a22;
+  --ink-700: #1b232d;
+  --ink-600: #232c38;
+  --ink-500: #2b3542;     /* was mid-grey; AAA on white */
+  --ink-400: #414a5a;
+
+  /* Saffron -> gold. 500 is fills/borders, 600/700 are used as text. */
+  --saffron-500: #e8a11c;
+  --saffron-600: #6d4109;
+  --saffron-700: #573307;
+  --saffron-400: #f0b84e;
+  --saffron-200: #f8dfa8;
+  --saffron-100: #fdf2dc;
+
+  --ok-600:    #176127;
+  --ok-100:    #e4f2e6;
+  --warn-600:  #6d4109;
+  --warn-100:  #f8e8c8;
+  --error-600: #8f2718;
+  --error-100: #f7dbd6;
+
+  --r-card: 14px;
+
+  background: var(--ff-paper);
+  color: var(--ff-ink);
+  font-size: 18px;                 /* rule 2 */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* --- 2. Type scale ------------------------------------------------------- */
+/* Each rule lifts one inline literal. Both spacing variants are matched
+   because the templates use both `font-size:13px` and `font-size: 13px`. */
+body[data-ff="1"] [style*="font-size:9px"],
+body[data-ff="1"] [style*="font-size: 9px"],
+body[data-ff="1"] [style*="font-size:10px"],
+body[data-ff="1"] [style*="font-size: 10px"],
+body[data-ff="1"] [style*="font-size:11px"],
+body[data-ff="1"] [style*="font-size: 11px"]   { font-size: 14px !important; }
+
+body[data-ff="1"] [style*="font-size:12px"],
+body[data-ff="1"] [style*="font-size: 12px"]   { font-size: 15px !important; }
+
+body[data-ff="1"] [style*="font-size:13px"],
+body[data-ff="1"] [style*="font-size: 13px"]   { font-size: 16px !important; }
+
+body[data-ff="1"] [style*="font-size:14px"],
+body[data-ff="1"] [style*="font-size: 14px"]   { font-size: 17px !important; }
+
+body[data-ff="1"] [style*="font-size:15px"],
+body[data-ff="1"] [style*="font-size: 15px"],
+body[data-ff="1"] [style*="font-size:1rem"],
+body[data-ff="1"] [style*="font-size: 1rem"]   { font-size: 18px !important; }
+
+body[data-ff="1"] [style*="font-size:1.05rem"],
+body[data-ff="1"] [style*="font-size:1.1rem"]  { font-size: 20px !important; }
+
+body[data-ff="1"] [style*="font-size:1.2rem"],
+body[data-ff="1"] [style*="font-size:1.25rem"],
+body[data-ff="1"] [style*="font-size:1.3rem"]  { font-size: 24px !important; }
+
+body[data-ff="1"] [style*="font-size:1.4rem"],
+body[data-ff="1"] [style*="font-size:1.5rem"]  { font-size: 28px !important; }
+
+body[data-ff="1"] [style*="font-size:1.75rem"],
+body[data-ff="1"] [style*="font-size:1.875rem"]{ font-size: 32px !important; }
+
+body[data-ff="1"] [style*="font-size:2rem"]    { font-size: 36px !important; }
+
+/* The live meter number — rule 2's headline case. */
+body[data-ff="1"] [style*="font-size:2.5rem"],
+body[data-ff="1"] [style*="font-size: 2.5rem"],
+body[data-ff="1"] [style*="font-size:2.75rem"] { font-size: 44px !important;
+                                                 font-weight: 800 !important;
+                                                 letter-spacing: -0.01em; }
+
+/* Eyebrow labels are tiny and uppercase by default — make them readable. */
+body[data-ff="1"] .eyebrow {
+  font-size: 14px !important;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-500);
+}
+
+/* --- 3. Glove-sized targets --------------------------------------------- */
+body[data-ff="1"] .btn,
+body[data-ff="1"] button:not(.ff-plain),
+body[data-ff="1"] input[type="submit"] {
+  min-height: 56px;
+  font-size: 20px !important;      /* rule 2: actions 20px */
+  font-weight: 700;
+  border-radius: var(--r-card);
+}
+
+/* The one dominant action on a screen (rule 5). */
+body[data-ff="1"] .ff-primary,
+body[data-ff="1"] .btn-primary {
+  min-height: 64px;
+  background: var(--ff-gold) !important;
+  border: 2px solid #c9860e !important;
+  color: #241a05 !important;
+  font-size: 22px !important;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+/* Numpad keys: bigger than the 60px default, per the spec table. */
+body[data-ff="1"] .numpad-btn {
+  height: 64px !important;
+  font-size: 26px !important;
+  font-weight: 700;
+  background: var(--paper-100);
+  border: 2px solid var(--ff-line);
+  color: var(--ff-ink);
+}
+body[data-ff="1"] .numpad-btn:active { background: var(--paper-200); }
+
+/* Any tap target that is a bare link acting as a control. */
+body[data-ff="1"] .action-card,
+body[data-ff="1"] .ff-tile {
+  min-height: 96px;
+  border: 2px solid var(--ff-line);
+  border-radius: var(--r-card);
+  font-size: 20px;
+  font-weight: 700;
+}
+body[data-ff="1"] .action-card--primary {
+  border-left: 8px solid var(--ff-gold);
+  background: #fffaf0;
+}
+
+/* --- 4/6. Status three ways --------------------------------------------- */
+/* Colour is never the only signal: the templates carry the icon and the word,
+   this gives each state a distinct shape as well. */
+body[data-ff="1"] .ff-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 16px !important;
+  font-weight: 700;
+  border: 2px solid currentColor;
+}
+body[data-ff="1"] .ff-status--done    { color: var(--ff-green); background: var(--ff-green-bg); }
+body[data-ff="1"] .ff-status--pending { color: var(--ff-gold-ink); background: #fdf2dc; border-style: dashed; }
+
+/* --- 7. Loud focus ------------------------------------------------------- */
+body[data-ff="1"] :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 4px solid var(--ff-gold-ring);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px rgba(13, 17, 23, 0.55);
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-ff="1"] *,
+  body[data-ff="1"] *::before,
+  body[data-ff="1"] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- Devanagari sits low; give it room at these sizes -------------------- */
+body[data-ff="1"] { line-height: 1.65; }
+body[data-ff="1"] :lang(hi) { line-height: 1.7; }

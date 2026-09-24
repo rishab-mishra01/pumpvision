@@ -1,7 +1,7 @@
 import os
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from pumpvision.constants import ALL_LABELS, ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS
@@ -121,7 +121,32 @@ def activity():
 @login_required
 @attendant_required
 def profile():
-    return render_template("attendant/profile_stub.html")
+    return render_template("attendant/profile_stub.html",
+                           ff_on=request.cookies.get("ff_ui") == "1")
+
+
+# ─── Field-First skin toggle (Option B) ───────────────────────────────────────
+# Opt-in PER DEVICE, not per account: the cookie rides on the phone, so a couple
+# of attendants can trial the new UI on their own handsets while everyone else
+# — and the same attendant on a shared handset — keeps the current one.
+# One year, so a trial is not silently undone by cookie expiry mid-rollout.
+_FF_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+
+@attendant_bp.route("/ui/field-first", methods=["POST"])
+@login_required
+@attendant_required
+def toggle_field_first():
+    turning_on = request.form.get("enable") == "1"
+    resp = make_response(redirect(url_for("attendant.profile")))
+    if turning_on:
+        resp.set_cookie("ff_ui", "1", max_age=_FF_COOKIE_MAX_AGE,
+                        samesite="Lax", httponly=True)
+        flash(HI["ff_enabled"], "success")
+    else:
+        resp.delete_cookie("ff_ui", samesite="Lax")
+        flash(HI["ff_disabled"], "success")
+    return resp
 
 
 # ─── Shift closing ────────────────────────────────────────────────────────────

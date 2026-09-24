@@ -3,7 +3,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
-<style>body { margin: 0; background: #050505; }</style>
+<style>body { margin: 0; background: var(--paper-50); }</style>
 {% endblock %}
 
 {% block page %}
@@ -89,7 +89,7 @@
       </svg>
       <span class="nav-label">Summary</span>
     </a>
-    <a href="{{ url_for('auth.logout') }}" class="nav-tab">
+    <a href="{{ url_for('owner.more') }}" class="nav-tab">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <circle cx="5" cy="12" r="1.6"/>
         <circle cx="12" cy="12" r="1.6"/>

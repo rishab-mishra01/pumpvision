@@ -29,12 +29,21 @@ def login():
         password = request.form.get("password", "")
 
         from pumpvision.models import User
+        from pumpvision.security import clear_login_failures, login_locked, record_login_failure
+
+        wait = login_locked(username)
+        if wait:
+            flash(f"Too many failed attempts. Try again in {max(1, wait // 60)} min.", "error")
+            return render_template("auth/login.html"), 429
+
         user = User.query.filter_by(username=username).first()
 
         if user and user.is_active and user.check_password(password):
+            clear_login_failures(username)
             login_user(user)
             return _role_home()
         else:
+            record_login_failure(username)
             flash("Invalid username or password.", "error")
 
     return render_template("auth/login.html")

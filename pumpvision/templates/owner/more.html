@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}More — Pumpvision{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>body { margin: 0; background: var(--paper-50); }</style>
+{% endblock %}
+
+{% block page %}
+<div class="more-screen" style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
+
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+
+    <div class="tanks-head-bar">
+      <div class="tanks-titlerow">
+        <span class="ttl">More</span>
+        <span class="sub">Shree Petroleum<br>RO 206858</span>
+      </div>
+    </div>
+
+    <!-- MANUAL SCAN -->
+    <div class="scan-row">
+      <button type="button" id="scanBtn" class="scan-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M3 12a9 9 0 0 1 15.5-6.3"/><polyline points="21 3 21 9 15 9"/>
+          <path d="M21 12a9 9 0 0 1-15.5 6.3"/><polyline points="3 21 3 15 9 15"/>
+        </svg>
+        <span id="scanLabel">Scan now</span>
+      </button>
+      <p class="scan-note" id="scanNote" role="status" aria-live="polite">
+        {% if last_scan %}Tanks last read {{ last_scan }} IST.{% else %}No tank reading recorded yet.{% endif %}
+        Takes about two minutes.
+      </p>
+    </div>
+
+    <div class="more-list">
+      <a class="more-item" href="{{ url_for('owner.tanks') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/>
+        </svg>
+        <span>Stock levels<span class="sub">Live tank gauges and days of cover</span></span>
+      </a>
+      <a class="more-item" href="{{ url_for('dashboard.summary') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
+        </svg>
+        <span>Daily summary<span class="sub">Cash reconciliation by day</span></span>
+      </a>
+      <a class="more-item" href="{{ url_for('credit.customers') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        </svg>
+        <span>Credit customers<span class="sub">Ledgers, invoices and payments</span></span>
+      </a>
+
+      <a class="more-item danger" href="{{ url_for('auth.logout') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>Sign out<span class="sub">Signed in as {{ current_user.username }}</span></span>
+      </a>
+    </div>
+
+    <p style="margin:18px 20px 24px;font-family:var(--font-sans);font-size:11.5px;color:var(--ink-500);">
+      Pumpvision · self-hosted over Tailscale
+    </p>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="nav">
+    <a href="{{ url_for('dashboard.index') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>
+      </svg>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="{{ url_for('owner.tanks') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/>
+      </svg>
+      <span class="nav-label">Stock</span>
+    </a>
+    <a href="{{ url_for('credit.credit_home') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="6" width="18" height="13" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span class="nav-label">Credit</span>
+    </a>
+    <a href="{{ url_for('dashboard.summary') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
+      </svg>
+      <span class="nav-label">Summary</span>
+    </a>
+    <a href="{{ url_for('owner.more') }}" class="nav-tab active">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>
+      </svg>
+      <span class="nav-label">More</span>
+    </a>
+  </nav>
+</div>
+
+<script>
+(function () {
+  var btn   = document.getElementById('scanBtn');
+  var label = document.getElementById('scanLabel');
+  var note  = document.getElementById('scanNote');
+  if (!btn) return;
+  var poll = null;
+
+  function busy(on, text) {
+    btn.disabled = on;
+    btn.classList.toggle('is-busy', on);
+    label.textContent = on ? 'Scanning…' : 'Scan now';
+    if (text) note.textContent = text;
+  }
+  function finish(state) {
+    clearInterval(poll); poll = null;
+    busy(false, state.message);
+    note.className = 'scan-note ' + (state.status === 'done' ? 'ok' : 'bad');
+  }
+  function check() {
+    fetch('{{ url_for('owner.scan_status') }}', {credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (s) { if (s.status !== 'running') finish(s); })
+      .catch(function () {});
+  }
+  btn.addEventListener('click', function () {
+    busy(true, 'Contacting the pump…');
+    note.className = 'scan-note';
+    fetch('{{ url_for('owner.scan_start') }}', {method: 'POST', credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        if (s.status !== 'running') { finish(s); return; }
+        poll = setInterval(check, 4000);
+      })
+      .catch(function () {
+        busy(false, 'Could not reach the server. Check Tailscale.');
+        note.className = 'scan-note bad';
+      });
+  });
+})();
+</script>
+{% endblock %}

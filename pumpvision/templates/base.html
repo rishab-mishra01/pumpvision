@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+{# Field-First (Option B) is opt-in PER DEVICE via the ff_ui cookie, and only
+   ever applies to the attendant app — owner and manager are untouched. #}
+{% set ff_on = current_user.is_authenticated
+               and current_user.role == 'attendant'
+               and request.cookies.get('ff_ui') == '1' %}
 {# a11y: the attendant app is Hindi, so declare lang=hi for it (WCAG 3.1.1);
    owner/manager stay English. Roman codes/numbers inside are short and are
    read acceptably under a hi document context. #}
@@ -16,9 +21,14 @@
   <!-- Design system — must be first -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">
 
+  {% if ff_on %}
+  <!-- Field-First skin: overrides the design-system tokens, so it must come after -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/field-first.css') }}">
+  {% endif %}
+
   <!-- PWA -->
   <link rel="manifest" href="/static/manifest.json">
-  <meta name="theme-color" content="#faf6ed">
+  <meta name="theme-color" content="{{ '#ffffff' if ff_on else '#faf6ed' }}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Pumpvision">
@@ -26,7 +36,7 @@
 
   {% block head %}{% endblock %}
 </head>
-<body data-era="balanced">
+<body data-era="balanced"{% if ff_on %} data-ff="1"{% endif %}>
 
   {#
     Attendant and auth screens override {% block page %} entirely — no legacy nav rendered.
@@ -109,6 +119,19 @@
     </main>
 
   {% endblock %}
+
+  {# PWA: register the root-scoped service worker. Wrapped in the secure-context
+     check because the app is also reachable over plain http on the tailnet IP,
+     where registration would throw. #}
+  <script>
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function (e) {
+          console.warn('Service worker registration failed:', e);
+        });
+      });
+    }
+  </script>
 
 </body>
 </html>
