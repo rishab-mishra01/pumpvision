@@ -58,7 +58,7 @@ depends on Railway any more.
 |------|-------|
 | Web app | gunicorn on **the evo** (`EVO-X3`, WSL2), port **8002**, started by `~/pumpvision-web.sh` |
 | Kept alive by | `start_if_dead "Pumpvision Web"` in `~/start-all.sh`, which cron runs every 5 min |
-| Live URL | `http://100.87.158.40:8002/` — Tailscale only, no public ingress |
+| Live URL | **`https://evo-x3-1.tail863296.ts.net:8443/` — PUBLIC** via Tailscale Funnel (since 2026-09-24). gunicorn binds `127.0.0.1:8002` only; the old `http://100.87.158.40:8002` is gone |
 | Database | PostgreSQL 17 on the evo, database `pumpvision`, same cluster as PIOS's `mea_kb` |
 | DB from the VPS | `postgresql://pumpvision@100.87.158.40:5432/pumpvision` over Tailscale |
 | DB from the app | `127.0.0.1:5432` — loopback on purpose, so the web app does not depend on tailscaled |
@@ -67,8 +67,22 @@ depends on Railway any more.
 | PWA | manifest.json + icons at `pumpvision/static/` |
 | Logins | owner `admin`/`rishab`, manager `manager`, attendants `operations`, `attendant`, `attendant1-3`. Passwords are **not** kept here: the owner/manager ones were changed in production (checked 2026-09-24), so the values previously written here were stale |
 
-**Access is via Tailscale**, exactly like PIOS on :8001 — if the phone shows nothing,
-check Tailscale is on before suspecting the app.
+**Public on the internet since 2026-09-24** (DM's decision). The app is reached through
+Tailscale Funnel on :8443, and phones no longer need Tailscale. This is interim: the plan
+is a Cloudflare tunnel with Cloudflare Access (an email-code gate) on a dedicated domain.
+`~/pumpvision-tunnel.sh` and `~/bin/cloudflared` are ready; it needs a domain that is not
+the poker one. `~/start-all.sh` re-asserts the Funnel if it goes missing. Only :8443 is
+funnelled; PIOS (:443) and the APK server (:8444) are tailnet-only.
+
+Internet hardening lives in `pumpvision/security.py`:
+- every POST must carry a same-host Origin/Referer (CSRF)
+- login lockout: 5 failures per user, 20 per IP, for 15 min
+- Secure/HttpOnly/SameSite cookies and HSTS, via `PUMPVISION_SECURE_COOKIES=1`
+- ProxyFix. The lockout IP is the right-most X-Forwarded-For entry, which is set by our
+  own proxy. Never trust client headers such as CF-Connecting-IP: through Funnel they
+  pass straight through.
+
+All passwords were rotated on 2026-09-24.
 
 **Two things not to re-derive:**
 - Postgres binds `listen_addresses='*'` (drop-in `/etc/postgresql/17/main/conf.d/10-pv.conf`),
