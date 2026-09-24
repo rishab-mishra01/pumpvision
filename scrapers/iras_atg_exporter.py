@@ -25,13 +25,18 @@ import asyncio
 import base64
 import io
 import os
+import re
 import sys
-from datetime import datetime
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import openpyxl
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 from iras_proxy import iras_proxy_cfg, IRAS_PROXY_ENABLED, safe_exc_name
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from scrapers import db_spool
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
@@ -51,6 +56,25 @@ PRODUCT_TANK_MAP = {
 
 TABLE_LOAD_TIMEOUT = 30   # seconds
 DOWNLOAD_TIMEOUT   = 30   # seconds
+
+# ── Stock tab date-time window ───────────────────────────────────────────────
+# The Stock tab filters on a date-time range that the portal pre-fills from the
+# BROWSER's clock. The VPS runs UTC while the portal's own Stock Date/Time values
+# are IST, so the default range asks for a slice 5h30m in the past. It returns
+# rows only when the site happened to post a reading in that stale window; the
+# rest of the time the grid renders its no-rows overlay and the snapshot records
+# nothing. Always set the range explicitly, in IST.
+IST                  = timezone(timedelta(hours=5, minutes=30))
+STOCK_DT_FMT         = "%d-%m-%Y %I:%M:%S %p"       # 22-08-2026 04:30:45 pm
+STOCK_DT_PLACEHOLDER = "DD-MM-YYYY hh:mm:ss aa"
+
+# How far back each snapshot looks. An hourly run only needs the newest reading,
+# but a window wider than the cron interval means a run that finds the portal
+# empty is healed by the next one rather than leaving a permanent hole — the
+# (scraped_at, tank_id) unique constraint makes the overlap a no-op.
+# Row count is not a constraint: results spanning multiple pages are read via
+# the Excel export, not the rendered DOM.
+ATG_WINDOW_HOURS = float(os.environ.get("ATG_WINDOW_HOURS", "2"))
 
 
 # ─────────────────────────────────────────────
@@ -118,6 +142,107 @@ async def navigate_to_stock(page):
 
     await page.wait_for_timeout(1500)
     print("[OK] Navigated to FCC Data > Stock")
+
+
+async def set_stock_range(page, frm: datetime, to: datetime) -> bool:
+    """
+    Set the Stock tab's from/to fields to an explicit range.
+
+    Returns True if both fields were set and stuck. On any failure the portal's
+    own (UTC-derived, usually empty) default is left in place and False is
+    returned — the caller still tries, so a portal redesign degrades to the old
+    behaviour instead of aborting the run.
+    """
+    frm_s = frm.strftime(STOCK_DT_FMT).lower()
+    to_s  = to.strftime(STOCK_DT_FMT).lower()
+
+    fields = page.locator(f"input[placeholder='{STOCK_DT_PLACEHOLDER}']")
+    try:
+        await fields.first.wait_for(state="visible", timeout=10_000)
+        n = await fields.count()
+        if n < 2:
+            print(f"  [ATG] WARNING: expected 2 date fields, found {n} — "
+                  f"leaving the portal default window")
+            return False
+        await fields.nth(0).fill(frm_s)
+        await fields.nth(1).fill(to_s)
+        got_frm = await fields.nth(0).input_value()
+        got_to  = await fields.nth(1).input_value()
+        if got_frm != frm_s or got_to != to_s:
+            print(f"  [ATG] WARNING: window did not stick — "
+                  f"asked {frm_s!r}..{to_s!r}, got {got_frm!r}..{got_to!r}")
+            return False
+        print(f"  [ATG] Window (IST): {got_frm} -> {got_to}")
+        return True
+    except Exception as exc:
+        print(f"  [ATG] WARNING: could not set date window "
+              f"({type(exc).__name__}) — using the portal default")
+        return False
+
+
+async def set_stock_window(page, hours: float | None = None) -> bool:
+    """Set a rolling window of the last `hours` (default ATG_WINDOW_HOURS), IST."""
+    hours = ATG_WINDOW_HOURS if hours is None else hours
+    now_ist = datetime.now(IST)
+    # Small lead on the upper bound so a reading posted mid-run is still inside.
+    return await set_stock_range(page,
+                                 now_ist - timedelta(hours=hours),
+                                 now_ist + timedelta(minutes=10))
+
+
+async def _pager_total(page) -> int | None:
+    """
+    Total row count the Stock grid reports ("1 to 10 of 124"), or None.
+
+    The grid paginates at 10 rows and renders only the current page, so this is
+    the only way to know whether a read saw the whole result set.
+    """
+    try:
+        loc = page.locator(".ag-paging-row-summary-panel").first
+        if await loc.count() == 0:
+            return None
+        txt = " ".join(((await loc.text_content()) or "").split())
+        m = re.search(r"of\s+([\d,]+)", txt)
+        return int(m.group(1).replace(",", "")) if m else None
+    except Exception:
+        return None
+
+
+def _prune_excel_exports(output_dir, keep_days: int = 7) -> None:
+    """Drop ATG_Stock_*.xlsx older than keep_days; one lands per run."""
+    cutoff = time.time() - keep_days * 86_400
+    try:
+        for f in Path(output_dir).glob("ATG_Stock_*.xlsx"):
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+async def _download_excel_rows(page, output_dir) -> list[dict]:
+    """
+    Export the current Stock query to Excel and parse it.
+
+    The export honours the active date window and returns every matching row,
+    which is what makes it the right read for a result set spanning pages.
+    """
+    fname = f"ATG_Stock_{datetime.now(IST).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    fpath = Path(output_dir) / fname
+    try:
+        async with page.expect_download(timeout=DOWNLOAD_TIMEOUT * 1000) as dl_info:
+            await page.locator("button.export-excel-button").first.click()
+        download = await dl_info.value
+        await download.save_as(str(fpath))
+        rows = _parse_excel(fpath)
+        print(f"  [ATG] Excel export: {fname} -> {len(rows)} row(s)")
+        _prune_excel_exports(output_dir)
+        return rows
+    except Exception as exc:
+        print(f"  [ATG] Excel download failed: {type(exc).__name__}: {exc}")
+        return []
 
 
 # ─────────────────────────────────────────────
@@ -299,7 +424,10 @@ def save_readings_to_db(readings: list[dict]) -> int:
 
     Uses the UniqueConstraint (scraped_at, tank_id) — skips if a row already
     exists for that snapshot time + tank to keep reruns idempotent.
-    Returns the count of rows inserted.
+
+    Returns the count of rows inserted, or -1 if the DB write failed — the
+    readings are then spooled to data/spool/atg_readings/ for replay.  A tank
+    snapshot exists nowhere else on disk, so losing this write loses the data.
     """
     if not readings:
         print("  [db] No ATG readings to save.")
@@ -344,7 +472,11 @@ def save_readings_to_db(readings: list[dict]) -> int:
 
     except Exception as e:
         print(f"  [db] ERROR saving ATG readings: {e}")
-        return 0
+        # Key on the snapshot time so concurrent hourly runs cannot overwrite
+        # each other's spooled payloads.
+        _stamp = min(r["scraped_at"] for r in readings).strftime("%Y%m%dT%H%M%S")
+        db_spool.spool("atg_readings", _stamp, {"readings": readings}, error=e)
+        return -1
 
 
 # ─────────────────────────────────────────────
@@ -368,7 +500,11 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
 
     await navigate_to_stock(page)
 
-    # Click Show to load the table (Stock tab may not need date inputs)
+    # The Stock tab IS date-filtered; the portal's default range is derived from
+    # the browser clock (UTC here) and does not match its IST data. Set it first.
+    await set_stock_window(page)
+
+    # Click Show to run the query for that range.
     try:
         show_btn = page.locator("button:has-text('Show')").first
         await show_btn.wait_for(state="visible", timeout=5_000)
@@ -394,24 +530,30 @@ async def run_atg(page, output_dir: Path | None = None, dry_run: bool = False) -
 
     print(f"  [ATG] {row_count} row(s) in Stock table")
 
-    # Strategy 1: read ag-Grid cells directly
-    raw_rows = await _read_ag_grid(page)
+    # The grid paginates at 10 rows and renders only the current page, and that
+    # page is not ordered by reading time — so whenever the result set is larger
+    # than what is rendered, reading the DOM would store an arbitrary subset.
+    # The Excel export honours the same date window and returns every row.
+    total = await _pager_total(page)
+    raw_rows: list[dict] = []
 
-    # Strategy 2: fallback to Excel download
+    if total is not None and total > row_count:
+        pages = (total + row_count - 1) // max(row_count, 1)
+        print(f"  [ATG] {total} rows across ~{pages} pages "
+              f"({row_count} rendered) — reading via Excel export")
+        raw_rows = await _download_excel_rows(page, output_dir)
+        if not raw_rows:
+            print("  [ATG] Excel export unusable — falling back to the rendered page "
+                  "(this page only, not the full result)")
+
+    # Single page, or the export failed: read the rendered cells.
+    if not raw_rows:
+        raw_rows = await _read_ag_grid(page)
+
+    # Last resort: the grid read came back empty even though rows are present.
     if not raw_rows:
         print("  [ATG] Grid read empty — trying Excel download")
-        now = datetime.now()
-        fname = f"ATG_Stock_{now.strftime('%Y%m%d_%H%M')}.xlsx"
-        fpath = output_dir / fname
-        try:
-            async with page.expect_download(timeout=DOWNLOAD_TIMEOUT * 1000) as dl_info:
-                await page.locator("button.export-excel-button").click()
-            download = await dl_info.value
-            await download.save_as(str(fpath))
-            print(f"  [ATG] Downloaded: {fname}")
-            raw_rows = _parse_excel(fpath)
-        except Exception as e:
-            print(f"  [ATG] Excel download failed: {e}")
+        raw_rows = await _download_excel_rows(page, output_dir)
 
     if not raw_rows:
         print("  [ATG] Could not read Stock table by any method")

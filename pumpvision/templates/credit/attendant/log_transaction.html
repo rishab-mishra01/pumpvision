@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Log Transaction — PumpVision{% endblock %}
+{% block title %}{{ hi.log_credit_transaction }} — PumpVision{% endblock %}
 
 {% block content %}
-<h1 class="text-xl font-bold text-gray-800 mb-4">Log Credit Transaction</h1>
+<h1 class="text-xl font-bold text-gray-800 mb-4">{{ hi.log_credit_transaction }}</h1>
 
 <form method="POST" action="{{ url_for('attendant.log_transaction') }}" class="space-y-4" id="txn-form">
 
   <div class="bg-white rounded-xl shadow p-4 space-y-4">
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.customer }} *</label>
       <select name="customer_id" id="customer-select" required
               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        <option value="">— Select customer —</option>
+        <option value="">{{ hi.select_customer_dash }}</option>
         {% for c in customers %}
         <option value="{{ c.customer_id }}">{{ c.company_name }}</option>
         {% endfor %}
@@ -19,15 +19,15 @@
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Vehicle *</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.vehicle }} *</label>
       <select name="vehicle_number" id="vehicle-select" required
               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        <option value="">— Select customer first —</option>
+        <option value="">{{ hi.select_customer_first_dash }}</option>
       </select>
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Product *</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.product }} *</label>
       <div class="grid grid-cols-4 gap-2" id="product-buttons">
         {% for prod, label in [('HS','HSD'), ('MS','Petrol'), ('X2','XP95'), ('XG','XGreen')] %}
         <label class="cursor-pointer">
@@ -44,47 +44,47 @@
 
   <div class="bg-white rounded-xl shadow p-4 space-y-4">
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Rate per Litre (₹)
-        <span class="text-xs text-gray-400 font-normal">— auto from current RSP</span>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.rate_per_litre }}
+        <span class="text-xs text-gray-400 font-normal">{{ hi.auto_from_rsp }}</span>
       </label>
-      <input type="text" id="rate-display" readonly value="— select a product —"
+      <input type="text" id="rate-display" readonly value="{{ hi.select_product_dash }}"
              class="w-full border border-gray-200 rounded-lg px-4 py-3 text-base bg-gray-50 text-gray-500 cursor-not-allowed">
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Litres *</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.litres_required }} *</label>
       <input type="number" name="litres" required step="0.01" min="0.01" inputmode="decimal"
              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="e.g. 50.00">
+             placeholder="{{ hi.eg_litres }}">
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₹) *
-        <span class="text-xs text-gray-400 font-normal">— from meter reading</span>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.amount }} (₹) *
+        <span class="text-xs text-gray-400 font-normal">{{ hi.amount_from_meter }}</span>
       </label>
       <input type="number" name="amount" required step="0.01" min="1" inputmode="decimal"
              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="e.g. 4699.50">
+             placeholder="{{ hi.eg_amount }}">
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Attendant Name *</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.attendant_name }} *</label>
       <input type="text" name="attendant_name" required
              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="Your name">
+             placeholder="{{ hi.your_name }}">
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+      <label class="block text-sm font-medium text-gray-700 mb-1">{{ hi.notes }}</label>
       <input type="text" name="notes"
              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-             placeholder="Optional">
+             placeholder="{{ hi.optional }}">
     </div>
   </div>
 
   <button type="submit"
           class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg">
-    Submit Transaction
+    {{ hi.submit_transaction }}
   </button>
 </form>
 
@@ -103,23 +103,23 @@ const customerSelect = document.getElementById('customer-select');
 const vehicleSelect  = document.getElementById('vehicle-select');
 
 const FIXED_VEHICLES = [
-  { number: 'UNREGISTERED', description: 'Pre-delivery / No registration' },
-  { number: 'CONTAINER',    description: 'Fuel container' },
+  { number: 'UNREGISTERED', description: {{ hi.fixed_unreg_desc|tojson }} },
+  { number: 'CONTAINER',    description: {{ hi.fixed_container_desc|tojson }} },
 ];
 
 customerSelect.addEventListener('change', function() {
   const customerId = this.value;
-  vehicleSelect.innerHTML = '<option value="">Loading...</option>';
+  vehicleSelect.innerHTML = '<option value="">' + {{ hi.loading|tojson }} + '</option>';
 
   if (!customerId) {
-    vehicleSelect.innerHTML = '<option value="">— Select customer first —</option>';
+    vehicleSelect.innerHTML = '<option value="">' + {{ hi.select_customer_first_dash|tojson }} + '</option>';
     return;
   }
 
   fetch(`/attendant/vehicles/${customerId}`)
     .then(r => r.json())
     .then(vehicles => {
-      vehicleSelect.innerHTML = '<option value="">— Select vehicle —</option>';
+      vehicleSelect.innerHTML = '<option value="">' + {{ hi.select_vehicle_dash|tojson }} + '</option>';
       FIXED_VEHICLES.forEach(v => {
         const opt = document.createElement('option');
         opt.value = v.number;
@@ -134,7 +134,7 @@ customerSelect.addEventListener('change', function() {
       });
     })
     .catch(() => {
-      vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+      vehicleSelect.innerHTML = '<option value="">' + {{ hi.error_loading_vehicles|tojson }} + '</option>';
     });
 });
 </script>

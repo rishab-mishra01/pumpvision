@@ -5,7 +5,7 @@
 # Base image: mcr.microsoft.com/playwright/python:v1.58.0-noble
 #
 #   - Ubuntu 24.04 LTS (Noble Numbat)
-#   - System Python: 3.12  (matches current Railway Python version)
+#   - System Python: 3.12
 #   - Chromium, Firefox, WebKit pre-installed at /ms-playwright
 #   - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright  (set by the image)
 #   - All system-level browser dependencies already present:
@@ -19,7 +19,7 @@
 
 FROM mcr.microsoft.com/playwright/python:v1.58.0-noble
 
-# Shared working directory for all Railway services
+# Shared working directory
 WORKDIR /app
 
 # Runtime defaults — no secrets baked in
@@ -28,7 +28,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Ubuntu 24.04 ships `python3` but not `python`.
 # The Playwright base image usually creates the alias; add it explicitly as a
-# safety net so `python -X utf8 ...` works in railway.json startCommand.
+# safety net so `python -X utf8 ...` works regardless of how it is invoked.
 RUN ln -sf "$(which python3)" /usr/local/bin/python 2>/dev/null || true
 
 # Install Python dependencies first — Docker layer is cached until
@@ -40,10 +40,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # See .dockerignore for exclusions (secrets, data/, venvs, session state, etc.)
 COPY . .
 
-# Port hint for web service.
-# Railway injects the actual PORT env var at runtime; this is documentation only.
+# Port hint for the web service. Override PORT at run time to change it.
 EXPOSE 8080
 
-# Default start command — Railway overrides this via railway.json startCommand,
-# but keeping it here makes the image usable standalone for local testing.
-CMD ["python", "-X", "utf8", "scripts/railway_entrypoint.py"]
+# NOTE: nothing deploys from this image today. The app is served directly by
+# ~/pumpvision-web.sh on the evo, and the scrapers run from a venv on the India
+# VPS. It is kept because it pins a known-good Playwright/Python/browser triple
+# that matches requirements.txt, which is genuinely hard to reconstruct.
+CMD ["sh", "-c", "gunicorn wsgi:app --bind 0.0.0.0:${PORT:-8080} --worker-class gthread --workers 1 --threads 4 --timeout 60"]

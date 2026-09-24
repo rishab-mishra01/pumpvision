@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 
 from pumpvision.constants import ALL_LABELS, ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS
 from pumpvision.decorators import attendant_required
+from pumpvision.i18n import HI
 
 attendant_bp = Blueprint("attendant", __name__)
 
@@ -22,10 +23,10 @@ _SHIFT_NOZZLE = {
     "XG":  {"db_label": "XG",    "nozzle_no": 11, "du": 9,  "db_product": "XG",  "color": "#f97316"},
 }
 _SHIFT_PRODUCT = {
-    "HS": {"nozzles": ["HS1", "HS2"], "color": "#3b82f6", "label": "High Speed Diesel", "banner": "HS - Diesel"},
-    "MS": {"nozzles": ["MS1", "MS2"], "color": "#10b981", "label": "Motor Spirit",       "banner": "MS - Petrol"},
-    "X2": {"nozzles": ["X2"],         "color": "#a855f7", "label": "Xtra Premium 95",   "banner": "X2 - Premium"},
-    "XG": {"nozzles": ["XG"],         "color": "#f97316", "label": "Xtra Green",        "banner": "XG - Bio"},
+    "HS": {"nozzles": ["HS1", "HS2"], "color": "#3b82f6", "label": "High Speed Diesel", "banner": "HS - डीज़ल"},
+    "MS": {"nozzles": ["MS1", "MS2"], "color": "#10b981", "label": "Motor Spirit",       "banner": "MS - पेट्रोल"},
+    "X2": {"nozzles": ["X2"],         "color": "#a855f7", "label": "Xtra Premium 95",   "banner": "X2 - प्रीमियम"},
+    "XG": {"nozzles": ["XG"],         "color": "#f97316", "label": "Xtra Green",        "banner": "XG - बायो"},
 }
 _NOZZLE_ORDER = ["HS1", "HS2", "MS1", "MS2", "X2", "XG"]
 
@@ -66,12 +67,12 @@ def _shift_op_date() -> date:
 def _greeting() -> str:
     hour = datetime.now().hour
     if 5 <= hour < 12:
-        return "Good morning"
+        return HI["good_morning"]
     elif 12 <= hour < 17:
-        return "Good afternoon"
+        return HI["good_afternoon"]
     elif 17 <= hour < 21:
-        return "Good evening"
-    return "Good night"
+        return HI["good_evening"]
+    return HI["good_night"]
 
 
 # ─── Attendant home ───────────────────────────────────────────────────────────
@@ -165,7 +166,7 @@ def shift_close_submit():
         for r in ManualTotalizerReading.query.filter_by(operational_date=op_date).all()
     }
     if not all(label in done_labels for label in ALL_LABELS):
-        flash("All products must be recorded before closing the shift.", "error")
+        flash(HI["flash_record_all_products"], "error")
         return redirect(url_for("attendant.shift_close"))
 
     ManualTotalizerReading.query.filter_by(operational_date=op_date).update({"is_locked": True})
@@ -177,7 +178,7 @@ def shift_close_submit():
     ))
     db.session.commit()
 
-    flash(f"Day close submitted for {op_date.strftime('%d %b %Y')}. Owner has been notified.", "success")
+    flash(HI["flash_day_close_submitted"].format(date=op_date.strftime('%d %b %Y')), "success")
     return redirect(url_for("attendant.home"))
 
 
@@ -196,7 +197,7 @@ def shift_close_entry(product):
     if ManualTotalizerReading.query.filter_by(
         operational_date=op_date, nozzle_label=labels[0], is_locked=True
     ).first():
-        flash("Readings for this day are locked.", "error")
+        flash(HI["flash_readings_locked"], "error")
         return redirect(url_for("attendant.shift_close"))
 
     if request.method == "POST":
@@ -206,11 +207,11 @@ def shift_close_entry(product):
             try:
                 val = float(raw)
                 if val <= 0:
-                    errors.append(f"{label}: must be greater than zero.")
+                    errors.append(HI["flash_label_gt_zero"].format(label=label))
                 else:
                     values[label] = val
             except (ValueError, TypeError):
-                errors.append(f"{label}: enter a valid number.")
+                errors.append(HI["flash_label_valid_number"].format(label=label))
 
         if errors:
             for e in errors:
@@ -235,7 +236,7 @@ def shift_close_entry(product):
                         recorded_at=now,
                     ))
             db.session.commit()
-            flash(f"{product} readings saved.", "success")
+            flash(HI["flash_readings_saved"].format(product=product), "success")
             return redirect(url_for("attendant.shift_close"))
 
     current_readings = {
@@ -298,28 +299,28 @@ def log_transaction():
 
         errors = []
         if not customer_id:
-            errors.append("Please select a customer.")
+            errors.append(HI["err_select_customer"])
         if not vehicle_number:
-            errors.append("Please select a vehicle.")
+            errors.append(HI["err_select_vehicle"])
         if product not in ("HS", "MS", "X2", "XG"):
-            errors.append("Please select a valid product.")
+            errors.append(HI["err_select_valid_product"])
         if not attendant_name:
-            errors.append("Attendant name is required.")
+            errors.append(HI["err_attendant_name_required"])
 
         try:
             litres = float(litres_str)
             if litres <= 0:
-                errors.append("Litres must be greater than zero.")
+                errors.append(HI["err_litres_gt_zero"])
         except (ValueError, TypeError):
-            errors.append("Litres must be a valid number.")
+            errors.append(HI["err_litres_valid"])
             litres = 0
 
         try:
             amount = float(amount_str)
             if amount <= 0:
-                errors.append("Amount must be greater than zero.")
+                errors.append(HI["err_amount_gt_zero"])
         except (ValueError, TypeError):
-            errors.append("Amount must be a valid number.")
+            errors.append(HI["err_amount_valid"])
             amount = 0
 
         if errors:
@@ -362,12 +363,14 @@ def log_transaction():
 
         if customer.utilization_pct >= threshold:
             flash(
-                f"Transaction saved. "
-                f"Note: {customer.company_name} is now at {customer.utilization_pct:.0f}% credit utilization.",
+                HI["flash_txn_saved_util"].format(
+                    name=customer.company_name,
+                    pct=f"{customer.utilization_pct:.0f}",
+                ),
                 "warning",
             )
         else:
-            flash("Transaction saved successfully.", "success")
+            flash(HI["flash_txn_saved"], "success")
 
         return redirect(url_for("attendant.log_transaction"))
 
@@ -449,20 +452,20 @@ def log_sale_details(customer_id):
         errors = []
 
         if not vehicle_number:
-            errors.append("Please select a vehicle.")
+            errors.append(HI["err_select_vehicle"])
         if product not in ("HS", "MS", "X2", "XG"):
-            errors.append("Please select a product.")
+            errors.append(HI["err_select_product"])
 
         rate = price_map.get(product)
         if product in ("HS", "MS", "X2", "XG") and rate is None:
-            errors.append(f"No current rate found for {product}. Contact owner.")
+            errors.append(HI["err_no_current_rate"].format(product=product))
 
         try:
             quantity = float(request.form.get("quantity", ""))
             if quantity <= 0:
-                errors.append("Quantity must be greater than zero.")
+                errors.append(HI["err_quantity_gt_zero"])
         except (ValueError, TypeError):
-            errors.append("Please enter a valid quantity.")
+            errors.append(HI["err_quantity_valid"])
             quantity = 0.0
 
         if not errors:
@@ -545,11 +548,12 @@ def shift_cng_numpad():
         try:
             closing = float(raw)
         except (ValueError, TypeError):
-            flash("Please enter a valid number.", "error")
+            flash(HI["flash_valid_number"], "error")
             return redirect(url_for("attendant.shift_cng_numpad"))
 
         if opening is not None and closing < opening:
-            flash(f"Closing ({closing:.1f} kg) must be ≥ opening ({opening:.1f} kg).", "error")
+            flash(HI["flash_closing_ge_opening_kg"].format(
+                closing=f"{closing:.1f}", opening=f"{opening:.1f}"), "error")
             return redirect(url_for("attendant.shift_cng_numpad"))
 
         s = db.session.get(AppSetting, "cng_rsp_per_kg")
@@ -603,7 +607,7 @@ def shift_select_product():
         .count() == 6
     )
     if all_submitted:
-        flash("Today's shift is already submitted.", "info")
+        flash(HI["flash_shift_already_submitted"], "info")
         return redirect(url_for("attendant.home"))
 
     product_done = {}
@@ -679,7 +683,7 @@ def shift_numpad(nozzle):
     ).first()
 
     if existing and existing.is_locked:
-        flash("This reading is already submitted and locked.", "error")
+        flash(HI["flash_reading_locked"], "error")
         return redirect(url_for("attendant.shift_summary"))
 
     # Back URL depends on which product this nozzle belongs to
@@ -695,11 +699,12 @@ def shift_numpad(nozzle):
         try:
             value = float(raw)
         except (ValueError, TypeError):
-            flash("Please enter a valid number.", "error")
+            flash(HI["flash_valid_number"], "error")
             return redirect(url_for("attendant.shift_numpad", nozzle=nozzle))
 
         if opening is not None and value < opening:
-            flash(f"Closing reading ({value:,.2f}) must be ≥ opening ({opening:,.2f}).", "error")
+            flash(HI["flash_closing_ge_opening"].format(
+                closing=f"{value:,.2f}", opening=f"{opening:,.2f}"), "error")
             return redirect(url_for("attendant.shift_numpad", nozzle=nozzle))
 
         now = datetime.now()
@@ -773,7 +778,7 @@ def shift_summary():
     all_entered = all(r["closing"] is not None for r in nozzle_rows)
     any_drafts  = any(r["closing"] is not None for r in nozzle_rows)
     warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5]
-    display_name = os.environ.get("ATTENDANT_DISPLAY_NAME", current_user.id.capitalize())
+    display_name = os.environ.get("ATTENDANT_DISPLAY_NAME", str(current_user.id).capitalize())
 
     return render_template(
         "attendant/shift_summary.html",
@@ -801,7 +806,7 @@ def shift_submit():
         if not ManualTotalizerReading.query.filter_by(
             operational_date=op_date, nozzle_label=det["db_label"]
         ).first():
-            flash("All 6 nozzle readings must be entered before submitting.", "error")
+            flash(HI["flash_all_six_nozzles"], "error")
             return redirect(url_for("attendant.shift_summary"))
 
     now = datetime.now()
@@ -812,5 +817,5 @@ def shift_submit():
         reference_date=op_date,
     ))
     db.session.commit()
-    flash("Shift closed. All readings submitted.", "success")
+    flash(HI["flash_shift_closed"], "success")
     return redirect(url_for("attendant.home"))

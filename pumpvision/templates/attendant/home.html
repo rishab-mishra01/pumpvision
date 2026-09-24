@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Home — Pumpvision{% endblock %}
+{% block title %}{{ hi.title_home }} — Pumpvision{% endblock %}
 
 {% block page %}
 <style>
@@ -48,7 +48,7 @@
       </div>
     </div>
     <button style="background:none;border:none;cursor:pointer;
-                   color:var(--ink-500);padding:8px;" aria-label="Notifications">
+                   color:var(--ink-500);padding:8px;" aria-label="सूचनाएँ">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -94,11 +94,11 @@
       <div>
         <p style="font-family:var(--font-sans);font-weight:600;font-size:13px;
                   color:var(--ok-600);margin:0 0 3px;">
-          {{ prev_date_str }} shift closed ✓
+          {{ prev_date_str }} {{ hi.shift_closed_suffix }}
         </p>
         <p style="font-family:var(--font-sans);font-weight:400;font-size:11px;
                   color:var(--ink-600);margin:0;line-height:1.5;">
-          Today's shift ({{ curr_date_str }}) is in progress. Close it tomorrow after 06:00.
+          {{ hi.shift_in_progress.format(date=curr_date_str) }}
         </p>
       </div>
     </div>
@@ -117,11 +117,11 @@
       <div>
         <p style="font-family:var(--font-sans);font-weight:600;font-size:13px;
                   color:var(--warn-600);margin:0 0 3px;">
-          {{ prev_date_str }} shift not closed
+          {{ prev_date_str }} {{ hi.shift_not_closed_suffix }}
         </p>
         <p style="font-family:var(--font-sans);font-weight:400;font-size:11px;
                   color:var(--ink-600);margin:0;line-height:1.5;">
-          Tap Close Shift to enter your closing readings.
+          {{ hi.tap_close_shift }}
         </p>
       </div>
     </div>
@@ -145,10 +145,10 @@
       </div>
       <p style="font-family:var(--font-sans);font-weight:600;font-size:1rem;
                 color:var(--ink-900);margin:0;">
-        Log Credit Sale
+        {{ hi.log_credit_sale }}
       </p>
       <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);margin:0;">
-        Record a fuel sale on credit
+        {{ hi.log_credit_sale_sub }}
       </p>
     </a>
 
@@ -164,10 +164,10 @@
       </div>
       <p style="font-family:var(--font-sans);font-weight:600;font-size:1rem;
                 color:var(--ink-900);margin:0;">
-        Close Shift
+        {{ hi.close_shift }}
       </p>
       <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);margin:0;">
-        Enter closing nozzle readings
+        {{ hi.close_shift_sub }}
       </p>
     </a>
 
@@ -183,7 +183,7 @@
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    Home
+    {{ hi.nav_home }}
   </a>
   <a href="{{ url_for('attendant.activity') }}"
      class="bottom-nav__item">
@@ -193,7 +193,7 @@
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    Activity
+    {{ hi.nav_activity }}
   </a>
   <a href="{{ url_for('attendant.profile') }}"
      class="bottom-nav__item">
@@ -202,7 +202,7 @@
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
       <circle cx="12" cy="7" r="4"/>
     </svg>
-    Profile
+    {{ hi.nav_profile }}
   </a>
 </nav>
 {% endblock %}

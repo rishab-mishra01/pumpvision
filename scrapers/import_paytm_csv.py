@@ -6,12 +6,17 @@ scraper download step failed and the DB import was never reached.
 
 Target database is determined by DATABASE_URL (env var).
   - Not set → SQLite (instance/pumpvision.db)
-  - Set to Railway URL → Railway PostgreSQL
+  - Set to a postgresql:// URL → that PostgreSQL (production is the evo,
+    reached over Tailscale at 100.87.158.40:5432)
+
+Set PUMPVISION_SKIP_BOOTSTRAP=1 when pointing this at production: create_app()
+would otherwise run create_all -> upgrade -> _seed_data against live data.
 
 Usage:
     python -X utf8 scrapers/import_paytm_csv.py data/paytm/paytm_2026-05-21.csv
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -37,7 +42,13 @@ from pumpvision.blueprints.paytm.routes import _parse_paytm_csv
 app = create_app()
 with app.app_context():
     db_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
-    target = "Railway PostgreSQL" if db_url.startswith("postgresql") else f"SQLite ({db_url})"
+    # Show the host, not a platform name -- this used to print "Railway PostgreSQL"
+    # for any postgres URL, which is actively misleading now that production is
+    # self-hosted. Credentials are stripped before printing.
+    if db_url.startswith("postgresql"):
+        target = f"PostgreSQL ({re.sub(r'//[^@]*@', '//', db_url)})"
+    else:
+        target = f"SQLite ({db_url})"
     print(f"Target DB : {target}")
     print(f"CSV file  : {csv_path.resolve()}")
     print()

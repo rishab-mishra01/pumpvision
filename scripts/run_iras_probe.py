@@ -5,17 +5,18 @@ IRAS login-page diagnostic probe.
 Launches Chromium headless, navigates to the IRAS login page, waits up to
 20 seconds for any form element, then prints a structured diagnostic report.
 
-Purpose: verify that the Docker + Railway environment can reach and render
-iras.iocliras.in before attempting a real scraper run.
+Purpose: verify that the host can reach and render iras.iocliras.in before
+attempting a real scraper run.  Most useful from the India VPS, since IRAS is
+geo-restricted and a rendering failure there is usually a network/egress
+problem rather than a scraper bug.
 
 This probe does NOT log in.  It does NOT read or print credentials.
 It does NOT save cookies, session state, or screenshots.
 It always exits 0 — failure to render is reported in the log, not raised.
 
 Usage:
-    Set in Railway service Variables:
-        PUMPVISION_SERVICE_ROLE=iras-probe
-    Then trigger/redeploy the service and check Railway logs.
+    ssh ubuntu@65.2.38.210
+    ~/pumpvision/.venv/bin/python -X utf8 ~/pumpvision/scripts/run_iras_probe.py
 
 Optional env var (read-only — not a credential):
     IRAS_URL   Base URL of the IRAS portal (default: https://iras.iocliras.in)

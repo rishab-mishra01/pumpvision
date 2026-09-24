@@ -29,7 +29,8 @@ def create_app():
     if db_url.startswith("postgresql"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
             "pool_pre_ping": True,   # discard stale connections before use
-            "pool_recycle": 300,     # retire connections after 5 min (< Railway idle timeout)
+            "pool_recycle": 300,     # retire connections after 5 min; also reconnects
+                                     # cleanly after a Postgres restart on the host
         }
 
     from .extensions import db, login_manager, migrate
@@ -115,6 +116,12 @@ def create_app():
             return '—'
         return f"{d.day} {d.strftime('%b %Y')}"
 
+    # Hindi glossary for the attendant app — one dict, reviewable in i18n.py.
+    # Exposed to every template as `hi`; attendant templates read their labels
+    # from it. Owner/manager templates simply never reference it.
+    from .i18n import HI
+    app.jinja_env.globals["hi"] = HI
+
     @app.context_processor
     def inject_notification_count():
         from flask_login import current_user
@@ -124,11 +131,17 @@ def create_app():
             return {"unread_notification_count": count}
         return {"unread_notification_count": 0}
 
-    with app.app_context():
-        db.create_all()
-        from flask_migrate import upgrade
-        upgrade()
-        _seed_data()
+    # Boot-time schema bootstrap + seeding. Skipped when PUMPVISION_SKIP_BOOTSTRAP
+    # is truthy, so a dev machine can point DATABASE_URL at an existing (e.g.
+    # production) database and read from it without create_all/upgrade/_seed_data
+    # mutating that database's schema or inserting local seed users into it.
+    # Unset by default. Set in ~/pumpvision-web.sh so the web app never bootstraps.
+    if os.environ.get("PUMPVISION_SKIP_BOOTSTRAP", "").strip().lower() not in ("1", "true", "yes"):
+        with app.app_context():
+            db.create_all()
+            from flask_migrate import upgrade
+            upgrade()
+            _seed_data()
 
     return app
 

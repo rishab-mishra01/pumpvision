@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Pumpvision India VPS cron wrapper: ATG tank stock snapshot (live reading).
 #
-# Crontab (VPS clock is UTC):  */30 * * * *
+# Crontab (VPS clock is UTC):  30 0-18 * * *   (hourly at :30, 06:00-00:30 IST)
 #
 # Shares the daily_scrape lock with the completed-shift wrapper. Non-blocking:
 # if a completed-shift run (or another snapshot) is in flight, this snapshot is
-# skipped -- the next 30-minute slot will catch up. ATG is a live reading, so a
-# skipped run loses nothing that matters.
+# skipped -- the next slot will catch up. ATG is a live reading and the Stock
+# window overlaps the cron interval, so a skipped run loses nothing.
 set -u
 
 REPO="$HOME/pumpvision"
@@ -23,15 +23,17 @@ find "$LOG_DIR" -name 'atg_*.log' -mtime +30 -delete 2>/dev/null
 
 {
     echo "[wrapper] start $(date -u +'%F %T') UTC"
-    if /usr/bin/flock -n "$LOCK" \
+    # -E 75: flock exits 75 when the lock is held, so a genuine scrape failure
+    # (exit 1) is no longer indistinguishable from "another run had the lock".
+    if /usr/bin/flock -n -E 75 "$LOCK" \
         "$REPO/.venv/bin/python" -X utf8 "$REPO/scripts/run_atg_snapshot.py"; then
         echo "[wrapper] done $(date -u +'%F %T') UTC"
     else
         rc=$?
-        if [ "$rc" -eq 1 ]; then
-            echo "[wrapper] SKIPPED $(date -u +'%F %T') UTC -- lock held by another daily_scrape run (or the snapshot exited 1; see output above)"
+        if [ "$rc" -eq 75 ]; then
+            echo "[wrapper] SKIPPED $(date -u +'%F %T') UTC -- lock held by another daily_scrape run"
         else
-            echo "[wrapper] FAILED exit=$rc $(date -u +'%F %T') UTC"
+            echo "[wrapper] FAILED exit=$rc $(date -u +'%F %T') UTC -- see output above"
         fi
         exit "$rc"
     fi

@@ -1,9 +1,0 @@
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE"
-  },
-  "deploy": {
-    "startCommand": "python -X utf8 scripts/railway_entrypoint.py"
-  }
-}

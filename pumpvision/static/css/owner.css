@@ -52,14 +52,14 @@
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   padding: 16px 4px 8px;
   background: transparent; border: 0; cursor: pointer;
-  color: rgba(244,241,232,0.42);
+  color: rgba(244,241,232,0.66);
   text-decoration: none;
   position: relative;
   -webkit-tap-highlight-color: transparent;
 }
 .nav-tab svg { width: 22px; height: 22px; }
 .nav-tab .nav-label {
-  font-family: var(--font-mono); font-size: 9.5px;
+  font-family: var(--font-mono); font-size: 11px;
   letter-spacing: 0.10em; text-transform: uppercase;
   font-weight: 500; color: inherit;
 }
@@ -705,7 +705,7 @@
   background: #f4b321;
   box-shadow: 0 0 0 3px rgba(244,179,33,0.16);
 }
-.dash-dark .dash-stock .head .meta { color: rgba(244,241,232,0.42); }
+.dash-dark .dash-stock .head .meta { color: rgba(244,241,232,0.66); }
 .dash-dark .dash-stock .alert { color: #f4f1e8; border-top-color: rgba(244,241,232,0.08); }
 .dash-dark .dash-stock .alert .pcode {
   background: rgba(244,241,232,0.08); color: rgba(244,241,232,0.65);
@@ -743,7 +743,7 @@
 }
 .summary.dark-theme .sum-recon > * { position: relative; z-index: 1; }
 .summary.dark-theme .sum-recon .rhead .ttl { color: #f4f1e8; }
-.summary.dark-theme .sum-recon .rhead .stamp { color: rgba(244,241,232,0.42); }
+.summary.dark-theme .sum-recon .rhead .stamp { color: rgba(244,241,232,0.66); }
 .summary.dark-theme .sum-recon .seyebrow { color: rgba(244,241,232,0.45); }
 .summary.dark-theme .sum-prow { border-top-color: rgba(244,241,232,0.08); }
 .summary.dark-theme .sum-prow .pcode { color: #f4f1e8; }
@@ -926,7 +926,7 @@
   --c-bg: #050505;
   --c-ink: #f4f1e8;
   --c-ink-2: rgba(244,241,232,0.62);
-  --c-ink-3: rgba(244,241,232,0.42);
+  --c-ink-3: rgba(244,241,232,0.66);
   --c-hair: rgba(244,241,232,0.08);
   --c-hair-2: rgba(244,241,232,0.14);
   --c-amber: #f4b321;
@@ -981,7 +981,7 @@
 .cred-tabs button .ct {
   background: rgba(244,241,232,0.10);
   color: var(--c-ink-3);
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
   padding: 2px 6px; border-radius: 999px; margin-left: 4px;
 }
 .cred-tabs button.active { color: var(--c-ink); }
@@ -1119,7 +1119,7 @@
   --c-bg: #050505;
   --c-ink: #f4f1e8;
   --c-ink-2: rgba(244,241,232,0.62);
-  --c-ink-3: rgba(244,241,232,0.42);
+  --c-ink-3: rgba(244,241,232,0.66);
   --c-hair: rgba(244,241,232,0.08);
   --c-amber: #f4b321;
   --c-red: #ef4444;
@@ -1195,7 +1195,7 @@
 }
 .cd-balance-v2 .lab {
   font-family: var(--font-sans);
-  font-size: 9.5px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   letter-spacing: 0.20em; text-transform: uppercase;
   color: var(--c-ink-3);
 }
@@ -1261,7 +1261,7 @@
   --c-bg: #050505;
   --c-ink: #f4f1e8;
   --c-ink-2: rgba(244,241,232,0.62);
-  --c-ink-3: rgba(244,241,232,0.42);
+  --c-ink-3: rgba(244,241,232,0.66);
   --c-ink-4: rgba(244,241,232,0.22);
   --c-hair: rgba(244,241,232,0.08);
   --c-amber: #f4b321;
@@ -1334,9 +1334,9 @@
 }
 .cform-field input::placeholder,
 .cform-field textarea::placeholder { color: var(--c-ink-4); }
-.cform-field input:focus,
-.cform-field select:focus,
-.cform-field textarea:focus { outline: none; }
+.cform-field input:focus-visible,
+.cform-field select:focus-visible,
+.cform-field textarea:focus-visible { outline: 3px solid #1f6fd4; outline-offset: 2px; border-radius: 3px; }
 .cform-field select option { background: #1a1a1a; color: var(--c-ink); }
 .cform-field .fhelper {
   font-family: var(--font-sans); font-size: 10.5px;

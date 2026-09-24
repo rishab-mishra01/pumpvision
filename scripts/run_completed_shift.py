@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Railway-friendly completed-shift cron entrypoint.
+Completed-shift cron entrypoint.
 
 Calculates accounting op_date in IST (UTC+05:30) and delegates to:
     python -X utf8 scrapers/daily_scrape.py --completed-shift --date YYYY-MM-DD
                                             [--paytm-wait-seconds N]
 
-The Railway cron schedule is evaluated in UTC. The recommended schedule is
+The cron schedule is evaluated in UTC. The recommended schedule is
 0 1 * * * (01:00 UTC = 06:30 IST), which runs after the 06:00 IST shift
 boundary. op_date is always IST calendar date - 1 day.
 
@@ -30,7 +30,7 @@ import sys
 
 # Load repo-root .env so cron/VPS runs get DATABASE_URL without shell-exporting
 # secrets. Same pattern as every scraper. No-op if the file does not exist
-# (e.g. Railway, where variables come from the service environment).
+# (e.g. a host where variables come from the service environment, not a file).
 from dotenv import load_dotenv
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -59,7 +59,7 @@ def _default_op_date(now_ist: datetime.datetime) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Completed-shift cron entrypoint (Railway / cross-platform).",
+        description="Completed-shift cron entrypoint (cross-platform).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -85,7 +85,7 @@ def main() -> int:
     # Guard: DATABASE_URL must be set but is never printed.
     if not os.environ.get("DATABASE_URL"):
         print("[ERROR] DATABASE_URL is not set in the environment.", file=sys.stderr)
-        print("        Set it in Railway service variables (or .env locally).", file=sys.stderr)
+        print("        Set it in the VPS .env (see CLAUDE.md > Deployment).", file=sys.stderr)
         print("        Do not paste the value into this script.", file=sys.stderr)
         return 1
 
@@ -137,7 +137,7 @@ def main() -> int:
 
     # Header.
     print("=======================================================")
-    print("  Pumpvision - completed-shift scrape (Railway cron)")
+    print("  Pumpvision - completed-shift scrape (VPS cron)")
     print("=======================================================")
     print(f"  op_date     : {op_date}  ({date_source})")
     print(f"  IST now     : {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")

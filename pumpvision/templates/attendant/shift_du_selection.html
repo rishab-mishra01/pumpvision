@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ product_info.banner }} — Shift Settlement{% endblock %}
+{% block title %}{{ product_info.banner }} — {{ hi.title_shift }}{% endblock %}
 
 {% block page %}
 <style>
@@ -46,7 +46,7 @@
               padding:18px 20px 10px;">
     <a href="{{ url_for('attendant.shift_select_product') }}"
        style="display:flex;align-items:center;justify-content:center;
-              width:36px;height:36px;color:var(--ink-600);text-decoration:none;">
+              width:44px;height:44px;color:var(--ink-600);text-decoration:none;" aria-label="वापस जाएँ">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19 12H5M12 5l-7 7 7 7"/>
@@ -56,7 +56,7 @@
                  color:var(--ink-900);">{{ product_info.banner }}</span>
     <a href="{{ url_for('attendant.profile') }}"
        style="display:flex;align-items:center;justify-content:center;
-              width:36px;height:36px;color:var(--ink-500);text-decoration:none;">
+              width:44px;height:44px;color:var(--ink-500);text-decoration:none;" aria-label="प्रोफ़ाइल">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -73,7 +73,7 @@
     <p style="font-family:var(--font-sans);font-weight:700;font-size:14px;
               color:var(--{{ cls }}-600);margin:0 0 3px;">{{ product_info.banner }}</p>
     <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-600);margin:0;">
-      Select dispensing unit and enter closing reading.
+      {{ hi.select_du_sub }}
     </p>
   </div>
 
@@ -93,7 +93,7 @@
 
       <!-- Opening reading -->
       <div style="margin-bottom:12px;">
-        <p class="eyebrow" style="margin-bottom:4px;">Opening Reading</p>
+        <p class="eyebrow" style="margin-bottom:4px;">{{ hi.opening }}</p>
         {% if nozzle.opening is not none %}
         <p style="font-family:var(--font-mono);font-weight:600;font-size:1rem;
                   color:var(--ink-900);margin:0;font-variant-numeric:tabular-nums;">
@@ -102,7 +102,7 @@
         </p>
         {% else %}
         <p style="font-family:var(--font-sans);font-size:13px;color:var(--error-600);margin:0;">
-          No opening reading. Contact owner.
+          {{ hi.no_opening_contact }}
         </p>
         {% endif %}
       </div>
@@ -110,7 +110,7 @@
       <!-- Closing reading tap target -->
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-          <p class="eyebrow" style="margin:0;">Closing Reading</p>
+          <p class="eyebrow" style="margin:0;">{{ hi.closing }}</p>
           {% if has_reading %}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
                stroke="var(--ok-600)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -133,7 +133,7 @@
           </svg>
           {% else %}
           <span style="font-family:var(--font-sans);font-size:13px;color:var(--ink-500);">
-            Tap to enter reading
+            {{ hi.tap_to_enter }}
           </span>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                stroke="var(--ink-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -156,7 +156,7 @@
             border-top:1px solid var(--paper-300);z-index:40;">
   <a href="{{ url_for('attendant.shift_select_product') }}"
      class="btn btn-saffron btn-full">
-    Confirm Readings
+    {{ hi.confirm_readings }}
   </a>
 </div>
 
@@ -168,7 +168,7 @@
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
-    Home
+    {{ hi.nav_home }}
   </a>
   <a href="{{ url_for('attendant.activity') }}" class="bottom-nav__item">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -177,7 +177,7 @@
       <rect x="10" y="6" width="4" height="14" rx="1"/>
       <rect x="17" y="9" width="4" height="11" rx="1"/>
     </svg>
-    Activity
+    {{ hi.nav_activity }}
   </a>
   <a href="{{ url_for('attendant.shift_select_product') }}"
      class="bottom-nav__item bottom-nav__item--active">
@@ -187,7 +187,7 @@
       <rect x="9" y="3" width="6" height="4" rx="1" ry="1"/>
       <path d="m9 12 2 2 4-4"/>
     </svg>
-    Shift
+    {{ hi.nav_shift }}
   </a>
 </nav>
 {% endblock %}

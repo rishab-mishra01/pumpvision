@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+{# a11y: the attendant app is Hindi, so declare lang=hi for it (WCAG 3.1.1);
+   owner/manager stay English. Roman codes/numbers inside are short and are
+   read acceptably under a hi document context. #}
+<html lang="{{ 'hi' if current_user.is_authenticated and current_user.role == 'attendant' else 'en' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -8,7 +11,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Serif+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Design system — must be first -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">

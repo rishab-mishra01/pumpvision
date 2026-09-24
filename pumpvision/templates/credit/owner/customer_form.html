@@ -15,7 +15,7 @@
     <div class="form-bar">
       <div class="fb-row">
         <a href="{{ url_for('credit.customers') }}" class="fb-cancel">Cancel</a>
-        <span class="fb-ttl">{% if customer %}Edit customer{% else %}New customer{% endif %}</span>
+        <h1 class="fb-ttl" style="margin:0;">{% if customer %}Edit customer{% else %}New customer{% endif %}</h1>
         <button type="submit" form="cform" class="fb-save">Save</button>
       </div>
     </div>
@@ -27,15 +27,15 @@
         <span class="fsec-head">Business</span>
 
         <div class="cform-field">
-          <span class="fl">Company name<span class="req">*</span></span>
-          <input type="text" name="company_name" required autocomplete="organization"
+          <label class="fl" for="cf-company">Company name<span class="req">*</span></label>
+          <input type="text" id="cf-company" name="company_name" required autocomplete="organization"
                  value="{{ customer.company_name if customer else '' }}"
                  placeholder="e.g. Sharma Transport Pvt. Ltd.">
         </div>
 
         <div class="cform-field">
-          <span class="fl">GSTIN</span>
-          <input type="text" name="gst_number"
+          <label class="fl" for="cf-gst">GSTIN</label>
+          <input type="text" id="cf-gst" name="gst_number"
                  value="{{ customer.gst_number if customer and customer.gst_number else '' }}"
                  placeholder="27ABCDE1234F1Z5 (optional)" style="font-family:var(--font-mono);font-size:13.5px;">
         </div>
@@ -46,15 +46,15 @@
         <span class="fsec-head">Fleet contact</span>
 
         <div class="cform-field">
-          <span class="fl">Fleet manager name<span class="req">*</span></span>
-          <input type="text" name="fleet_manager_name" required autocomplete="name"
+          <label class="fl" for="cf-fleet">Fleet manager name<span class="req">*</span></label>
+          <input type="text" id="cf-fleet" name="fleet_manager_name" required autocomplete="name"
                  value="{{ customer.fleet_manager_name if customer else '' }}"
                  placeholder="Full name">
         </div>
 
         <div class="cform-field">
-          <span class="fl">Mobile<span class="req">*</span></span>
-          <input type="text" name="whatsapp_number" required inputmode="tel"
+          <label class="fl" for="cf-mobile">Mobile<span class="req">*</span></label>
+          <input type="text" id="cf-mobile" name="whatsapp_number" required inputmode="tel"
                  value="{{ customer.whatsapp_number if customer else '91' }}"
                  placeholder="+91 — — — — — — — — — —"
                  style="font-family:var(--font-mono);font-size:13.5px;">
@@ -66,8 +66,8 @@
         <span class="fsec-head">Credit terms</span>
 
         <div class="cform-field">
-          <span class="fl">Credit limit<span class="req">*</span></span>
-          <input type="number" name="credit_limit" required min="0" step="1000" inputmode="numeric"
+          <label class="fl" for="cf-limit">Credit limit<span class="req">*</span></label>
+          <input type="number" id="cf-limit" name="credit_limit" required min="0" step="1000" inputmode="numeric"
                  value="{{ customer.credit_limit | int if customer else '' }}"
                  placeholder="₹ 0">
           <span class="fhelper">Outstanding cannot exceed this amount.</span>
@@ -93,8 +93,8 @@
         <span class="fsec-head">Balance{% if customer and customer.outstanding_balance %} <b>· ₹ {{ customer.outstanding_balance | inr }}</b>{% endif %}</span>
 
         <div class="cform-field" style="border-bottom:0;">
-          <span class="fl">Opening balance (₹)</span>
-          <input type="number" name="opening_balance" step="1" min="0" inputmode="numeric"
+          <label class="fl" for="cf-opening">Opening balance (₹)</label>
+          <input type="number" id="cf-opening" name="opening_balance" step="1" min="0" inputmode="numeric"
                  value="{{ customer.outstanding_balance | int if customer and customer.outstanding_balance else 0 }}"
                  placeholder="0">
           <span class="fhelper">Amount currently owed, carried from previous records.{% if customer and customer.outstanding_balance %} This overwrites the current balance.{% endif %}</span>
@@ -128,6 +128,7 @@
         </button>
 
         <input type="text" id="veh-input" placeholder="e.g. MP04AB1234"
+               aria-label="Vehicle number"
                autocomplete="off" autocapitalize="characters"
                style="display:none;font-family:var(--font-mono);font-size:14px;font-weight:600;
                       background:rgba(244,241,232,0.06);border:1px solid var(--c-amber);border-radius:8px;

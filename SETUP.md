@@ -27,7 +27,7 @@ it and where it comes from.
 | 6 | `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` | Step 4, scraper-only block (auto-reads Paytm OTP) | Ask Rishab — Google App Password, not the regular Gmail password |
 | 7 | `SDMS_USERNAME` / `SDMS_PASSWORD` | Step 4, scraper-only block | Ask Rishab — real SDMS PAD portal login |
 | 8 | Copy of `instance/pumpvision.db` (optional) | Step 5, only if you want populated dashboards instead of empty states | Ask Rishab |
-| 9 | Railway team invite | Step 8, only if deploying/checking production | Ask Rishab |
+| 9 | Tailnet access (Tailscale) | Step 8, only if deploying/checking production | Ask Rishab — production is self-hosted and tailnet-only |
 | 10 | VPS SSH access (India Lightsail server) | Step 8, only if touching scraper cron jobs | Ask Rishab |
 
 Rows 3–7 (all scraper credentials) are only needed together, and only if
@@ -106,7 +106,7 @@ cp .env.example .env
 (Windows PowerShell: `Copy-Item .env.example .env`)
 
 Open `.env` and fill in values. **Important — your local `.env` is separate
-from Railway's environment variables and the VPS's `.env`.** They do not sync
+from the VPS's `.env` and the evo's launcher script.** They do not sync
 automatically; each machine/environment keeps its own copy.
 
 ### Minimum needed to just run the app and click around locally:
@@ -165,7 +165,7 @@ tank_readings, sdms_summaries, nullable invoice_id fix).
 
 If you want to see **populated** dashboards/summary screens instead of empty
 "no data" states, ask Rishab for a copy of his local `instance/pumpvision.db`
-(or a Railway data export) rather than trying to regenerate real fuel/payment
+(or a `pg_dump` from the production DB) rather than trying to regenerate real fuel/payment
 data yourself — that data only exists via the scrapers hitting live portals.
 
 ---
@@ -220,7 +220,7 @@ server in a visible terminal you can kill cleanly — never detached/background.
 
 ## 8. Production / infrastructure access (not required to start developing)
 
-> **Before this step (only if relevant to you):** request a Railway team invite
+> **Before this step (only if relevant to you):** request tailnet access
 > (checklist item 9) if you'll deploy or inspect production, and/or VPS SSH
 > access (checklist item 10) if you'll touch scraper cron jobs. Neither is
 > needed just to develop and test locally.
@@ -228,8 +228,9 @@ server in a visible terminal you can kill cleanly — never detached/background.
 You don't need any of this to write code and test locally. Only relevant once
 you're deploying or debugging live data:
 
-- **Railway** — hosts the live app + PostgreSQL DB, auto-deploys on push to `main`. Ask Rishab for a Railway team invite if you'll be deploying/checking production.
-- **India VPS (AWS Lightsail, Mumbai)** — runs the scraper cron jobs (IRAS/Paytm/SDMS/ATG are India-geo-restricted, so they run from here, not Railway). SSH access is separate — ask Rishab.
+- **Railway — gone (August 2026).** It used to host the live app + PostgreSQL and auto-deploy on push to `main`. It no longer exists, and **pushing to `main` no longer deploys anything.**
+- **The evo (self-hosted)** — runs the live Flask app and PostgreSQL. Reachable only over Tailscale, no public ingress. Ask Rishab for tailnet access.
+- **India VPS (AWS Lightsail, Mumbai)** — runs the scraper cron jobs (IRAS/Paytm/SDMS/ATG are India-geo-restricted, so they must run from an Indian IP). It writes to the evo's database over Tailscale. SSH access is separate — ask Rishab.
 - **GitHub** — you already have this since you're reading this file via git.
 
 ---

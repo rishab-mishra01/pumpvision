@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Day Close — PumpVision{% endblock %}
+{% block title %}{{ hi.title_day_close }} — PumpVision{% endblock %}
 
 {% block content %}
 <div class="flex items-center gap-2 mb-1">
-  <a href="{{ url_for('attendant.home') }}" class="text-indigo-600 text-sm">← Back</a>
-  <h1 class="text-xl font-bold text-gray-800">Day Close</h1>
+  <a href="{{ url_for('attendant.home') }}" class="text-indigo-600 text-sm">← {{ hi.back }}</a>
+  <h1 class="text-xl font-bold text-gray-800">{{ hi.day_close }}</h1>
 </div>
 <p class="text-sm text-gray-500 mb-5">{{ op_date.strftime('%d %b %Y') }}</p>
 
 {% if is_locked %}
 <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-5 text-sm text-green-800 font-medium">
-  All readings submitted and locked for this day.
+  {{ hi.all_submitted_locked }}
 </div>
 {% endif %}
 
@@ -41,9 +41,9 @@
                  {{ 'bg-indigo-600 hover:bg-indigo-700 text-white active:bg-indigo-800'
                     if (all_done and not is_locked)
                     else 'bg-gray-200 text-gray-400 cursor-not-allowed' }}">
-    {% if is_locked %}Day Already Closed
-    {% elif all_done %}Close Day
-    {% else %}Complete all products first{% endif %}
+    {% if is_locked %}{{ hi.day_already_closed }}
+    {% elif all_done %}{{ hi.close_day }}
+    {% else %}{{ hi.complete_all_first }}{% endif %}
   </button>
 </form>
 {% endblock %}

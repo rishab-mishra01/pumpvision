@@ -40,6 +40,8 @@ load_dotenv(_PROJECT_ROOT / ".env")
 import anthropic
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
+from scrapers import db_spool
+
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
@@ -102,6 +104,32 @@ def _solve_captcha(image_bytes: bytes) -> str:
         }],
     )
     return msg.content[0].text.strip()
+
+
+# Portal replaced the image CAPTCHA with a plain arithmetic question in Aug 2026
+# ("12 x 8 = ?", "27 + 5 = ?", "36 - 8 = ?"), re-randomised on every page load.
+_MATH_RE = re.compile(r"(\d+)\s*([x×*+\-/÷])\s*(\d+)\s*=")
+
+
+async def _solve_math_challenge(page):
+    """Return the answer to the security-verification sum, or None if absent."""
+    try:
+        text = await page.eval_on_selector("body", "e => e.innerText")
+    except Exception:
+        return None
+    m = _MATH_RE.search(text or "")
+    if not m:
+        return None
+    a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
+    if op in ("x", "×", "*"):
+        return a * b
+    if op == "+":
+        return a + b
+    if op == "-":
+        return a - b
+    if op in ("/", "÷"):
+        return a // b if b and a % b == 0 else None
+    return None
 
 
 # ─────────────────────────────────────────────
@@ -230,24 +258,32 @@ async def do_login(page, context) -> bool:
 
         await page.wait_for_timeout(400)
 
-        # ── Solve CAPTCHA ─────────────────────────────────────────────────
-        captcha_img = await _find(page, [
-            "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
-            "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
-            "img[alt*='aptcha']", "img[name*='captcha']", "form img",
-        ])
-        if captcha_img is None:
-            print(f"  [login] ERROR: CAPTCHA image not found on attempt {attempt}")
-            if attempt == MAX_CAPTCHA_ATTEMPTS:
-                await page.screenshot(path=str(OUTPUT_DIR / "debug_login_no_captcha.png"))
-            continue
+        # ── Security verification ─────────────────────────────────────────
+        # Prefer the arithmetic question the portal switched to in Aug 2026;
+        # fall back to the image CAPTCHA if it ever returns.
+        math_answer = await _solve_math_challenge(page)
+        if math_answer is not None:
+            captcha_text = str(math_answer)
+            print(f"  [login] Math challenge solved: {captcha_text}")
+        else:
+            captcha_img = await _find(page, [
+                "img[src*='captcha']", "img[src*='Captcha']", "img[src*='kaptcha']",
+                "img[id*='captcha']", "img[id*='Captcha']", "img[class*='captcha']",
+                "img[alt*='aptcha']", "img[name*='captcha']", "form img",
+            ])
+            if captcha_img is None:
+                print(f"  [login] ERROR: no math question and no CAPTCHA image on attempt {attempt}")
+                if attempt == MAX_CAPTCHA_ATTEMPTS:
+                    await page.screenshot(path=str(OUTPUT_DIR / "debug_login_no_captcha.png"))
+                continue
 
-        img_bytes = await captcha_img.screenshot()
-        captcha_text = _solve_captcha(img_bytes)
-        print(f"  [login] CAPTCHA solved: {captcha_text!r}")
+            img_bytes = await captcha_img.screenshot()
+            captcha_text = _solve_captcha(img_bytes)
+            print(f"  [login] CAPTCHA solved: {captcha_text!r}")
 
         # ── Fill CAPTCHA input ────────────────────────────────────────────
         cap_input = await _find(page, [
+            "input[placeholder*='math question']", "input[placeholder*='answer']",
             "input[name*='captcha']", "input[name*='Captcha']",
             "input[id*='captcha']", "input[id*='Captcha']",
             "input[placeholder*='aptcha']", "input[placeholder*='APTCHA']",
@@ -467,6 +503,25 @@ async def set_date_and_view(page, dd_mm_yyyy: str):
     direct fill as fallback.
     """
     print(f"[date] Setting date range: {dd_mm_yyyy} → {dd_mm_yyyy}")
+
+    # Wait for the date inputs to exist before touching them. Without this the
+    # fill is skipped on a slow render, View is clicked with whatever range the
+    # page defaulted to, and step 4 then burns its full 30s waiting for a table
+    # that was never requested. One reload retry covers a lost/partial render.
+    for probe in (1, 2):
+        try:
+            await page.wait_for_selector("#fromdate", state="attached", timeout=15_000)
+            break
+        except PlaywrightTimeout:
+            if probe == 1:
+                print("  [date] date inputs absent — reloading page once")
+                try:
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(2_000)
+                except Exception as e:
+                    print(f"  [date] reload failed: {e}")
+            else:
+                print("  [date] WARN: date inputs still absent after reload")
 
     for field_id, label in [("fromdate", "From Date"), ("todate", "To Date")]:
         filled = False
@@ -782,7 +837,16 @@ def save_summary_to_db(date_iso: str, metadata: dict,
         print(f"  [db] SdmsSummary upserted for {date_iso}")
         return True
     except Exception as e:
-        print(f"  [db] WARNING: could not save to DB: {e}")
+        print(f"  [db] ERROR: could not save to DB: {e}")
+        db_spool.spool("sdms_summary", date_iso, {
+            "date_iso": date_iso,
+            "metadata": metadata,
+            "fleet_total": fleet_total,
+            "fleet_count": fleet_count,
+            "cng_kg": cng_kg,
+            "cng_revenue": cng_revenue,
+            "cng_count": cng_count,
+        }, error=e)
         return False
 
 
@@ -931,11 +995,14 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
             )
 
             # ── Step 7: Persist summary to DB ──────────────────────────────
+            # None = no write attempted (dry-run / local-only); False = attempted
+            # and failed, payload spooled.
+            db_saved = None
             if dry_run:
                 print("[step 7] [dry-run] DB write skipped")
             elif os.environ.get("DATABASE_URL"):
                 print("[step 7] Saving summary to DB...")
-                save_summary_to_db(
+                db_saved = save_summary_to_db(
                     date_iso, metadata,
                     fleet_total, fleet_count,
                     cng_kg, cng_revenue, cng_count,
@@ -945,7 +1012,7 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
 
             print()
             print("=" * 55)
-            print("  SUCCESS")
+            print("  SCRAPED OK — BUT NOT SAVED TO DB" if db_saved is False else "  SUCCESS")
             print(f"  Date              : {date_ddmmyyyy}")
             print(f"  Opening balance   : Rs. {metadata['opening_balance']:,.2f}")
             print(f"  Closing balance   : Rs. {metadata['closing_balance']:,.2f}")
@@ -958,7 +1025,10 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
             print(f"  CSV               : {csv_path.name}")
             print(f"  Summary JSON      : {json_path.name}")
             print("=" * 55)
-            return True
+            # A scrape whose DB write failed is NOT a success: the payload is
+            # spooled, and the caller must surface the failure so the run exits
+            # non-zero rather than logging SUCCESS over a lost write.
+            return db_saved is not False
 
         except Exception as e:
             print(f"\n[ERROR] Unexpected error: {e}")
