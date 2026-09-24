@@ -33,6 +33,9 @@ def create_app():
                                      # cleanly after a Postgres restart on the host
         }
 
+    from .security import init_security
+    init_security(app)
+
     from .extensions import db, login_manager, migrate
 
     db.init_app(app)
