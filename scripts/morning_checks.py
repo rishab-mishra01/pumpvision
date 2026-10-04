@@ -6,7 +6,9 @@
 price -- today's IRAS price (effective 06:00 today) is not in the DB. Attendant credit
          sales then fall back to the latest earlier price, which is wrong on a day
          the price changed.
-shift -- the last completed shift (yesterday 06:00 -> today 06:00) is not closed.
+shift -- the last completed shift (yesterday 06:00 -> today 06:00) is not closed; or,
+         if it is, a nozzle's reading is off by more than its reading time explains
+         (pumpvision/services/meter_check.py).
 
 Read-only apart from the alert, and never raises the same alert twice.
 """
@@ -57,7 +59,14 @@ def main():
                 alert(db, AppNotification, "shift_alert",
                       f"The {last:%d %b} shift (ended 06:00 today) has not been closed by the attendants.", last)
             else:
-                print("shift closed for", last)
+                from pumpvision.services.meter_check import check_day
+                flagged = [c for c in check_day(last) if c.status == "check"]
+                if flagged:
+                    detail = "; ".join(f"{c.name} {c.note}" for c in flagged)
+                    alert(db, AppNotification, "meter_alert",
+                          f"Meter check {last:%d %b}: {detail}"[:470] + ". See More -> Meter check.", last)
+                else:
+                    print("shift closed and meters fit for", last)
 
 
 if __name__ == "__main__":

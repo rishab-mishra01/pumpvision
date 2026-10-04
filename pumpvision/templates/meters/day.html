@@ -1,131 +1,120 @@
 {% extends "base.html" %}
-{% block title %}Meters {{ op_date.strftime('%d %b') }} — PumpVision{% endblock %}
+{% block title %}Meter check {{ op_date.strftime('%d %b') }} — Pumpvision{% endblock %}
 
-{% block content %}
-<div class="flex items-center justify-between mb-1">
-  <a href="{{ url_for('meters.index') }}" class="text-indigo-600 text-sm">← All Readings</a>
-  <div class="flex items-center gap-3 text-sm">
-    <a href="{{ url_for('meters.day', date_str=prev_date.strftime('%Y-%m-%d'), view=view) }}"
-       class="text-indigo-600">‹</a>
-    <span class="text-gray-500">{{ op_date.strftime('%d %b %Y') }}</span>
-    <a href="{{ url_for('meters.day', date_str=next_date.strftime('%Y-%m-%d'), view=view) }}"
-       class="text-indigo-600">›</a>
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>
+  body { margin: 0; background: var(--paper-50); }
+  .mc-nav { display:flex; align-items:center; justify-content:space-between; margin:12px 16px 0; font-family:var(--font-sans); }
+  .mc-nav a, .mc-nav span.off { padding:8px 12px; border:1px solid var(--paper-300); border-radius:var(--r-card); color:var(--ink-700); text-decoration:none; font-size:13px; }
+  .mc-nav span.off { opacity:.35; }
+  .mc-nav b { font-size:15px; color:var(--ink-900); }
+  .mc-sum { margin:12px 16px 0; padding:12px 14px; border-radius:var(--r-card); font-family:var(--font-sans); font-size:13.5px; }
+  .mc-sum.ok { background:var(--ok-100); border:1px solid var(--ok-600); color:var(--ok-600); }
+  .mc-sum.check { background:var(--warn-100); border:1px solid var(--warn-600); color:#5a3a00; }
+  .mc-sum.none { background:var(--paper-100); border:1px solid var(--paper-300); color:var(--ink-600); }
+  .mc-card { margin:10px 16px 0; padding:12px 14px; border:1px solid var(--paper-300); border-radius:var(--r-card); background:#fff; font-family:var(--font-sans); }
+  .mc-card.check { border-left:4px solid var(--warn-600); }
+  .mc-card.ok { border-left:4px solid var(--ok-600); }
+  .mc-head { display:flex; justify-content:space-between; align-items:baseline; }
+  .mc-name { font-family:var(--font-mono); font-weight:700; font-size:16px; color:var(--ink-900); }
+  .mc-badge { font-size:12px; font-weight:600; }
+  .mc-badge.ok { color:var(--ok-600); } .mc-badge.check { color:var(--warn-600); } .mc-badge.missing { color:var(--ink-500); }
+  .mc-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin-top:8px; font-size:12.5px; color:var(--ink-600); }
+  .mc-grid b { display:block; font-family:var(--font-mono); font-weight:500; font-size:13.5px; color:var(--ink-900); }
+  .mc-note { margin-top:8px; font-size:12.5px; color:var(--ink-700); }
+  .mc-help { margin:14px 16px 0; font-family:var(--font-sans); font-size:12px; color:var(--ink-500); line-height:1.5; }
+</style>
+{% endblock %}
+
+{% block page %}
+<div style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:24px;">
+
+    <div class="tanks-head-bar">
+      <div class="tanks-titlerow">
+        <span class="ttl">Meter check</span>
+        <span class="sub">Attendant readings<br>vs IRAS 06:00</span>
+      </div>
+    </div>
+
+    <div class="mc-nav">
+      <a href="{{ url_for('meters.day', date_str=prev_date.isoformat()) }}">← {{ prev_date.strftime('%d %b') }}</a>
+      <b>{{ op_date.strftime('%d %b %Y') }}</b>
+      {% if next_date %}<a href="{{ url_for('meters.day', date_str=next_date.isoformat()) }}">{{ next_date.strftime('%d %b') }} →</a>{% else %}<span class="off">next →</span>{% endif %}
+    </div>
+
+    {% set entered = checks | selectattr('status', 'ne', 'missing_entry') | list | length %}
+    {% if entered == 0 %}
+    <div class="mc-sum none">No attendant readings for this shift.</div>
+    {% elif n_flagged %}
+    <div class="mc-sum check"><b>{{ n_flagged }} nozzle{{ 's' if n_flagged != 1 }} to check.</b> The gap is bigger than the reading time explains.</div>
+    {% else %}
+    <div class="mc-sum ok"><b>All readings fit.</b> Gaps are explained by when the meters were read.{% if not closed %} Shift not yet submitted.{% endif %}</div>
+    {% endif %}
+
+    {% for c in checks %}
+    {% set cls = 'check' if c.status == 'check' else ('ok' if c.status == 'ok' else '') %}
+    <div class="mc-card {{ cls }}">
+      <div class="mc-head">
+        <span class="mc-name">{{ c.name }}</span>
+        <span class="mc-badge {{ 'ok' if c.status == 'ok' else ('check' if c.status == 'check' else 'missing') }}">
+          {{ {'ok': '✓ OK', 'check': '! Check', 'missing_entry': 'Not entered', 'missing_iras': 'IRAS pending'}[c.status] }}
+        </span>
+      </div>
+      {% if c.attendant is not none %}
+      <div class="mc-grid">
+        <span>Attendant<b>{{ '{:,.2f}'.format(c.attendant) }}</b></span>
+        <span>IRAS 06:00<b>{{ '{:,.2f}'.format(c.iras) if c.iras is not none else '—' }}</b></span>
+        {% set m = c.minutes_from_six or 0 %}
+        <span>Read at<b>{{ c.taken_at.strftime('%H:%M') }}{% if c.taken_at.date() != next_day %} {{ c.taken_at.strftime('%d %b') }}{% endif %}
+          <span style="color:var(--ink-500);font-size:12px;">{{ '+' if m >= 0 else '−' }}{% if (m|abs) >= 60 %}{{ (m|abs) // 60 }}h{% endif %}{% if (m|abs) % 60 or (m|abs) < 60 %}{{ (m|abs) % 60 }}m{% endif %}</span></b></span>
+        <span>Gap / expected<b>{% if c.gap is not none %}{{ '{:+,.1f}'.format(c.gap) }} / {{ '{:+,.1f}'.format(c.expected) }} L{% else %}—{% endif %}</b></span>
+      </div>
+      {% endif %}
+      <div class="mc-note">{{ c.note }}{% if c.method %} <span style="color:var(--ink-500);">· expected from {{ c.method }}</span>{% endif %}</div>
+    </div>
+    {% endfor %}
+
+    {% if cng %}
+    <div class="mc-card">
+      <div class="mc-head"><span class="mc-name">CNG</span><span class="mc-badge missing">no IRAS</span></div>
+      <div class="mc-grid">
+        <span>Closing<b>{{ '{:,.1f}'.format(cng.closing_reading) }} kg</b></span>
+        <span>Sold (attendant)<b>{{ '{:,.1f}'.format(cng.kg_sold) }} kg</b></span>
+      </div>
+    </div>
+    {% endif %}
+
+    <p class="mc-help">
+      IRAS records each meter at exactly 06:00. Attendants read it later, so their figure includes
+      fuel sold since 06:00. The expected gap uses that nozzle's own hourly sales that day and the
+      time of the reading (plus the 5 L pump test if read after it). Only gaps the timing cannot
+      explain are marked “Check”.
+    </p>
   </div>
+
+  <nav class="nav">
+    <a href="{{ url_for('dashboard.index') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-3v-7H8v7H5a2 2 0 0 1-2-2v-9z"/></svg>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="{{ url_for('owner.tanks') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/></svg>
+      <span class="nav-label">Stock</span>
+    </a>
+    <a href="{{ url_for('credit.credit_home') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="nav-label">Credit</span>
+    </a>
+    <a href="{{ url_for('dashboard.summary') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/></svg>
+      <span class="nav-label">Summary</span>
+    </a>
+    <a href="{{ url_for('owner.more') }}" class="nav-tab active">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      <span class="nav-label">More</span>
+    </a>
+  </nav>
 </div>
-<h1 class="text-xl font-bold text-gray-800 mb-4">Meter Comparison</h1>
-
-{# Toggle #}
-<div class="flex bg-gray-100 rounded-lg p-1 mb-5">
-  <a href="?view=totalizer"
-     class="flex-1 text-center py-2 text-sm font-medium rounded-md transition
-            {{ 'bg-white shadow text-gray-800' if view == 'totalizer' else 'text-gray-500' }}">
-    Totalizer
-  </a>
-  <a href="?view=litres"
-     class="flex-1 text-center py-2 text-sm font-medium rounded-md transition
-            {{ 'bg-white shadow text-gray-800' if view == 'litres' else 'text-gray-500' }}">
-    Litres Sold
-  </a>
-</div>
-
-{% if view == 'totalizer' %}
-{# ── Totalizer view — nozzle level ── #}
-<div class="bg-white rounded-xl shadow overflow-hidden">
-  <div class="grid grid-cols-5 bg-gray-50 border-b text-xs font-semibold text-gray-500 px-3 py-2">
-    <div>Nozzle</div>
-    <div class="text-right">Day Open</div>
-    <div class="text-right">Day Close</div>
-    <div class="text-right">IRAS Open</div>
-    <div class="text-right">IRAS Close</div>
-  </div>
-  {% for row in totalizer_rows %}
-  <div class="grid grid-cols-5 px-3 py-3 border-b last:border-0 text-sm items-center">
-    <div class="font-medium text-gray-700 text-xs">{{ row.label }}</div>
-
-    <div class="text-right font-mono text-xs
-                {{ 'text-gray-800' if row.emp_opening is not none else 'text-gray-300' }}">
-      {{ '{:,.2f}'.format(row.emp_opening) if row.emp_opening is not none else '—' }}
-    </div>
-
-    <div class="text-right font-mono text-xs">
-      {% if row.emp_closing is not none %}
-      <div class="text-gray-800">{{ '{:,.2f}'.format(row.emp_closing) }}</div>
-      {% if row.emp_recorded %}
-      <div class="text-gray-400" style="font-size:0.65rem">{{ row.emp_recorded.strftime('%H:%M') }}</div>
-      {% endif %}
-      {% else %}
-      <span class="text-gray-300">—</span>
-      {% endif %}
-    </div>
-
-    <div class="text-right font-mono text-xs
-                {{ 'text-gray-800' if row.iras_opening is not none else 'text-gray-300' }}">
-      {% if row.has_iras %}
-        {{ '{:,.2f}'.format(row.iras_opening) if row.iras_opening is not none else '—' }}
-      {% else %}
-        <span class="text-gray-300 italic">N/A</span>
-      {% endif %}
-    </div>
-
-    <div class="text-right font-mono text-xs
-                {{ 'text-gray-800' if row.iras_closing is not none else 'text-gray-300' }}">
-      {% if row.has_iras %}
-        {{ '{:,.2f}'.format(row.iras_closing) if row.iras_closing is not none else '—' }}
-      {% else %}
-        <span class="text-gray-300 italic">N/A</span>
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-{% else %}
-{# ── Litres sold view — product level ── #}
-<div class="bg-white rounded-xl shadow overflow-hidden">
-  <div class="grid grid-cols-4 bg-gray-50 border-b text-xs font-semibold text-gray-500 px-3 py-2">
-    <div>Product</div>
-    <div class="text-right">Employee</div>
-    <div class="text-right">IRAS</div>
-    <div class="text-right">Diff</div>
-  </div>
-  {% for row in litres_rows %}
-  <div class="grid grid-cols-4 px-3 py-3 border-b last:border-0 text-sm items-center">
-    <div class="font-semibold text-gray-700">{{ row.product }}</div>
-
-    <div class="text-right font-mono text-sm
-                {{ 'text-gray-800' if row.emp_litres is not none else 'text-gray-300' }}">
-      {{ '{:,.2f}'.format(row.emp_litres) if row.emp_litres is not none else '—' }}
-    </div>
-
-    <div class="text-right font-mono text-sm
-                {{ 'text-gray-800' if row.iras_litres is not none else 'text-gray-300' }}">
-      {% if row.product == 'CNG' %}
-        <span class="text-gray-300 italic text-xs">N/A</span>
-      {% else %}
-        {{ '{:,.2f}'.format(row.iras_litres) if row.iras_litres is not none else '—' }}
-      {% endif %}
-    </div>
-
-    <div class="text-right font-mono text-sm font-semibold">
-      {% if row.diff is not none %}
-        {% if row.diff > 2 %}
-          <span class="text-red-600">+{{ '{:,.2f}'.format(row.diff) }}</span>
-        {% elif row.diff < -2 %}
-          <span class="text-amber-600">{{ '{:,.2f}'.format(row.diff) }}</span>
-        {% else %}
-          <span class="text-green-600">{{ '{:,.2f}'.format(row.diff) }}</span>
-        {% endif %}
-      {% else %}
-        <span class="text-gray-300">—</span>
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-<p class="text-xs text-gray-400 mt-2 px-1">
-  Diff = Employee − IRAS. Red (+) means employee reads higher; amber (−) means lower. ±2L tolerance shown in green.
-</p>
-{% endif %}
-
 {% endblock %}
