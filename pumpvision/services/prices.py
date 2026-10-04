@@ -22,7 +22,19 @@ def get_rsp(product: str, op_date: date) -> float | None:
     if price:
         return price.rate_per_litre
 
-    local = LocalPrice.query.filter_by(product=product).order_by(
+    # Today's IRAS row only lands with the next morning's scrape, so during the
+    # day the exact lookup finds nothing. Use the latest IRAS price instead of
+    # falling through to LocalPrice, whose seeded 2024 rates are badly stale
+    # (HS 93.40 vs 101.16) and made every attendant credit sale record the
+    # wrong rate and litres.
+    latest = IrasPrice.query.filter(
+        IrasPrice.product == product,
+        IrasPrice.effective_from <= target_dt,
+    ).order_by(IrasPrice.effective_from.desc()).first()
+    if latest:
+        return latest.rate_per_litre
+
+    local =LocalPrice.query.filter_by(product=product).order_by(
         LocalPrice.effective_from.desc()
     ).first()
     return local.rate_per_litre if local else None
