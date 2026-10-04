@@ -20,6 +20,7 @@
       <div class="ledger-total">
         <span class="lab">Total outstanding</span>
         <span class="amt"><span class="rs">₹</span>{{ total_outstanding | inr }}</span>
+        {% if total_in_credit %}<span class="lab" style="margin-top:2px;">In credit ₹ {{ total_in_credit | inr }}</span>{% endif %}
       </div>
     </div>
 
@@ -45,8 +46,9 @@
           {% endif %}
         </div>
         <div class="right">
-          <span class="amt"><span class="rs">₹</span>{{ c.outstanding_balance | inr }}</span>
-          <span class="amt-lab">Outstanding</span>
+          {% set b = c.outstanding_balance or 0 %}
+          <span class="amt"><span class="rs">₹</span>{{ b | abs | inr }}</span>
+          <span class="amt-lab">{{ 'In credit' if b < 0 else 'Outstanding' }}</span>
         </div>
       </a>
       {% else %}

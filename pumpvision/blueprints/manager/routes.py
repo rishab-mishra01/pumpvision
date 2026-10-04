@@ -1,3 +1,4 @@
+import math
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -91,7 +92,7 @@ def home():
 @login_required
 @manager_required
 def lube():
-    from pumpvision.models import Customer, LubeProduct, LubeTransaction, db
+    from pumpvision.models import AppNotification, Customer, LubeProduct, LubeTransaction, db
 
     products = LubeProduct.query.filter_by(is_active=True).order_by(LubeProduct.name).all()
     customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
@@ -177,6 +178,14 @@ def lube():
             ))
             if customer:
                 customer.outstanding_balance = (customer.outstanding_balance or 0.0) + amount
+            if product.purchase_rate and unit_price < product.purchase_rate:
+                db.session.add(AppNotification(
+                    message=(f"Lube sold below cost: {product.name} {product.pack_size} at "
+                             f"₹{unit_price:,.2f} (cost ₹{product.purchase_rate:,.2f}), "
+                             f"qty {quantity:g}, {get_operational_date():%d %b %Y}."),
+                    notification_type="lube_alert",
+                    reference_date=get_operational_date(),
+                ))
             db.session.commit()
             message = f"Lube sale logged: ₹{amount:,.2f} — {product.name}"
             if customer:
@@ -236,7 +245,7 @@ def expense():
             amount = float(raw_amount)
         except ValueError:
             amount = None
-        if amount is None or amount <= 0:
+        if amount is None or not math.isfinite(amount) or amount <= 0:
             error = "Enter a valid amount greater than zero."
         elif category not in categories:
             error = "Choose a valid category."
@@ -314,7 +323,7 @@ def payment():
 
         if not customer:
             error = "Choose a valid customer."
-        elif amount is None or amount <= 0:
+        elif amount is None or not math.isfinite(amount) or amount <= 0:
             error = "Enter a valid amount greater than zero."
         elif payment_mode not in ("Cash", "Cheque", "Bank Transfer"):
             error = "Choose a valid payment mode."
@@ -334,7 +343,7 @@ def payment():
                 status=status,
             ))
             if status == "confirmed":
-                customer.outstanding_balance = max(0.0, (customer.outstanding_balance or 0.0) - amount)
+                customer.add_to_balance(-amount)
             db.session.commit()
             if status == "confirmed":
                 flash(f"Payment recorded: ₹{amount:,.2f} from {customer.company_name}", "ok")

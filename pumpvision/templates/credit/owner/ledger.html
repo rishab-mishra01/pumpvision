@@ -38,8 +38,9 @@
       </div>
 
       <div class="cd-balance-v2 {{ state }}">
-        <div class="lab">Outstanding</div>
-        <div class="amt"><span class="rs">₹</span>{{ customer.outstanding_balance | inr }}<span class="paise">.{{ (customer.outstanding_balance | inr_full)[-2:] }}</span></div>
+        {% set bal = customer.outstanding_balance or 0 %}
+        <div class="lab">{{ 'In credit' if bal < 0 else 'Outstanding' }}{% if customer.balance_as_of %} · verified {{ customer.balance_as_of | dshort }}{% else %} · not verified{% endif %}</div>
+        <div class="amt"><span class="rs">₹</span>{{ bal | abs | inr }}<span class="paise">.{{ (bal | abs | inr_full)[-2:] }}</span></div>
       </div>
 
       {% if last_payment %}
@@ -141,12 +142,69 @@
           </div>
         </div>
       </div>
+      {% elif item.type == 'lube' %}
+      <div class="cred-feed">
+        <div class="cred-feed-row first">
+          <span class="act-glyph pay" style="background:var(--paper-200);color:var(--c-ink-2);font-size:9px;font-family:var(--font-mono);">LUB</span>
+          <div class="body">
+            <span class="cname">Lube sale · {{ "%g"|format(item.quantity) }} ×</span>
+            <span class="desc">{{ item.name }}</span>
+          </div>
+          <div class="right">
+            <span class="amt">₹ {{ item.amount | inr }}</span>
+            <span class="when">{{ item.time.strftime('%H:%M') if item.time else '—' }}</span>
+          </div>
+        </div>
+      </div>
+      {% elif item.type == 'entry' %}
+      <div class="cred-feed">
+        <div class="cred-feed-row first">
+          <span class="act-glyph pay" style="background:var(--paper-200);color:var(--c-ink-2);font-size:9px;font-family:var(--font-mono);">{{ {'OPENING': 'OB', 'CHARGE': 'CHG', 'ADJUSTMENT': 'ADJ'}[item.entry_type] }}</span>
+          <div class="body">
+            <span class="cname">{% if item.entry_type == 'OPENING' %}Opening balance{% elif item.entry_type == 'CHARGE' %}{{ item.category or 'Charge' }} · paid on their behalf{% else %}Adjustment{% endif %}</span>
+            <span class="desc">{{ item.notes or item.source or '—' }}</span>
+          </div>
+          <div class="right">
+            <span class="amt{{ ' credit' if item.amount < 0 }}">{{ '−' if item.amount < 0 }}₹ {{ item.amount | abs | inr_full }}</span>
+          </div>
+        </div>
+      </div>
       {% endif %}
 
       {% endfor %}
       {% else %}
       <div class="cred-empty"><span class="ei">No activity yet</span></div>
       {% endif %}
+
+      <div class="cred-day">Add a charge or adjustment</div>
+      <form method="post" action="{{ url_for('credit.add_entry', customer_id=customer.customer_id) }}" style="padding:0 16px;">
+        <div class="cform-field">
+          <label class="fl" for="ae-type">Type</label>
+          <select id="ae-type" name="entry_type">
+            <option value="CHARGE">Charge — paid on their behalf (adds to balance)</option>
+            <option value="ADJUSTMENT">Adjustment — correction (+ adds, − reduces)</option>
+          </select>
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="ae-cat">For</label>
+          <select id="ae-cat" name="category">
+            {% for c in charge_categories %}<option>{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="ae-amount">Amount (₹) <span class="req">*</span></label>
+          <input type="number" id="ae-amount" name="amount" step="0.01" inputmode="decimal" required placeholder="0.00">
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="ae-date">Date</label>
+          <input type="date" id="ae-date" name="entry_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}">
+        </div>
+        <div class="cform-field">
+          <label class="fl" for="ae-notes">Note</label>
+          <input type="text" id="ae-notes" name="notes" maxlength="200" placeholder="Required for an adjustment">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-full" style="margin:12px 0 4px;">Add entry</button>
+      </form>
 
     </div>
 

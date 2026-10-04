@@ -55,7 +55,7 @@
         <option value="" disabled {% if not values.customer_id %}selected{% endif %}>Select customer</option>
         {% for c in customers %}
         <option value="{{ c.customer_id }}" {% if values.customer_id|string == c.customer_id|string %}selected{% endif %}>
-          {{ c.company_name }} — ₹{{ "{:,.2f}".format(c.outstanding_balance or 0.0) }} due
+          {{ c.company_name }} — ₹{{ "{:,.2f}".format((c.outstanding_balance or 0.0) | abs) }} {{ 'in credit' if (c.outstanding_balance or 0.0) < 0 else 'due' }}
         </option>
         {% endfor %}
       </select>

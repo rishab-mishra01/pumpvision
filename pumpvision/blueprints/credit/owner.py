@@ -1,3 +1,4 @@
+import math
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -8,12 +9,15 @@ from pumpvision.decorators import owner_required
 
 credit_bp = Blueprint("credit", __name__)
 
+# AppNotification types shown on the Credit home (the Meters badge counts only shift_close).
+ALERT_TYPES = ("credit_alert", "lube_alert")
+
 
 @credit_bp.route("/home")
 @login_required
 @owner_required
 def credit_home():
-    from pumpvision.models import CreditTransaction, Customer, Invoice, PaymentReceived
+    from pumpvision.models import AppNotification, CreditTransaction, Customer, Invoice, PaymentReceived
     from datetime import date, timedelta
 
     today = date.today()
@@ -76,14 +80,36 @@ def credit_home():
         .all()
     )
 
+    # Open credit/lube alerts (unbilled sales, billing-rate errors, lube below cost).
+    alerts = (
+        AppNotification.query
+        .filter(AppNotification.notification_type.in_(ALERT_TYPES), AppNotification.is_read.is_(False))
+        .order_by(AppNotification.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "credit/owner/credit_home.html",
         activity=activity,
+        alerts=alerts,
         pending=pending,
         customers=customers,
         invoices=invoices,
         today=today,
     )
+
+
+@credit_bp.route("/alerts/<int:alert_id>/dismiss", methods=["POST"])
+@login_required
+@owner_required
+def dismiss_alert(alert_id):
+    from pumpvision.models import AppNotification, db
+
+    alert = AppNotification.query.get_or_404(alert_id)
+    if alert.notification_type in ALERT_TYPES:
+        alert.is_read = True
+        db.session.commit()
+    return redirect(url_for("credit.credit_home"))
 
 
 @credit_bp.route("/")
@@ -112,7 +138,8 @@ def dashboard():
         .filter(CreditTransaction.transaction_date >= month_start)
         .scalar() or 0.0
     )
-    total_outstanding = sum(c.outstanding_balance or 0 for c in customers)
+    # Receivables only: an account in credit (the tanker) must not offset what others owe.
+    total_outstanding = sum(max(0.0, c.outstanding_balance or 0) for c in customers)
 
     return render_template(
         "credit/owner/dashboard.html",
@@ -131,7 +158,8 @@ def dashboard():
 def customers():
     from pumpvision.models import Customer, PaymentReceived
     all_customers = Customer.query.order_by(Customer.company_name).all()
-    total_outstanding = sum(c.outstanding_balance or 0 for c in all_customers)
+    total_outstanding = sum(max(0.0, c.outstanding_balance or 0) for c in all_customers)
+    total_in_credit = sum(-min(0.0, c.outstanding_balance or 0) for c in all_customers)
 
     # Build last payment lookup per customer
     last_payments = {}
@@ -143,6 +171,7 @@ def customers():
         "credit/owner/customers.html",
         customers=all_customers,
         total_outstanding=total_outstanding,
+        total_in_credit=total_in_credit,
         last_payments=last_payments,
         today=date.today(),
     )
@@ -152,7 +181,7 @@ def customers():
 @login_required
 @owner_required
 def new_customer():
-    from pumpvision.models import AuthorizedVehicle, Customer, db
+    from pumpvision.models import AccountEntry, AuthorizedVehicle, Customer, db
 
     if request.method == "POST":
         company_name       = request.form.get("company_name", "").strip()
@@ -190,6 +219,17 @@ def new_customer():
         )
         db.session.add(customer)
         db.session.flush()
+        if opening_balance:
+            db.session.add(AccountEntry(
+                customer_id=customer.customer_id,
+                entry_date=date.today(),
+                entry_type="OPENING",
+                amount=opening_balance,
+                source="Entered when the customer was created",
+                created_by=current_user.id,
+            ))
+            customer.balance_as_of = date.today()
+            customer.balance_source = "Entered by owner"
 
         raw_vehicles = request.form.get("vehicle_numbers", "")
         for line in raw_vehicles.splitlines():
@@ -211,7 +251,7 @@ def new_customer():
 @login_required
 @owner_required
 def edit_customer(customer_id):
-    from pumpvision.models import AuthorizedVehicle, Customer, db
+    from pumpvision.models import AccountEntry, AuthorizedVehicle, Customer, db
 
     customer = Customer.query.get_or_404(customer_id)
 
@@ -240,7 +280,19 @@ def edit_customer(customer_id):
             entered = round(float(request.form.get("opening_balance", "")), 2)
             shown = round(float(request.form.get("balance_before", "")), 2)
             if entered != shown:
+                delta = round(entered - (customer.outstanding_balance or 0.0), 2)
+                db.session.add(AccountEntry(
+                    customer_id=customer.customer_id,
+                    entry_date=date.today(),
+                    entry_type="ADJUSTMENT",
+                    amount=delta,
+                    notes=f"Balance edited to ₹{entered:,.2f}",
+                    source="Owner edit",
+                    created_by=current_user.id,
+                ))
                 customer.outstanding_balance = entered
+                customer.balance_as_of = date.today()
+                customer.balance_source = "Owner edit"
         except ValueError:
             pass
 
@@ -273,9 +325,12 @@ def edit_customer(customer_id):
 @login_required
 @owner_required
 def ledger(customer_id):
-    from pumpvision.models import CreditTransaction, Customer, Invoice, PaymentReceived
+    from pumpvision.models import (AccountEntry, CreditTransaction, Customer, Invoice, LubeTransaction,
+                                   PaymentReceived)
 
     customer = Customer.query.get_or_404(customer_id)
+    entries = AccountEntry.query.filter_by(customer_id=customer_id).all()
+    lube_sales = LubeTransaction.query.filter_by(customer_id=customer_id, payment_mode="credit").all()
     transactions = (
         CreditTransaction.query
         .filter_by(customer_id=customer_id)
@@ -319,6 +374,26 @@ def ledger(customer_id):
             "ref": p.reference_number,
             "status": p.status or "confirmed",
         })
+    for l in lube_sales:
+        activity.append({
+            "type": "lube",
+            "date": l.op_date,
+            "time": l.transaction_time.time() if l.transaction_time else None,
+            "name": f"{l.product.name} {l.product.pack_size}" if l.product else "Lube",
+            "quantity": l.quantity,
+            "amount": l.amount,
+        })
+    for e in entries:
+        activity.append({
+            "type": "entry",
+            "date": e.entry_date,
+            "time": None,
+            "entry_type": e.entry_type,
+            "category": e.category,
+            "amount": e.amount,
+            "notes": e.notes,
+            "source": e.source,
+        })
     activity.sort(
         key=lambda x: (x["date"], x["time"] or __import__("datetime").time.min),
         reverse=True,
@@ -335,7 +410,63 @@ def ledger(customer_id):
         unpaid_invoices=[i for i in invoices if not i.is_paid],
         tab=request.args.get("tab", "activity"),
         today=date.today(),
+        charge_categories=AccountEntry.CHARGE_CATEGORIES,
     )
+
+
+@credit_bp.route("/customers/<int:customer_id>/entry", methods=["POST"])
+@login_required
+@owner_required
+def add_entry(customer_id):
+    """Owner adds a non-fuel line: a CHARGE paid on the party's behalf, or a
+    signed ADJUSTMENT. Both move the balance and show in the ledger."""
+    from pumpvision.models import AccountEntry, Customer, db
+
+    customer = Customer.query.get_or_404(customer_id)
+    back = redirect(url_for("credit.ledger", customer_id=customer_id))
+
+    entry_type = request.form.get("entry_type", "")
+    if entry_type not in ("CHARGE", "ADJUSTMENT"):
+        flash("Choose charge or adjustment.", "error")
+        return back
+    try:
+        amount = round(float(request.form.get("amount", "")), 2)
+    except ValueError:
+        amount = 0.0
+    if not math.isfinite(amount) or amount == 0 or (entry_type == "CHARGE" and amount < 0):
+        flash("Enter a valid amount. A charge must be greater than zero.", "error")
+        return back
+    category = request.form.get("category", "").strip() or None
+    if entry_type == "CHARGE" and category not in AccountEntry.CHARGE_CATEGORIES:
+        flash("Choose what the charge is for.", "error")
+        return back
+    try:
+        entry_date = date.fromisoformat(request.form.get("entry_date", ""))
+    except ValueError:
+        entry_date = date.today()
+    if entry_date > date.today() or (customer.balance_as_of and entry_date <= customer.balance_as_of):
+        flash("The date must be after the verified balance date and not in the future.", "error")
+        return back
+    notes = request.form.get("notes", "").strip() or None
+    if entry_type == "ADJUSTMENT" and not notes:
+        flash("Say why the balance is being adjusted.", "error")
+        return back
+
+    db.session.add(AccountEntry(
+        customer_id=customer_id,
+        entry_date=entry_date,
+        entry_type=entry_type,
+        category=category if entry_type == "CHARGE" else None,
+        amount=amount,
+        notes=notes,
+        source="Owner entry",
+        created_by=current_user.id,
+    ))
+    customer.add_to_balance(amount)
+    db.session.commit()
+    label = f"{category} charge" if entry_type == "CHARGE" else "Adjustment"
+    flash(f"{label} of ₹{abs(amount):,.2f} recorded.", "ok")
+    return back
 
 
 @credit_bp.route("/customers/<int:customer_id>/payment", methods=["POST"])
@@ -351,7 +482,7 @@ def record_payment(customer_id):
         amount = round(float(request.form.get("amount", "")), 2)
     except ValueError:
         amount = 0.0
-    if amount <= 0:
+    if not math.isfinite(amount) or amount <= 0:
         flash("Enter a valid amount greater than zero.", "error")
         return back
 
@@ -389,7 +520,7 @@ def record_payment(customer_id):
         verified_by=current_user.id,
         verified_at=datetime.utcnow(),
     ))
-    customer.outstanding_balance = max(0.0, (customer.outstanding_balance or 0.0) - amount)
+    customer.add_to_balance(-amount)
     if invoice:
         db.session.flush()
         _refresh_invoice_paid(invoice)
@@ -421,7 +552,7 @@ def verify_payment(payment_id):
     if action == "confirm":
         payment.status = "confirmed"
         customer = db.session.get(Customer, payment.customer_id)
-        customer.outstanding_balance = max(0.0, (customer.outstanding_balance or 0.0) - payment.amount)
+        customer.add_to_balance(-payment.amount)
         if payment.invoice:
             _refresh_invoice_paid(payment.invoice)
         flash(f"Bank transfer of ₹{payment.amount:,.2f} confirmed.", "ok")
@@ -484,6 +615,7 @@ def generate_invoice():
         CreditTransaction.customer_id == customer.customer_id,
         CreditTransaction.transaction_date >= period_from,
         CreditTransaction.transaction_date <= period_to,
+        CreditTransaction.is_legacy_entry.isnot(True),
     ).all()
 
     if period_from > period_to:
@@ -555,6 +687,7 @@ def invoice_pdf(invoice_id):
             CreditTransaction.customer_id == invoice.customer_id,
             CreditTransaction.transaction_date >= invoice.period_from,
             CreditTransaction.transaction_date <= invoice.period_to,
+            CreditTransaction.is_legacy_entry.isnot(True),
         )
         .order_by(CreditTransaction.transaction_date, CreditTransaction.transaction_time)
         .all()

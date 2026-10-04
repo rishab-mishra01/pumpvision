@@ -125,6 +125,7 @@ def _calculate(op_date: date) -> dict:
     credit_total = db.session.query(
         func.sum(CreditTransaction.amount)
     ).filter(
+        CreditTransaction.is_legacy_entry.isnot(True),
         or_(
             and_(
                 CreditTransaction.transaction_date == op_date,

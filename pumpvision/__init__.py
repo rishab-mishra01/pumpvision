@@ -160,7 +160,9 @@ def create_app():
         from flask_login import current_user
         if current_user.is_authenticated and current_user.role == "owner":
             from .models import AppNotification
-            count = AppNotification.query.filter_by(is_read=False).count()
+            # The badge sits on Meters, so count only the shift-close notices it
+            # clears; credit/lube alerts are listed on the Credit home instead.
+            count = AppNotification.query.filter_by(is_read=False, notification_type="shift_close").count()
             return {"unread_notification_count": count}
         return {"unread_notification_count": 0}
 

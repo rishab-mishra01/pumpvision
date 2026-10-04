@@ -43,6 +43,10 @@ class Customer(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     notes = db.Column(db.Text)
+    # When outstanding_balance was last verified, and against what (e.g. the
+    # accounting software's month-end statement). NULL = never verified.
+    balance_as_of = db.Column(db.Date)
+    balance_source = db.Column(db.String(120))
 
     vehicles = db.relationship("AuthorizedVehicle", backref="customer", lazy=True)
     transactions = db.relationship("CreditTransaction", backref="customer", lazy=True)
@@ -53,7 +57,41 @@ class Customer(db.Model):
     def utilization_pct(self):
         if not self.credit_limit:
             return 0.0
-        return (self.outstanding_balance / self.credit_limit) * 100
+        return max(0.0, (self.outstanding_balance or 0.0) / self.credit_limit * 100)
+
+    def add_to_balance(self, amount):
+        """Apply a signed change: +sale/charge, -payment.
+
+        Never clamp at zero: a party can be in credit (the tanker, overpayments),
+        and clamping silently threw that money away.
+        """
+        self.outstanding_balance = round((self.outstanding_balance or 0.0) + amount, 2)
+
+
+class AccountEntry(db.Model):
+    """Non-fuel line on a customer account, signed like the accounting software
+    (positive = the party owes more).
+
+    OPENING    -- balance carried in at a cutover date
+    CHARGE     -- money the pump paid on the party's behalf (tanker EMI, salary,
+                  insurance, interest)
+    ADJUSTMENT -- signed correction, e.g. an owner edit of the balance
+    """
+    __tablename__ = "account_entries"
+
+    TYPES = ("OPENING", "CHARGE", "ADJUSTMENT")
+    CHARGE_CATEGORIES = ("EMI", "Salary", "Insurance", "Interest", "Repairs", "Other")
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.customer_id"), nullable=False)
+    entry_date = db.Column(db.Date, nullable=False)
+    entry_type = db.Column(db.String(20), nullable=False)
+    category = db.Column(db.String(40))
+    amount = db.Column(db.Float, nullable=False)
+    notes = db.Column(db.Text)
+    source = db.Column(db.String(200))
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class AuthorizedVehicle(db.Model):
@@ -253,6 +291,7 @@ class LubeProduct(db.Model):
     pack_size = db.Column(db.String(20), nullable=False)
     unit = db.Column(db.String(20), default='unit')
     sale_rate = db.Column(db.Float, nullable=False)
+    purchase_rate = db.Column(db.Float)  # cost price; a sale below it raises an alert
     is_active = db.Column(db.Boolean, default=True)
 
     transactions = db.relationship('LubeTransaction', backref='product', lazy=True)

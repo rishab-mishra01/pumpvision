@@ -99,6 +99,7 @@ def _cng_sdms(op_date):
 def _credit_total(op_date):
     nd = op_date + timedelta(days=1)
     return db.session.query(func.sum(CreditTransaction.amount)).filter(
+        CreditTransaction.is_legacy_entry.isnot(True),
         or_(
             and_(CreditTransaction.transaction_date == op_date,
                  CreditTransaction.transaction_time >= time(6, 0)),
