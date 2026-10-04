@@ -81,7 +81,7 @@
           <span class="act-glyph fuel {{ item.product | lower }}">{{ item.product }}</span>
           <div class="body">
             <span class="cname">{{ cust.company_name if cust else '—' }}</span>
-            <span class="desc">{{ "%.0f"|format(item.litres) }} L · {{ item.vehicle or '—' }}</span>
+            <span class="desc">{{ "%.0f"|format(item.litres) }} {{ 'kg' if item.product == 'CNG' else 'L' }} · {{ item.vehicle or '—' }}</span>
           </div>
           <div class="right">
             <span class="amt">₹ {{ item.amount | inr }}</span>

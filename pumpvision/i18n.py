@@ -134,6 +134,7 @@ HI = {
     "dispensed_quantity": "कितना तेल दिया",
     "amount_rupees": "रकम (₹)",
     "litres_L": "लीटर (L)",
+    "kg_label": "किलो (kg)",
     "select_to_see_rate": "रेट देखने के लिए उत्पाद चुनें",
     "select_product_first_units": "यूनिट बदलने से पहले उत्पाद चुनें।",
     "no_rate_for": "का रेट नहीं है। मालिक से संपर्क करें।",  # "{prod} " prepended in JS

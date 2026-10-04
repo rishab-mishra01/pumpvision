@@ -59,8 +59,8 @@
 
   <h2>रोज़ का क्रम</h2>
   <table class="day">
-    <tr><td>सुबह 06:00 के बाद</td><td>पिछली शिफ्ट बंद करें: हर मशीन (नोज़ल) के मीटर की आखिरी रीडिंग भरें और <span class="q">शिफ्ट जमा करें</span>। (पेज 5–7)</td></tr>
-    <tr><td>पूरे दिन</td><td>हर उधार बिक्री तुरंत ऐप में दर्ज करें और ग्राहक को साइन की हुई पर्ची दें। (पेज 3–4)</td></tr>
+    <tr><td>सुबह 06:00 के बाद</td><td>पिछली शिफ्ट बंद करें: हर मशीन (नोज़ल) के मीटर की आखिरी रीडिंग भरें और <span class="q">शिफ्ट जमा करें</span>। (पेज 6–8)</td></tr>
+    <tr><td>पूरे दिन</td><td>हर उधार बिक्री तुरंत ऐप में दर्ज करें और ग्राहक को साइन की हुई पर्ची दें। (पेज 3–5)</td></tr>
     <tr><td>काम खत्म होने पर</td><td>साझा फ़ोन हो तो <span class="q">प्रोफ़ाइल → बाहर निकलें</span> दबाएँ।</td></tr>
   </table>
   <p class="note ok">शिफ्ट का मतलब: एक दिन सुबह 06:00 से अगले दिन सुबह 06:00 तक। ऐप अपने आप पिछले दिन की शिफ्ट खोलता है।</p>
@@ -68,10 +68,11 @@
 
 <section class="page">
   <h2>ऐप खोलना</h2>
-  <div class="shots">
+  <div class="shots" style="grid-template-columns:repeat(4,1fr);gap:4mm;">
     <figure><img src="shots/00_login.png"><figcaption><b>A</b> अपना यूज़रनेम और पासवर्ड भरें।</figcaption></figure>
     <figure><img src="shots/01_home.png"><figcaption><b>B</b> होम स्क्रीन। <b>पीला डिब्बा</b> = पिछली शिफ्ट अभी बंद नहीं हुई।</figcaption></figure>
     <figure><img src="shots/18_home_closed.png"><figcaption><b>C</b> <b>हरा डिब्बा</b> = पिछली शिफ्ट बंद हो गई।</figcaption></figure>
+    <figure><img src="shots/21_profile.png"><figcaption><b>D</b> प्रोफ़ाइल: <b>बड़ा दिखाओ</b> और <b>बाहर निकलें</b>।</figcaption></figure>
   </div>
   <ul class="tight">
     <li>अपना पासवर्ड किसी को न बताएं। हर बिक्री और रीडिंग आपके नाम से दर्ज होती है।</li>
@@ -99,7 +100,7 @@
   <h2>1. उधार बिक्री (आगे)</h2>
   <ol class="steps" style="counter-reset:s 3">
     <li><b>गाड़ी नंबर</b> चुनें। नंबर न हो तो <span class="q">बिना नंबर</span> दबाएँ।</li>
-    <li><b>तेल चुनें:</b> HS (डीज़ल), MS (पेट्रोल), X2 (प्रीमियम 95) या XG (एक्स्ट्रा ग्रीन)।</li>
+    <li><b>तेल चुनें:</b> HS (डीज़ल), MS (पेट्रोल), X2 (प्रीमियम 95), XG (एक्स्ट्रा ग्रीन) या CNG (अगला पेज)।</li>
     <li><span class="q">रकम (₹)</span> या <span class="q">लीटर (L)</span> चुनें, फिर मशीन पर जो दिखा वही संख्या भरें। रेट ऐप अपने आप लगाता है।</li>
     <li><span class="q">बिक्री पक्की करें</span> दबाएँ।</li>
     <li>हरा ✓ दिखेगा। <b>रकम, लीटर और रेट</b> एक बार देख लें। ग्राहक को साइन की हुई पर्ची दें।</li>
@@ -110,7 +111,23 @@
     <figure><img src="shots/06_sale_confirmed.png"><figcaption><b>8</b> बिक्री दर्ज हो गई — पर्ची दें</figcaption></figure>
   </div>
   <p class="note warn"><b>गलती हो जाए तो:</b> वही बिक्री दोबारा दर्ज न करें। तुरंत मैनेजर को बताएं — ग्राहक का नाम, रकम और समय।</p>
-  <p class="note warn"><b>CNG की उधार बिक्री</b> अभी ऐप में दर्ज नहीं होती। ऐसी बिक्री मैनेजर को बताएं।</p>
+</section>
+
+<section class="page">
+  <h2>1. CNG की उधार बिक्री</h2>
+  <p class="sub">CNG किलो (kg) में बिकती है। बाकी तरीका वही है।</p>
+  <ol class="steps">
+    <li>ग्राहक और गाड़ी चुनें (ऊपर जैसा)।</li>
+    <li>नीचे वाला नीला <b>CNG</b> डिब्बा दबाएँ।</li>
+    <li><span class="q">रकम (₹)</span> या <span class="q">किलो (kg)</span> चुनें और मशीन पर दिखी संख्या भरें। रेट (₹/kg) ऐप अपने आप लगाता है।</li>
+    <li><span class="q">बिक्री पक्की करें</span> दबाएँ। किलो और रकम जाँचें, पर्ची दें।</li>
+  </ol>
+  <div class="shots">
+    <figure><img src="shots/07_sale_cng.png"><figcaption><b>2–3</b> CNG चुनी, किलो भरे</figcaption></figure>
+    <figure><img src="shots/08_sale_cng_confirmed.png"><figcaption><b>4</b> बिक्री दर्ज — किलो में</figcaption></figure>
+    <figure></figure>
+  </div>
+  <p class="note warn">रेट गलत दिखे तो बिक्री न करें — मालिक या मैनेजर को बताएं। CNG का रेट मालिक ऐप में बदलते हैं।</p>
 </section>
 
 <!-- ───────────── Page 4: shift close ───────────── -->

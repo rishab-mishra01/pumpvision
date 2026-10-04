@@ -1,4 +1,6 @@
-from flask import Blueprint, jsonify, redirect, render_template, url_for
+import math
+
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from pumpvision.decorators import owner_required
@@ -109,7 +111,7 @@ def tanks():
     )
 
 
-@owner_bp.route("/more")
+@owner_bp.route("/more", methods=["GET", "POST"])
 @login_required
 @owner_required
 def more():
@@ -119,15 +121,35 @@ def more():
     no menu and no confirmation. It is now a real menu, and the natural home for
     actions that are not a screen.
     """
-    from pumpvision.models import TankReading
+    from pumpvision.models import AppSetting, TankReading, db
 
+    if request.method == "POST":
+        # CNG pump price per kg: not in IRAS, so the owner keeps it current. It is
+        # the rate an attendant's CNG credit sale and the shift-close CNG row use.
+        try:
+            rate = round(float(request.form.get("cng_rate", "")), 2)
+        except ValueError:
+            rate = 0.0
+        if not math.isfinite(rate) or not 50 <= rate <= 300:
+            flash("Enter the CNG rate per kg (between ₹50 and ₹300).", "error")
+        else:
+            s = db.session.get(AppSetting, "cng_rsp_per_kg")
+            if s:
+                s.value = f"{rate:.2f}"
+            else:
+                db.session.add(AppSetting(key="cng_rsp_per_kg", value=f"{rate:.2f}"))
+            db.session.commit()
+            flash(f"CNG rate set to ₹{rate:.2f}/kg.", "ok")
+        return redirect(url_for("owner.more"))
+
+    cng = db.session.get(AppSetting, "cng_rsp_per_kg")
     latest = TankReading.query.order_by(TankReading.scraped_at.desc()).first()
     # Already IST -- see the note in tanks(); do not add an offset here either.
     last_scan = (
         latest.scraped_at.strftime("%d %b, %H:%M")
         if latest and latest.scraped_at else None
     )
-    return render_template("owner/more.html", last_scan=last_scan)
+    return render_template("owner/more.html", last_scan=last_scan, cng_rate=cng.value if cng else None)
 
 
 @owner_bp.route("/scan", methods=["POST"])

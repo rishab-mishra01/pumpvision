@@ -115,7 +115,7 @@
         <div class="cred-feed-row first">
           <span class="act-glyph fuel {{ item.product | lower }}">{{ item.product }}</span>
           <div class="body">
-            <span class="cname">Fuel sale · {{ "%.0f"|format(item.litres) }} L</span>
+            <span class="cname">Fuel sale · {{ "%.0f"|format(item.litres) }} {{ 'kg' if item.product == 'CNG' else 'L' }}</span>
             <span class="desc">{{ item.vehicle or '—' }}</span>
           </div>
           <div class="right">

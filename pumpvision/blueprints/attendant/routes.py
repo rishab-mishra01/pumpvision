@@ -1,4 +1,3 @@
-import os
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
@@ -459,7 +458,7 @@ def select_customer():
 @login_required
 @attendant_required
 def log_sale_details(customer_id):
-    from pumpvision.models import Customer, CreditTransaction, db
+    from pumpvision.models import AppSetting, Customer, CreditTransaction, db
     from pumpvision.services.prices import get_rsp
 
     customer = Customer.query.get_or_404(customer_id)
@@ -469,6 +468,12 @@ def log_sale_details(customer_id):
     vehicles = [v.vehicle_number for v in customer.vehicles if v.is_active]
     today = date.today()
     price_map = {prod: get_rsp(prod, today) for prod in ("HS", "MS", "X2", "XG")}
+    # CNG is not in IRAS: its pump price is the owner-set setting, sold in kg.
+    cng = db.session.get(AppSetting, "cng_rsp_per_kg")
+    try:
+        price_map["CNG"] = float(cng.value) if cng and float(cng.value) > 0 else None
+    except ValueError:
+        price_map["CNG"] = None
 
     if request.method == "POST":
         vehicle_number = request.form.get("vehicle_number", "").strip().upper()
@@ -478,11 +483,11 @@ def log_sale_details(customer_id):
 
         if not vehicle_number:
             errors.append(HI["err_select_vehicle"])
-        if product not in ("HS", "MS", "X2", "XG"):
+        if product not in price_map:
             errors.append(HI["err_select_product"])
 
         rate = price_map.get(product)
-        if product in ("HS", "MS", "X2", "XG") and rate is None:
+        if product in price_map and rate is None:
             errors.append(HI["err_no_current_rate"].format(product=product))
 
         try:
@@ -511,7 +516,7 @@ def log_sale_details(customer_id):
                 litres=litres,
                 rate_per_litre=rate or 0.0,
                 amount=amount,
-                attendant_name=current_user.id,
+                attendant_name=current_user.first_name or current_user.username,
                 is_legacy_entry=False,
             )
             db.session.add(txn)
@@ -803,7 +808,7 @@ def shift_summary():
     all_entered = all(r["closing"] is not None for r in nozzle_rows)
     any_drafts  = any(r["closing"] is not None for r in nozzle_rows)
     warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5]
-    display_name = os.environ.get("ATTENDANT_DISPLAY_NAME", str(current_user.id).capitalize())
+    display_name = current_user.first_name or current_user.username
 
     return render_template(
         "attendant/shift_summary.html",

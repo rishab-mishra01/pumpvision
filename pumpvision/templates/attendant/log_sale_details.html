@@ -20,6 +20,7 @@
   .prod-card.selected-MS { background: var(--ms-100);  border: 2px solid var(--ms-600); }
   .prod-card.selected-X2 { background: var(--x2-100);  border: 2px solid var(--x2-600); }
   .prod-card.selected-XG { background: var(--xg-100);  border: 2px solid var(--xg-600); }
+  .prod-card.selected-CNG { background: #dbeafe; border: 2px solid #1d4ed8; }
 
   /* Mode toggle */
   .mode-toggle {
@@ -207,6 +208,11 @@
         </button>
         {% endfor %}
       </div>
+      <button type="button" id="card-CNG" onclick="selectProduct('CNG')" class="prod-card" style="width:100%;margin-top:10px;">
+        <div style="font-family:var(--font-mono);font-weight:700;font-size:1.5rem;color:#1d4ed8;
+                    letter-spacing:-0.01em;margin-bottom:4px;">CNG</div>
+        <div class="eyebrow" style="color:var(--ink-500);">{{ hi.prod_cng_full }}</div>
+      </button>
     </div>
 
     <!-- Quantity section -->
@@ -302,14 +308,20 @@ function selectProduct(prod) {
   selectedProduct = prod;
   document.getElementById('product-hidden').value = prod;
 
-  ['HS', 'MS', 'X2', 'XG'].forEach(function (p) {
+  ['HS', 'MS', 'X2', 'XG', 'CNG'].forEach(function (p) {
     var card = document.getElementById('card-' + p);
     card.className = 'prod-card' + (p === prod ? ' selected-' + p : '');
   });
 
+  // CNG is sold by the kg, liquid fuel by the litre.
+  document.getElementById('btn-litres').textContent = prod === 'CNG' ? {{ hi.kg_label|tojson }} : {{ hi.litres_L|tojson }};
+  if (inputMode === 'litres') document.getElementById('currency-symbol').textContent = unit();
+
   updateRateDisplay();
   updateConfirmButton();
 }
+
+function unit() { return selectedProduct === 'CNG' ? 'kg' : 'L'; }
 
 function setMode(mode) {
   if (mode === inputMode) return;
@@ -337,7 +349,7 @@ function setMode(mode) {
 
   document.getElementById('btn-amount').className = 'mode-btn' + (mode === 'amount' ? ' active' : '');
   document.getElementById('btn-litres').className = 'mode-btn' + (mode === 'litres' ? ' active' : '');
-  document.getElementById('currency-symbol').textContent = mode === 'amount' ? '₹' : 'L';
+  document.getElementById('currency-symbol').textContent = mode === 'amount' ? '₹' : unit();
 
   updateRateDisplay();
   updateConfirmButton();
@@ -359,7 +371,7 @@ function updateRateDisplay() {
   sub.style.color = 'var(--ink-500)';
   var qty   = parseFloat(document.getElementById('quantity-input').value) || 0;
   var total = inputMode === 'amount' ? qty : qty * rate;
-  sub.textContent = {{ hi.rate_label|tojson }} + ': ₹' + rate.toFixed(2) + '/L · ' + {{ hi.total_label|tojson }} + ': ₹' + total.toFixed(2);
+  sub.textContent = {{ hi.rate_label|tojson }} + ': ₹' + rate.toFixed(2) + '/' + unit() + ' · ' + {{ hi.total_label|tojson }} + ': ₹' + total.toFixed(2);
 }
 
 function updateConfirmButton() {

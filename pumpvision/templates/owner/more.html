@@ -33,6 +33,28 @@
       </p>
     </div>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="flash flash-{{ 'error' if category == 'error' else 'ok' }}" role="status" style="margin:12px 16px 0;">{{ message }}</div>
+    {% endfor %}
+    {% endwith %}
+
+    <!-- CNG RATE: the pump price per kg, set by the owner (not in IRAS) -->
+    <form method="post" action="{{ url_for('owner.more') }}"
+          style="margin:12px 16px 0;padding:14px 16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:var(--paper-100);">
+      <label for="cng-rate" style="display:block;font-family:var(--font-sans);font-weight:600;font-size:14px;color:var(--ink-900);">
+        CNG rate (₹/kg) <span style="font-weight:400;color:var(--ink-500);">· now ₹{{ cng_rate or '—' }}</span>
+      </label>
+      <p style="margin:4px 0 10px;font-family:var(--font-sans);font-size:12px;color:var(--ink-500);">
+        Used for attendants' CNG credit sales. Update it whenever the pump price changes.
+      </p>
+      <div style="display:flex;gap:8px;">
+        <input id="cng-rate" name="cng_rate" type="number" step="0.01" min="50" max="300" inputmode="decimal" required
+               value="{{ cng_rate or '' }}" style="flex:1;min-width:0;padding:10px 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+
     <div class="more-list">
       <a class="more-item" href="{{ url_for('owner.tanks') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -7,6 +7,7 @@
 
   /* Product color map for confirmed screen */
   .dot-HS { background: var(--hsd-600); }
+  .dot-CNG { background: #1d4ed8; }
   .dot-MS { background: var(--ms-600); }
   .dot-X2 { background: var(--x2-600); }
   .dot-XG { background: var(--xg-600); }
@@ -107,7 +108,7 @@
         <span class="eyebrow">{{ hi.volume_label }}</span>
         <span style="font-family:var(--font-mono);font-size:13px;font-weight:500;
                      color:var(--ink-900);font-variant-numeric:tabular-nums;">
-          {{ '%.2f' % txn.litres }} L
+          {{ '%.2f' % txn.litres }} {{ 'kg' if txn.product == 'CNG' else 'L' }}
         </span>
       </div>
       <div class="rule-dotted"></div>
@@ -118,7 +119,7 @@
         <span class="eyebrow">{{ hi.rate }}</span>
         <span style="font-family:var(--font-mono);font-size:13px;font-weight:500;
                      color:var(--ink-900);font-variant-numeric:tabular-nums;">
-          ₹{{ '%.2f' % txn.rate_per_litre }}/L
+          ₹{{ '%.2f' % txn.rate_per_litre }}/{{ 'kg' if txn.product == 'CNG' else 'L' }}
         </span>
       </div>
       <div class="rule-dotted"></div>
