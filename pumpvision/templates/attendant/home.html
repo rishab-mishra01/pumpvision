@@ -56,8 +56,7 @@
           <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>
       </button>
-      <a href="{{ url_for('auth.logout') }}" aria-label="{{ hi.sign_out }}" title="{{ hi.sign_out }}"
-         onclick='return confirm({{ (hi.sign_out ~ "?") | tojson }})'
+      <a href="{{ url_for('auth.logout_confirm') }}" aria-label="{{ hi.sign_out }}" title="{{ hi.sign_out }}"
          style="display:inline-flex;color:var(--ink-500);padding:8px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

@@ -49,6 +49,22 @@ def login():
     return render_template("auth/login.html")
 
 
+@auth_bp.route("/logout/confirm")
+@login_required
+def logout_confirm():
+    """Ask before signing out -- as a page, not a JS confirm(): the Android app's
+    WebView has no WebChromeClient, so confirm() never shows there and froze the
+    attendant home screen (2026-10-04)."""
+    if current_user.role == "attendant":
+        home = url_for("attendant.home")
+    elif current_user.role == "manager":
+        home = url_for("manager.home")
+    else:
+        home = url_for("dashboard.index")
+    return render_template("auth/logout_confirm.html", home=home,
+                           hindi=current_user.role == "attendant")
+
+
 @auth_bp.route("/logout")
 @login_required
 def logout():

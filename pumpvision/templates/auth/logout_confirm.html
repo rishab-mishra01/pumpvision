@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ 'बाहर निकलें' if hindi else 'Sign out' }} — Pumpvision{% endblock %}
+
+{% block page %}
+<style>body { background: var(--paper-50); }</style>
+<div style="min-height:100dvh;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px 20px;">
+  <div style="border:1px solid var(--paper-300);border-radius:var(--r-card);background:var(--paper-100);padding:24px 20px;text-align:center;">
+    <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.6rem;color:var(--ink-900);margin:0 0 6px;">
+      {{ 'बाहर निकलें?' if hindi else 'Sign out?' }}
+    </h2>
+    <p style="font-family:var(--font-sans);font-size:14px;color:var(--ink-600);margin:0 0 20px;">
+      {{ current_user.first_name or current_user.username }}
+    </p>
+    <a href="{{ url_for('auth.logout') }}" class="btn btn-full"
+       style="min-height:52px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;
+              background:var(--error-100);border:1px solid var(--error-600);color:var(--error-600);text-decoration:none;font-weight:600;">
+      {{ 'हाँ, बाहर निकलें' if hindi else 'Yes, sign out' }}
+    </a>
+    <a href="{{ home }}" class="btn btn-secondary btn-full"
+       style="min-height:52px;display:flex;align-items:center;justify-content:center;text-decoration:none;">
+      {{ 'नहीं, वापस जाएँ' if hindi else 'No, go back' }}
+    </a>
+  </div>
+</div>
+{% endblock %}
