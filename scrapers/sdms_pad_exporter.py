@@ -69,7 +69,7 @@ CAPTCHA_PROMPT = (
 FLEET_CARD_DOC_TYPE = "Fleet- Card Posting"
 CNG_PLANT_PREFIX   = "CGD"            # plant column starts with this
 CNG_UNIT           = "KG"
-CNG_RSP_PER_KG     = float(os.environ.get("CNG_RSP_PER_KG", "93.40"))
+CNG_RSP_PER_KG     = float(os.environ.get("CNG_RSP_PER_KG", "93.40"))  # legacy; no longer used for SDMS revenue
 
 CUSTOMER_LABEL = "SHREE PETROLEUM (206858)"
 
@@ -737,18 +737,25 @@ def compute_cng_summary(rows: list[dict]) -> tuple[float, float, int]:
     """
     Sum quantity (KG) for CGD supply rows (plant starts with 'CGD', unit == 'KG').
     Returns (kg_total, revenue, count).
-    Revenue = kg_total × CNG_RSP_PER_KG.
+    Revenue = sum of the ledger debit on those rows (the CGD invoice amount), so the
+    effective rate is ledger amount / kg and follows CGD's own rate changes.
     """
     kg_total = 0.0
+    revenue = 0.0
     count = 0
     for row in rows:
         plant = row.get("plant", "").strip().upper()
         unit  = row.get("unit",  "").strip().upper()
         if plant.startswith(CNG_PLANT_PREFIX) and unit == CNG_UNIT:
             kg_total += _parse_amount(row.get("quantity", "0"))
+            revenue += _parse_amount(row.get("debit", "0"))
             count += 1
-    revenue = round(kg_total * CNG_RSP_PER_KG, 2)
-    return round(kg_total, 3), revenue, count
+    return round(kg_total, 3), round(revenue, 2), count
+
+
+def cng_ledger_rate(kg: float, revenue: float):
+    """Effective ledger rate (Rs/kg); None when no CNG was posted for the day."""
+    return round(revenue / kg, 2) if kg > 0 else None
 
 
 # ─────────────────────────────────────────────
@@ -789,7 +796,7 @@ def save_outputs(
         "fleet_card_count": fleet_count,
         "cng_kg_total":     cng_kg,
         "cng_revenue":      cng_revenue,
-        "cng_rsp_per_kg":   CNG_RSP_PER_KG,
+        "cng_rsp_per_kg":   cng_ledger_rate(cng_kg, cng_revenue),
         "cng_count":        cng_count,
         "generated_at":     metadata["generated_at"],
         "customer":         CUSTOMER_LABEL,
@@ -829,7 +836,7 @@ def save_summary_to_db(date_iso: str, metadata: dict,
             row.fleet_card_count = fleet_count
             row.cng_kg_total     = cng_kg
             row.cng_revenue      = cng_revenue
-            row.cng_rsp_per_kg   = CNG_RSP_PER_KG
+            row.cng_rsp_per_kg   = cng_ledger_rate(cng_kg, cng_revenue)
             row.cng_count        = cng_count
             row.opening_balance  = metadata.get("opening_balance")
             row.closing_balance  = metadata.get("closing_balance")
@@ -1018,7 +1025,7 @@ async def run(dry_run: bool = False, target_date: str | None = None) -> bool:
             print(f"  Closing balance   : Rs. {metadata['closing_balance']:,.2f}")
             print(f"  Fleet card total  : Rs. {fleet_total:,.2f} ({fleet_count} txns)")
             if cng_count:
-                print(f"  CNG supply        : {cng_kg:.3f} KG × Rs.{CNG_RSP_PER_KG} = Rs. {cng_revenue:,.2f}")
+                print(f"  CNG supply        : {cng_kg:.3f} KG × Rs.{cng_ledger_rate(cng_kg, cng_revenue)} (ledger) = Rs. {cng_revenue:,.2f}")
             else:
                 print(f"  CNG supply        : no CGD billing row for this date")
             print(f"  Table rows        : {len(rows)}")
