@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<title>Pumpvision — कर्मचारी गाइड</title>
+<style>
+  @page { size: A4; margin: 12mm 13mm 14mm; }
+  :root { --ink:#18202e; --muted:#5a6273; --line:#e3dccb; --paper:#faf6ed; --saffron:#e8692a; --ok:#3f6b35; --okbg:#e3ecd9; --warn:#8a5a14; --warnbg:#f4e3c2; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Noto Sans Devanagari","IBM Plex Sans",sans-serif; color:var(--ink); font-size:12.5pt; line-height:1.55; }
+  h1 { font-size:26pt; margin:0 0 2mm; line-height:1.2; }
+  h2 { font-size:17pt; margin:0 0 3mm; padding-bottom:1.5mm; border-bottom:2px solid var(--saffron); line-height:1.3; }
+  .sub { color:var(--muted); margin:0 0 6mm; font-size:12pt; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .brand { font-family:"JetBrains Mono",monospace; letter-spacing:2px; font-size:10pt; color:var(--saffron); margin-bottom:6mm; }
+  .tasks { display:grid; grid-template-columns:1fr 1fr; gap:5mm; margin:4mm 0 6mm; }
+  .task { border:1.5px solid var(--line); border-radius:4mm; padding:4mm 5mm; background:var(--paper); }
+  .task b { font-size:14pt; display:block; margin-bottom:1mm; }
+  .task .when { color:var(--saffron); font-weight:600; }
+  table.day { width:100%; border-collapse:collapse; margin:2mm 0 5mm; }
+  table.day td { padding:2.5mm 3mm; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.day td:first-child { width:42mm; font-weight:700; white-space:nowrap; }
+  ol.steps { margin:0 0 4mm; padding:0; list-style:none; counter-reset:s; }
+  ol.steps > li { counter-increment:s; position:relative; padding:0 0 2.2mm 10mm; }
+  ol.steps > li::before { content:counter(s); position:absolute; left:0; top:0.4mm; width:6.5mm; height:6.5mm; border-radius:50%; background:var(--saffron); color:#fff; font-weight:700; font-size:10pt; text-align:center; line-height:6.5mm; font-family:"IBM Plex Sans",sans-serif; }
+  .shots { display:grid; grid-template-columns:repeat(3, 1fr); gap:5mm; margin:3mm 0 5mm; }
+  figure { margin:0; text-align:center; }
+  figure img { width:100%; border:1px solid var(--line); border-radius:3mm; display:block; }
+  figcaption { font-size:10pt; color:var(--muted); margin-top:1.5mm; line-height:1.35; }
+  figcaption b { color:var(--saffron); font-family:"IBM Plex Sans",sans-serif; }
+  .note { border-radius:3mm; padding:3mm 4mm; margin:3mm 0; font-size:11.5pt; }
+  .note.ok { background:var(--okbg); border:1px solid #b9cfa7; }
+  .note.warn { background:var(--warnbg); border:1px solid #d9b77a; color:#4d3409; }
+  .q { font-family:"Noto Sans Devanagari",sans-serif; font-weight:700; }
+  ul.tight { margin:1mm 0 3mm; padding-left:6mm; }
+  ul.tight li { margin-bottom:1.2mm; }
+  .foot { color:var(--muted); font-size:9.5pt; margin-top:6mm; }
+</style>
+</head>
+<body>
+
+<!-- ───────────── Page 1: overview ───────────── -->
+<section class="page">
+  <div class="brand">PUMPVISION · SHREE PETROLEUM · RO 206858</div>
+  <h1>कर्मचारी गाइड</h1>
+  <p class="sub">फ़ोन पर Pumpvision ऐप में रोज़ के दो काम — उधार बिक्री और शिफ्ट बंद करना।</p>
+
+  <div class="tasks">
+    <div class="task">
+      <b>1. उधार बिक्री दर्ज करें</b>
+      <span class="when">कब:</span> हर बार जब उधार खाते वाला ग्राहक तेल ले — उसी समय, गाड़ी जाने से पहले।
+    </div>
+    <div class="task">
+      <b>2. शिफ्ट बंद करें</b>
+      <span class="when">कब:</span> हर सुबह 06:00 बजे के बाद — पिछले दिन की शिफ्ट के लिए, सभी मशीनों की मीटर रीडिंग।
+    </div>
+  </div>
+
+  <h2>रोज़ का क्रम</h2>
+  <table class="day">
+    <tr><td>सुबह 06:00 के बाद</td><td>पिछली शिफ्ट बंद करें: हर मशीन (नोज़ल) के मीटर की आखिरी रीडिंग भरें और <span class="q">शिफ्ट जमा करें</span>। (पेज 5–7)</td></tr>
+    <tr><td>पूरे दिन</td><td>हर उधार बिक्री तुरंत ऐप में दर्ज करें और ग्राहक को साइन की हुई पर्ची दें। (पेज 3–4)</td></tr>
+    <tr><td>काम खत्म होने पर</td><td>साझा फ़ोन हो तो <span class="q">प्रोफ़ाइल → बाहर निकलें</span> दबाएँ।</td></tr>
+  </table>
+  <p class="note ok">शिफ्ट का मतलब: एक दिन सुबह 06:00 से अगले दिन सुबह 06:00 तक। ऐप अपने आप पिछले दिन की शिफ्ट खोलता है।</p>
+</section>
+
+<section class="page">
+  <h2>ऐप खोलना</h2>
+  <div class="shots">
+    <figure><img src="shots/00_login.png"><figcaption><b>A</b> अपना यूज़रनेम और पासवर्ड भरें।</figcaption></figure>
+    <figure><img src="shots/01_home.png"><figcaption><b>B</b> होम स्क्रीन। <b>पीला डिब्बा</b> = पिछली शिफ्ट अभी बंद नहीं हुई।</figcaption></figure>
+    <figure><img src="shots/18_home_closed.png"><figcaption><b>C</b> <b>हरा डिब्बा</b> = पिछली शिफ्ट बंद हो गई।</figcaption></figure>
+  </div>
+  <ul class="tight">
+    <li>अपना पासवर्ड किसी को न बताएं। हर बिक्री और रीडिंग आपके नाम से दर्ज होती है।</li>
+    <li>धूप में पढ़ने में दिक्कत हो तो <span class="q">प्रोफ़ाइल → बड़ा दिखाओ → चालू करें</span> — अक्षर और बटन बड़े हो जाएँगे (सिर्फ़ उसी फ़ोन पर)।</li>
+  </ul>
+</section>
+
+<!-- ───────────── Page 2: credit sale ───────────── -->
+<section class="page">
+  <h2>1. उधार बिक्री दर्ज करना</h2>
+  <p class="sub">उधार खाते वाला ग्राहक तेल ले, तो उसी समय दर्ज करें। बाद के लिए न छोड़ें।</p>
+  <ol class="steps">
+    <li>होम पर <span class="q">उधार बिक्री दर्ज करें</span> दबाएँ।</li>
+    <li>ग्राहक ढूँढें: ऊपर के डिब्बे में नाम, ID या गाड़ी नंबर लिखें। ग्राहक पर दबाएँ।</li>
+    <li>ग्राहक लिस्ट में नहीं है, या उसके नाम के आगे ताला है — तो उधार न दें, मैनेजर से पूछें।</li>
+  </ol>
+  <div class="shots">
+    <figure><img src="shots/02_select_customer.png"><figcaption><b>1</b> ग्राहकों की लिस्ट</figcaption></figure>
+    <figure><img src="shots/03_search_customer.png"><figcaption><b>2</b> नाम लिखकर खोजें</figcaption></figure>
+    <figure><img src="shots/04_sale_empty.png"><figcaption><b>3</b> बिक्री की जानकारी वाली स्क्रीन</figcaption></figure>
+  </div>
+</section>
+
+<section class="page">
+  <h2>1. उधार बिक्री (आगे)</h2>
+  <ol class="steps" style="counter-reset:s 3">
+    <li><b>गाड़ी नंबर</b> चुनें। नंबर न हो तो <span class="q">बिना नंबर</span> दबाएँ।</li>
+    <li><b>तेल चुनें:</b> HS (डीज़ल), MS (पेट्रोल), X2 (प्रीमियम 95) या XG (एक्स्ट्रा ग्रीन)।</li>
+    <li><span class="q">रकम (₹)</span> या <span class="q">लीटर (L)</span> चुनें, फिर मशीन पर जो दिखा वही संख्या भरें। रेट ऐप अपने आप लगाता है।</li>
+    <li><span class="q">बिक्री पक्की करें</span> दबाएँ।</li>
+    <li>हरा ✓ दिखेगा। <b>रकम, लीटर और रेट</b> एक बार देख लें। ग्राहक को साइन की हुई पर्ची दें।</li>
+  </ol>
+  <div class="shots">
+    <figure><img src="shots/05_sale_filled.png"><figcaption><b>4–5</b> गाड़ी और तेल चुना</figcaption></figure>
+    <figure><img src="shots/05b_sale_amount.png"><figcaption><b>6–7</b> रकम भरें, फिर <b>बिक्री पक्की करें</b></figcaption></figure>
+    <figure><img src="shots/06_sale_confirmed.png"><figcaption><b>8</b> बिक्री दर्ज हो गई — पर्ची दें</figcaption></figure>
+  </div>
+  <p class="note warn"><b>गलती हो जाए तो:</b> वही बिक्री दोबारा दर्ज न करें। तुरंत मैनेजर को बताएं — ग्राहक का नाम, रकम और समय।</p>
+  <p class="note warn"><b>CNG की उधार बिक्री</b> अभी ऐप में दर्ज नहीं होती। ऐसी बिक्री मैनेजर को बताएं।</p>
+</section>
+
+<!-- ───────────── Page 4: shift close ───────────── -->
+<section class="page">
+  <h2>2. शिफ्ट बंद करना</h2>
+  <p class="sub">हर सुबह 06:00 के बाद। हर मशीन (नोज़ल) के मीटर पर जो आखिरी रीडिंग है, वही भरें।</p>
+  <ol class="steps">
+    <li>होम पर <span class="q">शिफ्ट बंद करें</span> दबाएँ। सभी तेल दिखेंगे।</li>
+    <li><b>HS</b> दबाएँ। दो मशीनें दिखेंगी: HS1 (DU 9) और HS2 (DU 15)। ऊपर शुरुआती रीडिंग पहले से भरी है।</li>
+    <li>HS1 में <span class="q">रीडिंग भरने के लिए दबाएँ</span> दबाएँ। मीटर की पूरी रीडिंग नंबर-पैड से भरें — दशमलव (.) के बाद वाले अंक भी।</li>
+    <li>नीचे <span class="q">बिका तेल</span> दिखेगा। यह ठीक लगे तो <span class="q">सेव करके पक्का करें</span> दबाएँ। बहुत ज़्यादा या कम लगे तो मीटर दोबारा देखें।</li>
+  </ol>
+  <div class="shots">
+    <figure><img src="shots/10_shift_products.png"><figcaption><b>1</b> तेल चुनें</figcaption></figure>
+    <figure><img src="shots/11_shift_du.png"><figcaption><b>2</b> HS की दोनों मशीनें</figcaption></figure>
+    <figure><img src="shots/12_numpad_filled.png"><figcaption><b>3–4</b> रीडिंग भरी, <b>बिका तेल</b> देखें</figcaption></figure>
+  </div>
+  <p class="note warn">आखिरी रीडिंग शुरुआती से कम नहीं हो सकती — ऐसा हो तो ऐप रीडिंग नहीं लेगा। मीटर दोबारा पढ़ें।</p>
+</section>
+
+<section class="page">
+  <h2>2. शिफ्ट बंद करना (आगे)</h2>
+  <ol class="steps" style="counter-reset:s 4">
+    <li>HS2 की रीडिंग भी इसी तरह भरें, फिर <span class="q">रीडिंग पक्की करें</span> दबाएँ।</li>
+    <li><b>MS</b> के लिए यही करें (MS1 और MS2)। <b>X2</b> और <b>XG</b> में एक ही मशीन है — सीधे नंबर-पैड खुलेगा।</li>
+    <li><b>CNG:</b> मीटर की रीडिंग <b>किलो (kg)</b> में भरें। पहली बार भरने पर शुरुआती रीडिंग नहीं होती, इसलिए उस दिन बिक्री 0 दिखेगी — अगले दिन से हिसाब बनेगा।</li>
+    <li>हर तेल पर <span class="q">हो गया</span> दिखे, तो <span class="q">जाँचें और जमा करें</span> दबाएँ।</li>
+  </ol>
+  <div class="shots">
+    <figure><img src="shots/13_du_after_one.png"><figcaption><b>5</b> HS1 भर गई, अब HS2</figcaption></figure>
+    <figure><img src="shots/14_cng_filled.png"><figcaption><b>7</b> CNG — किलो में</figcaption></figure>
+    <figure><img src="shots/15_products_done.png"><figcaption><b>8</b> सब पर <b>हो गया</b></figcaption></figure>
+  </div>
+</section>
+
+<section class="page">
+  <h2>2. शिफ्ट जमा करना</h2>
+  <ol class="steps" style="counter-reset:s 8">
+    <li>हर मशीन की शुरुआती, आखिरी और बिका तेल (L) देखें। कुछ गलत हो तो उसके आगे <span class="q">बदलें</span> दबाकर ठीक करें।</li>
+    <li>सब ठीक हो तो <span class="q">शिफ्ट जमा करें</span> दबाएँ।</li>
+    <li>हरा संदेश आएगा: <span class="q">शिफ्ट बंद हो गई</span>। होम पर हरा डिब्बा दिखेगा। मालिक को सूचना अपने आप जाती है।</li>
+  </ol>
+  <div class="shots">
+    <figure><img src="shots/16_summary_ready.png"><figcaption><b>9</b> सभी रीडिंग जाँचें</figcaption></figure>
+    <figure><img src="shots/16c_summary_bottom.png"><figcaption><b>10</b> नीचे तक देखें, फिर <b>शिफ्ट जमा करें</b></figcaption></figure>
+    <figure><img src="shots/17_after_submit.png"><figcaption><b>11</b> शिफ्ट बंद हो गई</figcaption></figure>
+  </div>
+  <ul class="tight">
+    <li>छह मशीनों (HS1, HS2, MS1, MS2, X2, XG) की रीडिंग भरे बिना शिफ्ट जमा नहीं होगी। CNG भी रोज़ भरें।</li>
+    <li>हर रीडिंग <span class="q">सेव करके पक्का करें</span> दबाते ही सेव हो जाती है। बीच में रुकना पड़े तो <span class="q">बाद के लिए सेव करें</span> — बाद में वहीं से आगे भरें।</li>
+    <li><b>जमा करने के बाद रीडिंग बदल नहीं सकते।</b> गलती दिखे तो मैनेजर को बताएं।</li>
+  </ul>
+  <p class="foot">Pumpvision · Shree Petroleum, Padra, Rewa · कर्मचारी गाइड · अक्टूबर 2026</p>
+</section>
+
+</body>
+</html>
