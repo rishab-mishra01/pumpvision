@@ -44,10 +44,15 @@ def _cng_opening_reading(op_date: date):
 
 
 def _opening_reading(nozzle_no: int, op_date: date):
-    """Opening totalizer for a nozzle: try NozzleTotalizer, fall back to last ManualTotalizerReading."""
+    """Opening totalizer for a nozzle: the IRAS reading at 06:00 on op_date, else the
+    last ManualTotalizerReading.
+
+    A NozzleTotalizer row dated D holds the meter at 06:00 on D (the owner
+    dashboard and the Meters screen read it that way). This used to look up D-1,
+    so the attendant saw a day-old opening and "litres sold" covering two days.
+    """
     from pumpvision.models import NozzleTotalizer, ManualTotalizerReading
-    prev = op_date - timedelta(days=1)
-    row = NozzleTotalizer.query.filter_by(nozzle_no=nozzle_no, operational_date=prev).first()
+    row = NozzleTotalizer.query.filter_by(nozzle_no=nozzle_no, operational_date=op_date).first()
     if row:
         return row.totalizer_end
     row = (ManualTotalizerReading.query
@@ -58,9 +63,30 @@ def _opening_reading(nozzle_no: int, op_date: date):
     return row.totalizer_value if row else None
 
 
+def _shift_closed(op_date: date) -> bool:
+    from pumpvision.models import ManualTotalizerReading
+    return ManualTotalizerReading.query.filter(
+        ManualTotalizerReading.operational_date == op_date,
+        ManualTotalizerReading.is_locked == True,
+        ManualTotalizerReading.nozzle_no != None,
+    ).count() >= 6
+
+
 def _shift_op_date() -> date:
-    """Operational date the employee is closing: always yesterday."""
-    return date.today() - timedelta(days=1)
+    """The shift the attendant closes: the last COMPLETED operational day.
+
+    Uses the 06:00 rule, not the calendar, so a shift can no longer be closed
+    while it is still running (at 01:00 the running shift is yesterday's; the
+    last completed one is the day before). If the day before that was missed
+    -- not closed, while the one before it was -- that missed day comes first,
+    so a single missed day can still be closed instead of being skipped forever.
+    """
+    from pumpvision.services.operational import get_operational_date
+    last = get_operational_date() - timedelta(days=1)
+    missed = last - timedelta(days=1)
+    if not _shift_closed(missed) and _shift_closed(missed - timedelta(days=1)):
+        return missed
+    return last
 
 
 def _greeting() -> str:
@@ -80,18 +106,11 @@ def _greeting() -> str:
 @login_required
 @attendant_required
 def home():
-    from pumpvision.models import ManualTotalizerReading
     from pumpvision.services.operational import get_operational_date
 
     current_op_date  = get_operational_date()
-    previous_op_date = current_op_date - timedelta(days=1)
-
-    locked_prev = ManualTotalizerReading.query.filter(
-        ManualTotalizerReading.operational_date == previous_op_date,
-        ManualTotalizerReading.is_locked == True,
-        ManualTotalizerReading.nozzle_no != None,
-    ).count()
-    prev_shift_closed = locked_prev >= 6
+    previous_op_date = _shift_op_date()   # a missed day shows here first
+    prev_shift_closed = _shift_closed(previous_op_date)
 
     display_name = current_user.first_name or current_user.username
 
