@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "manager/_ui.html" import styles, topbar, nav %}
+{% from "manager/_ui.html" import styles, topbar, nav with context %}
 {% block title %}{{ feature }} — Pumpvision{% endblock %}
 
 {% block page %}
@@ -10,8 +10,8 @@
     <div style="width:64px;height:64px;border-radius:50%;background:var(--paper-100);border:1px solid var(--paper-300);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:var(--ink-500);">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     </div>
-    <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.5rem;color:var(--ink-900);margin:0 0 6px;">Coming soon</h2>
-    <p class="mg-note">{{ feature }} is not available yet.</p>
+    <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.5rem;color:var(--ink-900);margin:0 0 6px;">{{ t('coming_soon') }}</h2>
+    <p class="mg-note">{{ t('not_available', feature=feature) }}</p>
   </div>
 </div>
 {{ nav('home') }}

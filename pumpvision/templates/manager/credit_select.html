@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% from "manager/_ui.html" import styles, flashes, topbar, nav %}
-{% block title %}Credit Sale — Manager · Pumpvision{% endblock %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav with context %}
+{% block title %}{{ t('title_credit') }} — Pumpvision{% endblock %}
 
 {% block page %}
 {{ styles() }}
 <div class="mg-page">
-  {{ topbar('Credit Sale') }}
+  {{ topbar(t('title_credit')) }}
   {{ flashes() }}
   <div class="mg-body">
-    <p class="mg-note" style="margin:0;">Choose the customer who is taking fuel on credit.</p>
-    <input type="search" id="q" class="mg-input" placeholder="Search name or vehicle number" autocomplete="off" aria-label="Search customers">
+    <p class="mg-note" style="margin:0;">{{ t('credit_pick_help') }}</p>
+    <input type="search" id="q" class="mg-input" placeholder="{{ t('search_ph') }}" autocomplete="off" aria-label="{{ t('search_aria') }}">
 
     <div class="mg-card" id="list">
       {% for c in customers %}
@@ -18,14 +18,14 @@
          data-q="{{ (c.company_name ~ ' ' ~ (c.vehicles | selectattr('is_active') | map(attribute='vehicle_number') | join(' '))) | lower }}">
         <span style="flex:1;">
           <b>{{ c.company_name }}</b>
-          <small>{{ 'In credit ₹' ~ (bal | abs | inr) if bal < 0 else 'Owes ₹' ~ (bal | inr) }}{% if c.credit_limit and bal > 0 %} · {{ '%.0f' | format(100 * bal / c.credit_limit) }}% of limit{% endif %}</small>
+          <small>{{ t('in_credit', amount=(bal | abs | inr)) if bal < 0 else t('owes', amount=(bal | inr)) }}{% if c.credit_limit and bal > 0 %} · {{ t('pct_of_limit', pct=('%.0f' | format(100 * bal / c.credit_limit))) }}{% endif %}</small>
         </span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
       </a>
       {% else %}
-      <p class="mg-note" style="padding:16px;">No active credit customers.</p>
+      <p class="mg-note" style="padding:16px;">{{ t('no_customers') }}</p>
       {% endfor %}
-      <p id="none" class="mg-note" style="padding:16px;display:none;">No customer matches.</p>
+      <p id="none" class="mg-note" style="padding:16px;display:none;">{{ t('no_match') }}</p>
     </div>
   </div>
 </div>

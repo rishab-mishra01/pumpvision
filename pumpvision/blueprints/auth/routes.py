@@ -61,8 +61,12 @@ def logout_confirm():
         home = url_for("manager.home")
     else:
         home = url_for("dashboard.index")
-    return render_template("auth/logout_confirm.html", home=home,
-                           hindi=current_user.role == "attendant")
+    if current_user.role == "manager":
+        from pumpvision.i18n_manager import lang
+        hindi = lang() == "hi"          # the manager picks Hindi/English in his app
+    else:
+        hindi = current_user.role == "attendant"
+    return render_template("auth/logout_confirm.html", home=home, hindi=hindi)
 
 
 @auth_bp.route("/logout")

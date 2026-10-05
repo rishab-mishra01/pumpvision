@@ -1,15 +1,38 @@
 import math
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from pumpvision import i18n_manager as i18n
 from pumpvision.decorators import manager_required
+from pumpvision.i18n_manager import tr
 from pumpvision.services.operational import get_operational_date
 
 DEFAULT_EXPENSE_CATEGORIES = ["Staff", "Maintenance", "Utilities", "Supplies", "Misc"]
 
 manager_bp = Blueprint("manager", __name__)
+
+
+@manager_bp.context_processor
+def _i18n():
+    """t('key', ...) in the manager templates; Hindi by default, English by the switch."""
+    return {"t": tr, "lang": i18n.lang(), "label": i18n.label}
+
+
+@manager_bp.route("/lang", methods=["POST"])
+@login_required
+@manager_required
+def set_lang():
+    """Switch the app between Hindi and English (a cookie on this phone)."""
+    chosen = "en" if request.form.get("lang") == "en" else "hi"
+    nxt = request.form.get("next", "")
+    # only ever return to a manager page on this site
+    if not (nxt.startswith("/manager/") and not nxt.startswith("//") and "\\" not in nxt):
+        nxt = url_for("manager.home")
+    resp = make_response(redirect(nxt))
+    resp.set_cookie(i18n.COOKIE, chosen, max_age=i18n.MAX_AGE, samesite="Lax", httponly=True)
+    return resp
 
 _SHIFT_DB_LABELS = ["HSD 1", "HSD 2", "MS 1", "MS 2", "XP", "XG"]
 
@@ -26,12 +49,11 @@ def _greeting() -> str:
 
 
 def _fmt_date(d) -> str:
-    """Portable date format: '7 May 2026' (no leading zero, works on Windows + Linux)."""
-    return d.strftime("%d %b %Y").lstrip("0")
+    return i18n.fmt_date(d)
 
 
 def _fmt_short(d) -> str:
-    return d.strftime("%d %b").lstrip("0")
+    return i18n.fmt_short(d)
 
 
 @manager_bp.route("/")
@@ -79,7 +101,7 @@ def home():
         "manager/home.html",
         greeting=_greeting(),
         today_str=_fmt_date(today_op),
-        day_name=today_op.strftime("%A"),
+        day_name=i18n.weekday(today_op),
         prev_str=_fmt_short(prev_op),
         shift_readings_done=shift_readings_done,
         expenses_done=expenses_done,
@@ -141,13 +163,13 @@ def lube():
             unit_price = None
 
         if not product:
-            error = "Choose a valid product."
-        elif quantity is None or quantity <= 0:
-            error = "Enter a valid quantity greater than zero."
-        elif unit_price is None or unit_price <= 0:
-            error = "Enter a valid unit price greater than zero."
+            error = tr("err_product")
+        elif quantity is None or not math.isfinite(quantity) or quantity <= 0:
+            error = tr("err_qty")
+        elif unit_price is None or not math.isfinite(unit_price) or unit_price <= 0:
+            error = tr("err_unit_price")
         elif payment_mode not in ("cash", "credit"):
-            error = "Choose a valid payment mode."
+            error = tr("err_mode")
         elif payment_mode == "credit":
             try:
                 customer_id = int(customer_id_raw)
@@ -159,7 +181,7 @@ def lube():
                     is_active=True,
                 ).first()
             if not customer:
-                error = "Choose a valid customer for credit sale."
+                error = tr("err_credit_customer")
 
         if error:
             flash(error, "error")
@@ -187,7 +209,7 @@ def lube():
                     reference_date=get_operational_date(),
                 ))
             db.session.commit()
-            message = f"Lube sale logged: ₹{amount:,.2f} — {product.name}"
+            message = tr("lube_logged", amount=f"{amount:,.2f}", product=product.name)
             if customer:
                 message += f" ({customer.company_name})"
             flash(message, "ok")
@@ -246,9 +268,9 @@ def expense():
         except ValueError:
             amount = None
         if amount is None or not math.isfinite(amount) or amount <= 0:
-            error = "Enter a valid amount greater than zero."
+            error = tr("err_amount")
         elif category not in categories:
-            error = "Choose a valid category."
+            error = tr("err_category")
         else:
             try:
                 op_date = date.fromisoformat(op_date_str) if op_date_str else today_op
@@ -266,7 +288,7 @@ def expense():
                 logged_by=current_user.id,
             ))
             db.session.commit()
-            flash(f"Expense logged: ₹{amount:,.2f} — {category}", "ok")
+            flash(tr("expense_logged", amount=f"{amount:,.2f}", category=i18n.label("cat", category)), "ok")
             return redirect(url_for("manager.home"))
 
     return render_template(
@@ -322,11 +344,11 @@ def payment():
             amount = None
 
         if not customer:
-            error = "Choose a valid customer."
+            error = tr("err_customer")
         elif amount is None or not math.isfinite(amount) or amount <= 0:
-            error = "Enter a valid amount greater than zero."
+            error = tr("err_amount")
         elif payment_mode not in ("Cash", "Cheque", "Bank Transfer"):
-            error = "Choose a valid payment mode."
+            error = tr("err_mode")
 
         if error:
             flash(error, "error")
@@ -346,9 +368,9 @@ def payment():
                 customer.add_to_balance(-amount)
             db.session.commit()
             if status == "confirmed":
-                flash(f"Payment recorded: ₹{amount:,.2f} from {customer.company_name}", "ok")
+                flash(tr("payment_recorded", amount=f"{amount:,.2f}", customer=customer.company_name), "ok")
             else:
-                flash("Bank transfer recorded — awaiting owner verification", "ok")
+                flash(tr("transfer_recorded"), "ok")
             return redirect(url_for("manager.home"))
 
     return render_template(
@@ -360,13 +382,6 @@ def payment():
 
 # ─── Credit sales (the manager may enter them as well as the attendants) ──────
 
-_CREDIT_ERRORS = {
-    "no_vehicle": "Choose the vehicle.",
-    "bad_product": "Choose the fuel.",
-    "no_rate": "There is no current rate for this fuel. Ask the owner.",
-    "qty_not_positive": "Enter an amount or quantity greater than zero.",
-    "qty_not_number": "Enter a valid amount or quantity.",
-}
 
 
 @manager_bp.route("/credit/")
@@ -388,7 +403,7 @@ def credit_sale(customer_id):
 
     customer = Customer.query.get_or_404(customer_id)
     if not customer.is_active:
-        flash("This account is suspended. Ask the owner before giving credit.", "error")
+        flash(tr("suspended"), "error")
         return redirect(url_for("manager.credit_select"))
 
     rates = rate_map()
@@ -403,7 +418,7 @@ def credit_sale(customer_id):
         if txn:
             return redirect(url_for("manager.credit_done", transaction_id=txn.transaction_id))
         for e in errors:
-            flash(_CREDIT_ERRORS[e], "error")
+            flash(tr(e), "error")
 
     return render_template(
         "manager/credit_form.html",
@@ -429,4 +444,4 @@ def credit_done(transaction_id):
 @login_required
 @manager_required
 def invoice():
-    return render_template("manager/coming_soon.html", feature="Generate Invoice")
+    return render_template("manager/coming_soon.html", feature=tr("feature_invoice"))

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "manager/_ui.html" import styles, flashes, topbar, nav %}
-{% block title %}Home — Manager · Pumpvision{% endblock %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav with context %}
+{% block title %}{{ t('nav_home') }} — Pumpvision{% endblock %}
 
 {% block page %}
 {{ styles() }}
@@ -10,7 +10,7 @@
 
   <div style="padding:4px 20px 16px;">
     <h2 style="font-family:var(--font-serif);font-weight:400;font-size:1.9rem;letter-spacing:-.01em;color:var(--ink-900);margin:0;">
-      Good {{ greeting }}, {{ current_user.first_name }}
+      {{ t('greet_' ~ greeting) }}, {{ current_user.first_name }}
     </h2>
     <p class="mg-note" style="margin:2px 0 0;">{{ day_name }} · {{ today_str }}</p>
   </div>
@@ -18,12 +18,12 @@
   <div class="mg-body" style="gap:22px;">
 
     <div>
-      <p class="mg-h">Today's tasks</p>
+      <p class="mg-h">{{ t('today_tasks') }}</p>
       <div class="mg-card">
         {% set tasks = [
-          (shift_readings_done, none, 'Previous shift readings entered', prev_str ~ ' · 6 nozzles'),
-          (expenses_done, url_for('manager.expense'), 'Expenses logged today', today_str),
-          (paytm_done, none, 'Paytm report uploaded', prev_str ~ ' report'),
+          (shift_readings_done, none, t('task_shift'), t('task_shift_sub', date=prev_str)),
+          (expenses_done, url_for('manager.expense'), t('task_expense'), today_str),
+          (paytm_done, none, t('task_paytm'), t('task_paytm_sub', date=prev_str)),
         ] %}
         {# Readings and the Paytm report are owner pages, so for the manager those two rows only show status. #}
         {% for done, href, title, sub in tasks %}
@@ -40,13 +40,13 @@
 
     {% if pending_payments %}
     <div>
-      <p class="mg-h">Pending action</p>
+      <p class="mg-h">{{ t('pending_action') }}</p>
       <div style="display:flex;flex-direction:column;gap:8px;">
         {% for item in pending_payments %}
         <a href="{{ url_for('manager.payment') }}" class="mg-row"
            style="background:var(--warn-100);border:1px solid var(--warn-600);border-left:3px solid var(--warn-600);border-radius:var(--r-card);">
-          <span style="flex:1;"><b>{{ item.customer_name }}</b><small>Bank transfer · {{ item.date_str }}</small></span>
-          <span style="text-align:right;"><b style="color:var(--warn-600);">₹{{ "{:,.0f}".format(item.payment.amount) }}</b><small>Verify →</small></span>
+          <span style="flex:1;"><b>{{ item.customer_name }}</b><small>{{ t('bank_transfer_on', date=item.date_str) }}</small></span>
+          <span style="text-align:right;"><b style="color:var(--warn-600);">₹{{ "{:,.0f}".format(item.payment.amount) }}</b><small>{{ t('verify') }}</small></span>
         </a>
         {% endfor %}
       </div>
@@ -54,23 +54,23 @@
     {% endif %}
 
     <div>
-      <p class="mg-h">Quick log</p>
+      <p class="mg-h">{{ t('quick_log') }}</p>
       <div class="mg-tiles">
         <a href="{{ url_for('manager.credit_select') }}" class="mg-tile primary">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          Credit Sale
+          {{ t('btn_credit_sale') }}
         </a>
         <a href="{{ url_for('manager.lube') }}" class="mg-tile">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4"/><circle cx="9" cy="19" r="1"/><circle cx="20" cy="19" r="1"/></svg>
-          Lube Sale
+          {{ t('btn_lube_sale') }}
         </a>
         <a href="{{ url_for('manager.expense') }}" class="mg-tile">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-          Expense
+          {{ t('btn_expense') }}
         </a>
         <a href="{{ url_for('manager.payment') }}" class="mg-tile">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          Payment
+          {{ t('btn_payment') }}
         </a>
       </div>
     </div>

@@ -1,26 +1,26 @@
 {% extends "base.html" %}
-{% from "manager/_ui.html" import styles, flashes, topbar, nav, lab %}
-{% block title %}Record Payment — Manager · Pumpvision{% endblock %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav, lab with context %}
+{% block title %}{{ t('title_payment') }} — Pumpvision{% endblock %}
 
 {% block page %}
 {{ styles() }}
 <div class="mg-page">
-  {{ topbar('Record Payment') }}
+  {{ topbar(t('title_payment')) }}
   {{ flashes() }}
   <form method="POST" class="mg-body">
     <div>
-      {{ lab('Customer', 'pay-customer') }}
+      {{ lab(t('customer'), 'pay-customer') }}
       <select id="pay-customer" name="customer_id" required class="mg-input">
-        <option value="" disabled {% if not values.customer_id %}selected{% endif %}>Select customer</option>
+        <option value="" disabled {% if not values.customer_id %}selected{% endif %}>{{ t('select_customer') }}</option>
         {% for c in customers %}
         <option value="{{ c.customer_id }}" {% if values.customer_id|string == c.customer_id|string %}selected{% endif %}>
-          {{ c.company_name }} — ₹{{ "{:,.2f}".format((c.outstanding_balance or 0.0) | abs) }} {{ 'in credit' if (c.outstanding_balance or 0.0) < 0 else 'due' }}
+          {{ c.company_name }} — ₹{{ "{:,.2f}".format((c.outstanding_balance or 0.0) | abs) }} {{ t('in_credit_lc') if (c.outstanding_balance or 0.0) < 0 else t('due') }}
         </option>
         {% endfor %}
       </select>
     </div>
     <div>
-      {{ lab('Amount', 'pay-amount') }}
+      {{ lab(t('amount'), 'pay-amount') }}
       <div style="position:relative;">
         <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--ink-500);">₹</span>
         <input type="number" id="pay-amount" name="amount" inputmode="decimal" step="0.01" min="0.01" required
@@ -28,24 +28,24 @@
       </div>
     </div>
     <div>
-      {{ lab('Payment mode') }}
+      {{ lab(t('payment_mode')) }}
       <div class="mg-chips" style="grid-template-columns:1fr 1fr 1fr;">
         {% for mode in ["Cash", "Cheque", "Bank Transfer"] %}
-        <label class="mg-chip"><input type="radio" name="payment_mode" value="{{ mode }}" {% if values.payment_mode == mode %}checked{% endif %}><span>{{ mode }}</span></label>
+        <label class="mg-chip"><input type="radio" name="payment_mode" value="{{ mode }}" {% if values.payment_mode == mode %}checked{% endif %}><span>{{ t('mode_' ~ mode) }}</span></label>
         {% endfor %}
       </div>
-      <p class="mg-note" style="margin:6px 0 0;">A bank transfer waits for the owner to confirm it in the bank.</p>
+      <p class="mg-note" style="margin:6px 0 0;">{{ t('bank_note') }}</p>
     </div>
     <div>
-      {{ lab('Reference number', 'pay-reference', optional=True) }}
+      {{ lab(t('reference'), 'pay-reference', optional=True) }}
       <input type="text" id="pay-reference" name="reference_number" maxlength="50" value="{{ values.reference_number }}"
-             placeholder="Cheque no. / UTR" class="mg-input">
+             placeholder="{{ t('ref_ph') }}" class="mg-input">
     </div>
     <div>
-      {{ lab('Notes', 'pay-notes', optional=True) }}
+      {{ lab(t('notes'), 'pay-notes', optional=True) }}
       <input type="text" id="pay-notes" name="notes" value="{{ values.notes }}" class="mg-input">
     </div>
-    <button type="submit" class="mg-submit">Record payment</button>
+    <button type="submit" class="mg-submit">{{ t('record_payment') }}</button>
   </form>
 </div>
 {{ nav('payment') }}

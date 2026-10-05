@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% from "manager/_ui.html" import styles, flashes, topbar, nav, lab %}
-{% block title %}Log Expense — Manager · Pumpvision{% endblock %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav, lab with context %}
+{% block title %}{{ t('title_expense') }} — Pumpvision{% endblock %}
 
 {% block page %}
 {{ styles() }}
 <div class="mg-page">
-  {{ topbar('Log Expense') }}
+  {{ topbar(t('title_expense')) }}
   {{ flashes() }}
   <form method="POST" class="mg-body">
     <div>
-      {{ lab('Amount', 'exp-amount') }}
+      {{ lab(t('amount'), 'exp-amount') }}
       <div style="position:relative;">
         <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--ink-500);">₹</span>
         <input type="number" id="exp-amount" name="amount" inputmode="decimal" step="0.01" min="0.01" required
@@ -17,23 +17,23 @@
       </div>
     </div>
     <div>
-      {{ lab('Category', 'exp-category') }}
+      {{ lab(t('category'), 'exp-category') }}
       <select id="exp-category" name="category" required class="mg-input">
         {% for cat in categories %}
-        <option value="{{ cat }}" {% if cat == values.category %}selected{% endif %}>{{ cat }}</option>
+        <option value="{{ cat }}" {% if cat == values.category %}selected{% endif %}>{{ label('cat', cat) }}</option>
         {% endfor %}
       </select>
     </div>
     <div>
-      {{ lab('Description', 'exp-description', optional=True) }}
+      {{ lab(t('description'), 'exp-description', optional=True) }}
       <input type="text" id="exp-description" name="description" maxlength="200" value="{{ values.description }}"
-             placeholder="e.g. Diesel generator fuel" class="mg-input">
+             placeholder="{{ t('desc_ph') }}" class="mg-input">
     </div>
     <div>
-      {{ lab('Date', 'exp-date') }}
+      {{ lab(t('date'), 'exp-date') }}
       <input type="date" id="exp-date" name="op_date" value="{{ values.op_date }}" class="mg-input">
     </div>
-    <button type="submit" class="mg-submit">Log expense</button>
+    <button type="submit" class="mg-submit">{{ t('log_expense') }}</button>
   </form>
 </div>
 {{ nav('expense') }}
