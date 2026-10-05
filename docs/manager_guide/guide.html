@@ -1,137 +1,145 @@
 <!doctype html>
-<html lang="en">
+<html lang="hi">
 <head>
 <meta charset="utf-8">
-<title>Pumpvision — Manager Guide</title>
+<title>Pumpvision — मैनेजर गाइड</title>
 <style>
   @page { size: A4; margin: 12mm 13mm 14mm; }
   :root { --ink:#18202e; --muted:#5a6273; --line:#e3dccb; --paper:#faf6ed; --saffron:#e8692a; --ok:#3f6b35; --okbg:#e3ecd9; --warnbg:#f4e3c2; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family:"IBM Plex Sans","Noto Sans",sans-serif; color:var(--ink); font-size:11.5pt; line-height:1.5; }
-  h1 { font-size:25pt; margin:0 0 2mm; line-height:1.2; font-family:"Newsreader",Georgia,serif; font-weight:500; }
-  h2 { font-size:16pt; margin:0 0 3mm; padding-bottom:1.5mm; border-bottom:2px solid var(--saffron); line-height:1.3; }
-  .sub { color:var(--muted); margin:0 0 5mm; }
+  body { margin:0; font-family:"Noto Sans Devanagari","IBM Plex Sans",sans-serif; color:var(--ink); font-size:12.5pt; line-height:1.55; }
+  h1 { font-size:26pt; margin:0 0 2mm; line-height:1.2; }
+  h2 { font-size:17pt; margin:0 0 3mm; padding-bottom:1.5mm; border-bottom:2px solid var(--saffron); line-height:1.3; }
+  .sub { color:var(--muted); margin:0 0 5mm; font-size:12pt; }
   .page { page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .brand { font-family:"JetBrains Mono",monospace; letter-spacing:2px; font-size:9.5pt; color:var(--saffron); margin-bottom:5mm; }
+  .brand { font-family:"JetBrains Mono",monospace; letter-spacing:2px; font-size:10pt; color:var(--saffron); margin-bottom:5mm; }
   table { width:100%; border-collapse:collapse; margin:2mm 0 4mm; }
-  td { padding:2.2mm 3mm; border-bottom:1px solid var(--line); vertical-align:top; }
-  td:first-child { width:40mm; font-weight:700; white-space:nowrap; }
+  td { padding:2.5mm 3mm; border-bottom:1px solid var(--line); vertical-align:top; }
+  td:first-child { width:38mm; font-weight:700; white-space:nowrap; }
   ol.steps { margin:0 0 3mm; padding:0; list-style:none; counter-reset:s; }
-  ol.steps > li { counter-increment:s; position:relative; padding:0 0 2mm 9.5mm; }
-  ol.steps > li::before { content:counter(s); position:absolute; left:0; top:.4mm; width:6mm; height:6mm; border-radius:50%; background:var(--saffron); color:#fff; font-weight:700; font-size:9.5pt; text-align:center; line-height:6mm; }
+  ol.steps > li { counter-increment:s; position:relative; padding:0 0 2.2mm 10mm; }
+  ol.steps > li::before { content:counter(s); position:absolute; left:0; top:.5mm; width:6.5mm; height:6.5mm; border-radius:50%; background:var(--saffron); color:#fff; font-weight:700; font-size:10pt; text-align:center; line-height:6.5mm; font-family:"IBM Plex Sans",sans-serif; }
   .shots { display:grid; grid-template-columns:repeat(3,1fr); gap:5mm; margin:3mm 0 4mm; }
   figure { margin:0; text-align:center; }
   figure img { width:100%; border:1px solid var(--line); border-radius:3mm; display:block; }
-  figcaption { font-size:9.5pt; color:var(--muted); margin-top:1.5mm; line-height:1.35; }
-  figcaption b { color:var(--saffron); }
-  .note { border-radius:3mm; padding:2.5mm 4mm; margin:3mm 0; font-size:11pt; }
+  figcaption { font-size:10.5pt; color:var(--muted); margin-top:1.5mm; line-height:1.4; }
+  figcaption b { color:var(--saffron); font-family:"IBM Plex Sans",sans-serif; }
+  .note { border-radius:3mm; padding:3mm 4mm; margin:3mm 0; font-size:1em; }
   .note.ok { background:var(--okbg); border:1px solid #b9cfa7; }
   .note.warn { background:var(--warnbg); border:1px solid #d9b77a; color:#4d3409; }
-  .q { font-weight:700; }
-  ul.tight { margin:1mm 0 3mm; padding-left:6mm; } ul.tight li { margin-bottom:1mm; }
-  .foot { color:var(--muted); font-size:9pt; margin-top:5mm; }
+  .q { font-weight:700; font-family:"Noto Sans Devanagari","IBM Plex Sans",sans-serif; }
+  ul.tight { margin:1mm 0 3mm; padding-left:6mm; } ul.tight li { margin-bottom:1.3mm; }
+  .p3 figure img { width:84%; margin:0 auto; }
+  .foot { color:var(--muted); font-size:9.5pt; margin-top:5mm; }
 </style>
 </head>
 <body>
 
 <section class="page">
   <div class="brand">PUMPVISION · SHREE PETROLEUM · RO 206858</div>
-  <h1>Manager Guide</h1>
-  <p class="sub">What you do in the Pumpvision app, and when.</p>
+  <h1>मैनेजर गाइड</h1>
+  <p class="sub">Pumpvision ऐप में आपके काम — क्या करना है और कब।</p>
 
   <table>
-    <tr><td>Credit Sale</td><td>When a credit customer takes fuel and the attendant has not entered it. Enter it straight away and get the signed slip.</td></tr>
-    <tr><td>Payment</td><td>Every time a customer pays money you receive: cash, cheque or bank transfer.</td></tr>
-    <tr><td>Expense</td><td>Every expense paid from the pump's cash, the same day.</td></tr>
-    <tr><td>Lube Sale</td><td>Each oil, grease or coolant sale, cash or credit.</td></tr>
+    <tr><td>Credit Sale</td><td>जब कोई उधार वाला ग्राहक तेल ले और पंप के कर्मचारी ने उसे दर्ज न किया हो। तुरंत दर्ज करें और ग्राहक से साइन की हुई पर्ची लें।</td></tr>
+    <tr><td>Payment</td><td>जब भी कोई ग्राहक पैसे दे — नकद, चेक या बैंक ट्रांसफर।</td></tr>
+    <tr><td>Expense</td><td>पंप के पैसों से हुआ हर खर्च, उसी दिन।</td></tr>
+    <tr><td>Lube Sale</td><td>हर ऑयल, ग्रीस या कूलेंट की बिक्री — नकद या उधार।</td></tr>
   </table>
-  <div class="note ok">Everything you enter is saved with your name and the time. The owner sees it at once and nothing can be deleted from the app, so check the figures before you press the button.</div>
+  <div class="note ok">आप जो भी दर्ज करेंगे, वह आपके नाम और समय के साथ सेव होता है। मालिक को तुरंत दिखता है। ऐप से कुछ मिटाया नहीं जा सकता, इसलिए बटन दबाने से पहले रकम एक बार देख लें।</div>
 
+  <h2>ऐप में आना</h2>
+  <ol class="steps">
+    <li>अपना <b>Username</b> और <b>Password</b> डालें। यह आपके अलावा किसी को न बताएं।</li>
+    <li>नीचे की पट्टी में पाँच हिस्से हैं: <span class="q">Home, Credit, Lube, Expense, Payment</span>। कहीं भी हों, यहाँ से किसी भी हिस्से में जा सकते हैं।</li>
+  </ol>
 </section>
 
 <section class="page">
-  <h2>Signing in and the Home screen</h2>
+  <h2>Home स्क्रीन</h2>
   <div class="shots">
-    <figure><img src="shots/01_home.png"><figcaption><b>Home.</b> Today's tasks, then four quick buttons. The bottom bar always shows the five areas.</figcaption></figure>
-    <figure><img src="shots/09_logout.png"><figcaption><b>Sign out.</b> The arrow icon at the top right asks first, so a stray tap does nothing.</figcaption></figure>
+    <figure><img src="shots/01_home.png"><figcaption><b>Home</b> — ऊपर आज के काम (Today's tasks), नीचे चार बड़े बटन।</figcaption></figure>
+    <figure><img src="shots/09_logout.png"><figcaption><b>बाहर निकलना</b> — ऊपर दाईं तरफ़ तीर वाला निशान। दबाने पर पहले पूछता है, इसलिए गलती से नहीं निकलेगा।</figcaption></figure>
     <figure></figure>
   </div>
   <ul class="tight">
-    <li><b>Today's tasks:</b> a green tick means done. "Expenses logged today" opens the expense form. "Previous shift readings" and "Paytm report" only show whether the owner's side is done; you do not need to act on them.</li>
-    <li><b>Pending action:</b> bank transfers you logged that the owner has not confirmed yet.</li>
-    <li>Keep your password private. Everything entered under your name is your responsibility.</li>
+    <li><b>Today's tasks:</b> हरा ✓ मतलब काम हो गया। <span class="q">Expenses logged today</span> दबाने पर खर्च लिखने का फ़ॉर्म खुलता है। बाकी दो (<span class="q">Previous shift readings</span>, <span class="q">Paytm report</span>) सिर्फ़ बताते हैं कि मालिक की तरफ़ का काम हुआ या नहीं — इनमें आपको कुछ नहीं करना।</li>
+    <li><b>Pending action:</b> आपने जो बैंक ट्रांसफर दर्ज किए और जिन्हें मालिक ने अभी तक पक्का नहीं किया।</li>
+    <li>काम खत्म होने पर, ख़ासकर साझा फ़ोन पर, ऐप से बाहर निकल जाएँ।</li>
   </ul>
 </section>
 
-<section class="page">
-  <h2>1. Credit Sale</h2>
-  <p class="sub">Credit tab at the bottom, or the Credit Sale button on Home.</p>
+<section class="page p3" style="font-size:11.5pt;">
+  <h2>1. उधार बिक्री (Credit Sale)</h2>
+  <p class="sub">नीचे की पट्टी में <b>Credit</b>, या Home पर <b>Credit Sale</b> बटन।</p>
   <ol class="steps">
-    <li>Find the customer: scroll, or type a name or vehicle number in the search box. Each customer shows what they owe and how much of their limit is used.</li>
-    <li>Choose the <b>vehicle</b>. Use "No number / container" if there is none.</li>
-    <li>Choose the <b>fuel</b>: HS diesel, MS petrol, X2 premium, XG green, or CNG (sold in kg).</li>
-    <li>Choose <b>Amount (₹)</b> or <b>Litres</b> (kg for CNG), and type the figure from the dispenser. The line under the box shows the rate, litres and total, so check it matches.</li>
-    <li>Press <b>Record credit sale</b>. A slip appears: check the amount and give the customer the signed slip.</li>
+    <li>ग्राहक चुनें। ऊपर के डिब्बे में नाम या गाड़ी नंबर लिखकर खोज सकते हैं। हर ग्राहक के नीचे दिखता है कि उस पर कितना बकाया है।</li>
+    <li><b>Vehicle</b> (गाड़ी) चुनें। गाड़ी का नंबर न हो तो <span class="q">No number / container</span> चुनें।</li>
+    <li><b>Fuel</b> (तेल) चुनें: HS डीज़ल, MS पेट्रोल, X2 प्रीमियम, XG ग्रीन, या CNG (किलो में)।</li>
+    <li><span class="q">Amount (₹)</span> चुनें तो रकम भरें; <span class="q">Litres</span> (CNG में kg) चुनें तो मशीन पर दिखी मात्रा भरें। डिब्बे के नीचे रेट, लीटर और कुल रकम दिखती है — ध्यान से मिला लें।</li>
+    <li><span class="q">Record credit sale</span> दबाएँ।</li>
+    <li>हरा निशान और पर्ची की जानकारी दिखेगी। रकम जाँचकर ग्राहक से <b>साइन की हुई पर्ची</b> लें।</li>
   </ol>
   <div class="shots">
-    <figure><img src="shots/02_select.png"><figcaption><b>1</b> Choose the customer</figcaption></figure>
-    <figure><img src="shots/04_form.png"><figcaption><b>2–5</b> Vehicle, fuel, amount</figcaption></figure>
-    <figure><img src="shots/05_done.png"><figcaption><b>6</b> Recorded: give the slip</figcaption></figure>
+    <figure><img src="shots/02_select.png"><figcaption><b>1</b> ग्राहक चुनें</figcaption></figure>
+    <figure><img src="shots/04_form.png"><figcaption><b>2–5</b> गाड़ी, तेल, रकम</figcaption></figure>
+    <figure><img src="shots/05_done.png"><figcaption><b>6</b> दर्ज हो गया</figcaption></figure>
   </div>
-  <div class="note warn"><b>The rate is automatic</b> (today's IOC price; CNG at the pump price the owner sets). If a rate looks wrong or says "no current rate", do not sell on credit: tell the owner.</div>
-  <div class="note warn"><b>Mistake?</b> Do not enter the sale again. Tell the owner the customer, amount and time so it can be corrected. A suspended account cannot be chosen: the owner decides about credit for it.</div>
+  <div class="note warn"><b>रेट अपने आप लगता है</b> (आज का IOC रेट; CNG का रेट वह जो मालिक ने ऐप में रखा है)। रेट गलत लगे, या "no current rate" लिखा आए, तो उधार न दें — मालिक को बताएं।</div>
+  <div class="note warn"><b>गलती हो जाए तो:</b> वही बिक्री दोबारा दर्ज न करें। मालिक को ग्राहक का नाम, रकम और समय बताएं, ताकि वे ठीक करा सकें। जिस ग्राहक का खाता बंद (suspended) है, वह लिस्ट से नहीं चुना जा सकता — उधार देने का फ़ैसला मालिक करेंगे।</div>
 </section>
 
 <section class="page">
-  <h2>2. Payment received</h2>
-  <p class="sub">Payment tab, or the Payment button on Home.</p>
+  <h2>2. पैसे मिले (Payment)</h2>
+  <p class="sub">नीचे की पट्टी में <b>Payment</b>, या Home पर <b>Payment</b> बटन।</p>
   <ol class="steps">
-    <li>Choose the <b>customer</b> (the list shows what they owe).</li>
-    <li>Type the <b>amount</b> actually received.</li>
-    <li>Choose the <b>mode</b>: Cash, Cheque or Bank Transfer. For a cheque or transfer, type the cheque number or UTR as the <b>reference</b>.</li>
-    <li>Press <b>Record payment</b>.</li>
+    <li><b>Customer</b> चुनें। नाम के आगे दिखता है कि उन पर कितना बकाया है।</li>
+    <li><b>Amount</b> में जितने पैसे असल में मिले, उतने भरें।</li>
+    <li><b>Payment mode</b> चुनें: <span class="q">Cash</span> (नकद), <span class="q">Cheque</span> या <span class="q">Bank Transfer</span>। चेक या ट्रांसफर हो तो <b>Reference number</b> में चेक नंबर या UTR लिखें।</li>
+    <li><span class="q">Record payment</span> दबाएँ।</li>
   </ol>
   <div class="shots">
-    <figure><img src="shots/06_payment.png"><figcaption>Record Payment</figcaption></figure>
+    <figure><img src="shots/06_payment.png"><figcaption>पैसे दर्ज करने की स्क्रीन</figcaption></figure>
     <figure></figure><figure></figure>
   </div>
   <ul class="tight">
-    <li><b>Cash and cheque</b> reduce the customer's balance straight away.</li>
-    <li><b>Bank transfer</b> is held as "pending". The balance changes only after the owner sees the money in the bank and confirms it. Until then it shows under "Pending action" on Home.</li>
-    <li>If a customer pays more than they owe, the extra is kept as credit in their favour. Nothing is lost.</li>
+    <li><b>नकद और चेक:</b> ग्राहक का बकाया उसी समय कम हो जाता है।</li>
+    <li><b>बैंक ट्रांसफर:</b> पहले "pending" रहता है। मालिक जब बैंक में पैसे देखकर पक्का करेंगे, तभी बकाया कम होगा। तब तक यह Home पर <span class="q">Pending action</span> में दिखता है।</li>
+    <li>ग्राहक ने बकाये से ज़्यादा दिए तो बचे पैसे उसके नाम "जमा" रहते हैं। कुछ खोता नहीं।</li>
   </ul>
 </section>
 
 <section class="page">
-  <h2>3. Expense</h2>
-  <p class="sub">Expense tab, or the Expense button on Home. Do it every day an expense is paid; Home shows a reminder until one is logged.</p>
+  <h2>3. खर्च (Expense)</h2>
+  <p class="sub">नीचे की पट्टी में <b>Expense</b>, या Home पर <b>Expense</b> बटन। जिस दिन खर्च हो, उसी दिन दर्ज करें — Home पर तब तक याद दिलाया जाता है।</p>
   <ol class="steps">
-    <li>Type the <b>amount</b> and choose the <b>category</b> (Staff, Maintenance, Utilities, Supplies, Misc).</li>
-    <li>Add a short <b>description</b> if it helps, for example "Diesel generator fuel".</li>
-    <li>Check the <b>date</b>, then press <b>Log expense</b>.</li>
+    <li><b>Amount</b> भरें और <b>Category</b> चुनें (Staff, Maintenance, Utilities, Supplies, Misc)।</li>
+    <li><b>Description</b> में छोटा सा विवरण लिखें, जैसे "जनरेटर का डीज़ल"। यह ज़रूरी नहीं है।</li>
+    <li><b>Date</b> जाँचें, फिर <span class="q">Log expense</span> दबाएँ।</li>
   </ol>
   <div class="shots">
-    <figure><img src="shots/07_expense.png"><figcaption>Log Expense</figcaption></figure>
+    <figure><img src="shots/07_expense.png"><figcaption>खर्च दर्ज करना</figcaption></figure>
     <figure></figure><figure></figure>
   </div>
+  <p class="note ok">Category समझ न आए तो <b>Misc</b> (विविध) चुनें और Description में लिख दें।</p>
 </section>
 
 <section class="page">
-  <h2>4. Lube Sale</h2>
-  <p class="sub">Lube tab, or the Lube Sale button on Home.</p>
+  <h2>4. ल्यूब बिक्री (Lube Sale)</h2>
+  <p class="sub">नीचे की पट्टी में <b>Lube</b>, या Home पर <b>Lube Sale</b> बटन।</p>
   <ol class="steps">
-    <li>Choose the <b>product</b>. The price fills in; change the <b>unit price</b> only if the sale was really at another price.</li>
-    <li>Type the <b>quantity</b>.</li>
-    <li>Choose <b>Cash</b> or <b>Credit</b>. For Credit, choose the customer: the amount is added to what they owe.</li>
-    <li>Press <b>Log sale</b>.</li>
+    <li><b>Product</b> चुनें। कीमत अपने आप भर जाती है। बिक्री सच में किसी और कीमत पर हुई हो, तभी <b>Unit price</b> बदलें।</li>
+    <li><b>Quantity</b> (कितने नग) भरें।</li>
+    <li><span class="q">Cash</span> या <span class="q">Credit</span> चुनें। Credit हो तो ग्राहक चुनें — रकम उसके बकाये में जुड़ जाती है।</li>
+    <li><span class="q">Log sale</span> दबाएँ।</li>
   </ol>
   <div class="shots">
-    <figure><img src="shots/08_lube.png"><figcaption>Lube Sale</figcaption></figure>
+    <figure><img src="shots/08_lube.png"><figcaption>ल्यूब बिक्री की स्क्रीन</figcaption></figure>
     <figure></figure><figure></figure>
   </div>
-  <p class="note warn">A lube product that is not in the list has no price set yet. Ask the owner. A sale below the cost price is recorded, but the owner is alerted.</p>
-  <p class="foot">Pumpvision · Shree Petroleum, Padra, Rewa · Manager Guide · October 2026</p>
+  <p class="note warn">कोई ल्यूब प्रोडक्ट लिस्ट में न दिखे तो उसकी कीमत अभी ऐप में नहीं डाली गई है — मालिक से कहें। लागत से कम कीमत पर बिक्री दर्ज हो जाती है, पर मालिक को सूचना (alert) चली जाती है।</p>
+  <p class="foot">Pumpvision · Shree Petroleum, Padra, Rewa · मैनेजर गाइड · अक्टूबर 2026</p>
 </section>
 
 </body>
