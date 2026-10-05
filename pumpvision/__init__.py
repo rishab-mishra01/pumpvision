@@ -46,9 +46,11 @@ def create_app():
     def load_user(user_id):
         from .models import User
         try:
-            return db.session.get(User, int(user_id))
+            user = db.session.get(User, int(user_id))
         except (ValueError, TypeError):
             return None
+        # A deactivated account must lose its live sessions too, not just its login.
+        return user if user is not None and user.is_active else None
 
     from .blueprints.auth.routes import auth_bp
     from .blueprints.dashboard.routes import dashboard_bp
@@ -193,6 +195,13 @@ def _seed_data():
         (os.getenv("MANAGER_USERNAME",   "manager"),    os.getenv("MANAGER_PASSWORD",   ""), "manager",   "Manager"),
     ]
     changed = False
+    # Seed the first-run accounts ONLY into an empty users table. This used to insert
+    # any of them that was "missing" by name, so every process that started the app
+    # without PUMPVISION_SKIP_BOOTSTRAP (the VPS scrapers do) re-created accounts
+    # that had been renamed -- 'admin' and 'manager' came back carrying the old
+    # passwords from that host's .env, live on the public site (found 2026-10-05).
+    if User.query.count() > 0:
+        _ensure_user = []
     for username, password, role, first_name in _ensure_user:
         existing = User.query.filter_by(username=username).first()
         if not existing:
