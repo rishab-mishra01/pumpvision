@@ -477,74 +477,38 @@ def select_customer():
 @login_required
 @attendant_required
 def log_sale_details(customer_id):
-    from pumpvision.models import AppSetting, Customer, CreditTransaction, db
-    from pumpvision.services.prices import get_rsp
+    from pumpvision.models import Customer
+    from pumpvision.services.credit_sale import rate_map, record_sale
 
     customer = Customer.query.get_or_404(customer_id)
     if not customer.is_active:
         return redirect(url_for("attendant.select_customer"))
 
     vehicles = [v.vehicle_number for v in customer.vehicles if v.is_active]
-    today = date.today()
-    price_map = {prod: get_rsp(prod, today) for prod in ("HS", "MS", "X2", "XG")}
-    # CNG is not in IRAS: its pump price is the owner-set setting, sold in kg.
-    cng = db.session.get(AppSetting, "cng_rsp_per_kg")
-    try:
-        price_map["CNG"] = float(cng.value) if cng and float(cng.value) > 0 else None
-    except ValueError:
-        price_map["CNG"] = None
+    price_map = rate_map()
 
     if request.method == "POST":
-        vehicle_number = request.form.get("vehicle_number", "").strip().upper()
         product = request.form.get("product", "").strip().upper()
-        input_mode = request.form.get("input_mode", "amount")
-        errors = []
-
-        if not vehicle_number:
-            errors.append(HI["err_select_vehicle"])
-        if product not in price_map:
-            errors.append(HI["err_select_product"])
-
-        rate = price_map.get(product)
-        if product in price_map and rate is None:
-            errors.append(HI["err_no_current_rate"].format(product=product))
-
-        try:
-            quantity = float(request.form.get("quantity", ""))
-            if quantity <= 0:
-                errors.append(HI["err_quantity_gt_zero"])
-        except (ValueError, TypeError):
-            errors.append(HI["err_quantity_valid"])
-            quantity = 0.0
-
-        if not errors:
-            if input_mode == "amount":
-                amount = quantity
-                litres = round(quantity / rate, 3) if rate else 0.0
-            else:
-                litres = quantity
-                amount = round(quantity * rate, 2) if rate else 0.0
-
-            now = datetime.now()
-            txn = CreditTransaction(
-                customer_id=customer.customer_id,
-                vehicle_number=vehicle_number,
-                transaction_date=today,
-                transaction_time=now.time(),
-                product=product,
-                litres=litres,
-                rate_per_litre=rate or 0.0,
-                amount=amount,
-                attendant_name=current_user.first_name or current_user.username,
-                is_legacy_entry=False,
-            )
-            db.session.add(txn)
-            customer.outstanding_balance = (customer.outstanding_balance or 0.0) + amount
-            db.session.commit()
+        txn, errors = record_sale(
+            customer,
+            request.form.get("vehicle_number", ""),
+            product,
+            request.form.get("input_mode", "amount"),
+            request.form.get("quantity", ""),
+            current_user.first_name or current_user.username,
+            rates=price_map,
+        )
+        if txn:
             return redirect(url_for("attendant.transaction_confirmed", transaction_id=txn.transaction_id))
-
+        messages = {
+            "no_vehicle": HI["err_select_vehicle"],
+            "bad_product": HI["err_select_product"],
+            "no_rate": HI["err_no_current_rate"].format(product=product),
+            "qty_not_positive": HI["err_quantity_gt_zero"],
+            "qty_not_number": HI["err_quantity_valid"],
+        }
         for e in errors:
-            flash(e, "error")
+            flash(messages[e], "error")
 
     return render_template(
         "attendant/log_sale_details.html",

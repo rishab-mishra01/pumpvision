@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav %}
+{% block title %}Credit Sale — Manager · Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+<div class="mg-page">
+  {{ topbar('Credit Sale') }}
+  {{ flashes() }}
+  <div class="mg-body">
+    <p class="mg-note" style="margin:0;">Choose the customer who is taking fuel on credit.</p>
+    <input type="search" id="q" class="mg-input" placeholder="Search name or vehicle number" autocomplete="off" aria-label="Search customers">
+
+    <div class="mg-card" id="list">
+      {% for c in customers %}
+      {% set bal = c.outstanding_balance or 0 %}
+      <a href="{{ url_for('manager.credit_sale', customer_id=c.customer_id) }}" class="mg-row"
+         data-q="{{ (c.company_name ~ ' ' ~ (c.vehicles | selectattr('is_active') | map(attribute='vehicle_number') | join(' '))) | lower }}">
+        <span style="flex:1;">
+          <b>{{ c.company_name }}</b>
+          <small>{{ 'In credit ₹' ~ (bal | abs | inr) if bal < 0 else 'Owes ₹' ~ (bal | inr) }}{% if c.credit_limit and bal > 0 %} · {{ '%.0f' | format(100 * bal / c.credit_limit) }}% of limit{% endif %}</small>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </a>
+      {% else %}
+      <p class="mg-note" style="padding:16px;">No active credit customers.</p>
+      {% endfor %}
+      <p id="none" class="mg-note" style="padding:16px;display:none;">No customer matches.</p>
+    </div>
+  </div>
+</div>
+{{ nav('credit') }}
+<script>
+  (function () {
+    var q = document.getElementById('q'), rows = document.querySelectorAll('#list a[data-q]'), none = document.getElementById('none');
+    q.addEventListener('input', function () {
+      var t = q.value.trim().toLowerCase(), shown = 0;
+      rows.forEach(function (r) { var ok = !t || r.dataset.q.indexOf(t) !== -1; r.style.display = ok ? '' : 'none'; if (ok) shown++; });
+      none.style.display = shown ? 'none' : 'block';
+    });
+  }());
+</script>
+{% endblock %}

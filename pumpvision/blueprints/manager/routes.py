@@ -358,6 +358,73 @@ def payment():
     )
 
 
+# ─── Credit sales (the manager may enter them as well as the attendants) ──────
+
+_CREDIT_ERRORS = {
+    "no_vehicle": "Choose the vehicle.",
+    "bad_product": "Choose the fuel.",
+    "no_rate": "There is no current rate for this fuel. Ask the owner.",
+    "qty_not_positive": "Enter an amount or quantity greater than zero.",
+    "qty_not_number": "Enter a valid amount or quantity.",
+}
+
+
+@manager_bp.route("/credit/")
+@login_required
+@manager_required
+def credit_select():
+    from pumpvision.models import Customer
+
+    customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
+    return render_template("manager/credit_select.html", customers=customers)
+
+
+@manager_bp.route("/credit/<int:customer_id>", methods=["GET", "POST"])
+@login_required
+@manager_required
+def credit_sale(customer_id):
+    from pumpvision.models import Customer
+    from pumpvision.services.credit_sale import rate_map, record_sale
+
+    customer = Customer.query.get_or_404(customer_id)
+    if not customer.is_active:
+        flash("This account is suspended. Ask the owner before giving credit.", "error")
+        return redirect(url_for("manager.credit_select"))
+
+    rates = rate_map()
+    values = {"vehicle_number": "", "product": "", "input_mode": "amount", "quantity": ""}
+    if request.method == "POST":
+        values.update({k: request.form.get(k, "").strip() for k in values})
+        txn, errors = record_sale(
+            customer, values["vehicle_number"], values["product"],
+            "litres" if values["input_mode"] == "litres" else "amount",
+            values["quantity"], current_user.first_name or current_user.username, rates=rates,
+        )
+        if txn:
+            return redirect(url_for("manager.credit_done", transaction_id=txn.transaction_id))
+        for e in errors:
+            flash(_CREDIT_ERRORS[e], "error")
+
+    return render_template(
+        "manager/credit_form.html",
+        customer=customer,
+        vehicles=[v.vehicle_number for v in customer.vehicles if v.is_active],
+        rates=rates,
+        values=values,
+    )
+
+
+@manager_bp.route("/credit/done/<int:transaction_id>")
+@login_required
+@manager_required
+def credit_done(transaction_id):
+    from pumpvision.models import CreditTransaction, Customer
+
+    txn = CreditTransaction.query.get_or_404(transaction_id)
+    return render_template("manager/credit_done.html", txn=txn,
+                           customer=Customer.query.get_or_404(txn.customer_id))
+
+
 @manager_bp.route("/invoice/")
 @login_required
 @manager_required

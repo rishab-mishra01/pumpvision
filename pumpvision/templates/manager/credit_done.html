@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, nav %}
+{% block title %}Credit sale recorded — Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+{% set unit = 'kg' if txn.product == 'CNG' else 'L' %}
+<div class="mg-page">
+  <div style="text-align:center;padding:36px 20px 8px;">
+    <div style="width:64px;height:64px;border-radius:50%;margin:0 auto 14px;background:var(--ok-100);border:2px solid var(--ok-600);color:var(--ok-600);display:flex;align-items:center;justify-content:center;">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h1 style="font-family:var(--font-serif);font-weight:400;font-size:1.7rem;color:var(--ink-900);margin:0;">Credit sale recorded</h1>
+    <p class="mg-note" style="margin:4px 0 0;">Get the customer's signed slip.</p>
+  </div>
+  <div class="mg-body">
+    <div class="mg-card">
+      <div style="background:var(--ink-900);color:var(--paper-50);padding:16px;text-align:center;">
+        <div class="mg-h" style="color:var(--paper-400);margin:0;">Total</div>
+        <div style="font-family:var(--font-mono);font-size:2rem;font-weight:600;">₹{{ '%.2f' | format(txn.amount) }}</div>
+      </div>
+      {% for k, v in [('Customer', customer.company_name), ('Vehicle', txn.vehicle_number), ('Fuel', txn.product),
+                      ('Quantity', ('%.2f' | format(txn.litres)) ~ ' ' ~ unit), ('Rate', '₹' ~ ('%.2f' | format(txn.rate_per_litre)) ~ '/' ~ unit),
+                      ('Time', txn.transaction_date.strftime('%d %b %Y') ~ ' · ' ~ txn.transaction_time.strftime('%H:%M')),
+                      ('Entered by', txn.attendant_name)] %}
+      <div class="mg-row" style="justify-content:space-between;padding:11px 16px;"><small>{{ k }}</small><b style="font-weight:500;">{{ v }}</b></div>
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('manager.credit_select') }}" class="mg-submit" style="display:flex;align-items:center;justify-content:center;text-decoration:none;position:static;">Record another</a>
+    <a href="{{ url_for('manager.home') }}" class="mg-note" style="text-align:center;padding:8px;">Back to home</a>
+  </div>
+</div>
+{{ nav('credit') }}
+{% endblock %}
