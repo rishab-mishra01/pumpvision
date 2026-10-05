@@ -21,18 +21,19 @@
       <p class="mg-h">Today's tasks</p>
       <div class="mg-card">
         {% set tasks = [
-          (shift_readings_done, url_for('meters.index'), 'Previous shift readings entered', prev_str ~ ' · 6 nozzles'),
+          (shift_readings_done, none, 'Previous shift readings entered', prev_str ~ ' · 6 nozzles'),
           (expenses_done, url_for('manager.expense'), 'Expenses logged today', today_str),
-          (paytm_done, url_for('paytm.upload'), 'Paytm report uploaded', prev_str ~ ' report'),
+          (paytm_done, none, 'Paytm report uploaded', prev_str ~ ' report'),
         ] %}
+        {# Readings and the Paytm report are owner pages, so for the manager those two rows only show status. #}
         {% for done, href, title, sub in tasks %}
-        <a href="{{ href }}" class="mg-row">
+        <{{ 'a href="' ~ href ~ '"' if href else 'div' }} class="mg-row">
           <span class="mg-dot {{ 'done' if done }}">
             {% if done %}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>{% endif %}
           </span>
           <span style="flex:1;"><b style="{{ 'color:var(--ok-600);' if done }}">{{ title }}</b><small>{{ sub }}</small></span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-        </a>
+          {% if href %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>{% endif %}
+        </{{ 'a' if href else 'div' }}>
         {% endfor %}
       </div>
     </div>
