@@ -104,10 +104,19 @@ def tanks():
     # every reading five and a half hours in the future.
     refresh_time = latest_ts.strftime("%H:%M") if latest_ts else None
 
+    # How old the newest reading is, so the screen can say so instead of
+    # promising an hourly refresh that a failed IRAS login can silently break.
+    # Naive IST on both sides (datetime.now() is IST on the evo).
+    age_min = None
+    if latest_ts:
+        from datetime import datetime
+        age_min = max(0, int((datetime.now() - latest_ts).total_seconds() // 60))
+
     return render_template(
         "owner/tanks.html",
         tanks=tanks_data,
         refresh_time=refresh_time,
+        age_min=age_min,
     )
 
 

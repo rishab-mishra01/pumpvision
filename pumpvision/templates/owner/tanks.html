@@ -29,7 +29,15 @@
       </svg>
       <span class="row">
         <span class="a">Automated Tank Gauging</span>
-        <span class="b">Auto-updates every hour</span>
+        {% if age_min is none %}
+        <span class="b">No reading yet</span>
+        {% elif age_min >= 90 %}
+        <span class="b" style="color:var(--warn-600);font-weight:600;">
+          Last reading {{ (age_min // 60) }}h {{ '%02d' % (age_min % 60) }}m ago — hourly update is late. Tap Scan now.
+        </span>
+        {% else %}
+        <span class="b">Last reading {{ age_min }} min ago · refreshes hourly</span>
+        {% endif %}
       </span>
       {% if refresh_time %}
       <span class="stamp">{{ refresh_time }}</span>
