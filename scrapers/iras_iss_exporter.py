@@ -674,6 +674,7 @@ def parse_shift_totalizer_nozzle(filepath: Path, nozzle_no: int) -> "dict | None
                           next((i for i, h in enumerate(headers) if "nozzle" in h), None))
     shift_type_col = next((i for i, h in enumerate(headers) if "shift" in h and "type" in h), None)
     tot_reading_col = next((i for i, h in enumerate(headers) if "tot" in h and "reading" in h), None)
+    shift_time_col = next((i for i, h in enumerate(headers) if "shift" in h and "time" in h), None)
 
     if None in (nozzle_col, shift_type_col, tot_reading_col):
         wb.close()
@@ -681,6 +682,7 @@ def parse_shift_totalizer_nozzle(filepath: Path, nozzle_no: int) -> "dict | None
         return None
 
     open_val = close_val = None
+    open_t = close_t = None
 
     for row in sheet.iter_rows(min_row=header_row_idx + 1, values_only=True):
         if row[nozzle_col] is None:
@@ -698,10 +700,17 @@ def parse_shift_totalizer_nozzle(filepath: Path, nozzle_no: int) -> "dict | None
         except (ValueError, TypeError):
             continue
 
+        # A day's file holds several rows of each type: the 00:40 shift change (which is
+        # the PREVIOUS day's close) and the 23:58 midnight close. The opening is the
+        # earliest O row and the closing the latest C row -- not whichever is last in the
+        # file, which gave a day-old closing and a wrong boundary (found 2026-10-07).
+        t = str(row[shift_time_col]) if shift_time_col is not None else ""
         if shift_type == "O":
-            open_val = reading
+            if open_t is None or t <= open_t:
+                open_val, open_t = reading, t
         elif shift_type == "C":
-            close_val = reading
+            if close_t is None or t >= close_t:
+                close_val, close_t = reading, t
 
     wb.close()
 
@@ -758,7 +767,7 @@ def xg_pre_check(st_dir: Path, shift_date: str) -> dict:
         return unresolved
 
     vals = parse_shift_totalizer_nozzle(fpath, XG_NOZZLE)
-    if vals is None:
+    if vals is None or vals["close"] is None:
         print("  [XG pre-check] WARN: Could not read nozzle 11 from Shift Totalizer.")
         print("  [XG pre-check] Falling back to ISS boundary search for nozzle 11.")
         return unresolved
@@ -883,7 +892,7 @@ async def run_boundary(page, output_dir: Path, shift_date: str) -> dict:
             if nozzle not in remaining:
                 continue
             vals = parse_shift_totalizer_nozzle(st_fpath, nozzle)
-            if vals is None:
+            if vals is None or vals["close"] is None:
                 print(f"  [ST pre-check] Nozzle {nozzle}: not in ST file — will search ISS.")
                 continue
             movement = vals["close"] - vals["open"]
