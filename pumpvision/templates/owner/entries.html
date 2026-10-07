@@ -76,6 +76,7 @@
         <b>₹{{ "{:,.2f}".format(e.amount) }}</b>{{ del_btn('credit', e.transaction_id) }}
       </div>
       {% else %}<div class="en-empty">No credit sales logged.</div>{% endfor %}
+      <a href="{{ url_for('owner.entry_add_credit', date=op_date.isoformat()) }}" class="en-row" style="text-decoration:none;color:var(--saffron-700);font-weight:600;font-size:14px;">+ Add a credit sale for this day</a>
     </div>
 
     <p class="en-h">Payments received</p>

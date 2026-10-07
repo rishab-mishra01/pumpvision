@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Add credit sale — Pumpvision{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>
+  body { margin: 0; background: var(--paper-50); }
+  .en-card { margin: 10px 16px 0; background: var(--paper-100); border: 1px solid var(--paper-300); border-radius: var(--r-card); overflow: hidden; }
+  .en-h { margin: 18px 20px 0; font-family: var(--font-sans); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); }
+  .en-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; font-family: var(--font-sans); }
+  .en-row + .en-row { border-top: 1px solid var(--paper-300); }
+  .en-row .main { flex: 1; min-width: 0; font-size: 14px; color: var(--ink-900); }
+  .en-row .main small { display: block; font-size: 12px; color: var(--ink-500); margin-top: 2px; }
+  .en-row b { font-family: var(--font-mono); font-size: 14px; white-space: nowrap; }
+  .en-del { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px; border-radius: var(--r-card);
+    border: 1px solid var(--error-600); color: var(--error-600); font-size: 13px; font-weight: 600; text-decoration: none; background: #fff; }
+  .en-empty { padding: 14px; font-family: var(--font-sans); font-size: 13px; color: var(--ink-500); }
+</style>
+{% endblock %}
+
+{% block page %}
+<div style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;">
+
+    <div class="tanks-head-bar">
+      <div class="tanks-titlerow"><span class="ttl">Add a credit sale</span><span class="sub">Forgotten entry</span></div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="flash flash-{{ 'error' if category == 'error' else 'ok' }}" role="status" style="margin:12px 16px 0;">{{ message }}</div>
+    {% endfor %}
+    {% endwith %}
+
+    <form method="post" class="en-card" style="padding:16px;display:flex;flex-direction:column;gap:14px;font-family:var(--font-sans);">
+      <p style="margin:0;font-size:13px;color:var(--ink-500);">Use this for a credit sale that was made but never entered. It is saved on the date and time below, at that day's price, so that day's cash and the customer's balance both correct.</p>
+      <style>.en-in{width:100%;box-sizing:border-box;min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;}.en-lab{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-500);margin-bottom:6px;}</style>
+      <div><label class="en-lab" for="c">Customer</label>
+        <select id="c" name="customer_id" required class="en-in">
+          <option value="">Select customer</option>
+          {% for c in customers %}<option value="{{ c.customer_id }}" {{ 'selected' if values.customer_id == c.customer_id|string }}>{{ c.company_name }}</option>{% endfor %}
+        </select></div>
+      <div><label class="en-lab" for="v">Vehicle number</label>
+        <input id="v" name="vehicle_number" list="veh" required class="en-in" value="{{ values.vehicle_number }}" placeholder="MP17 …" autocapitalize="characters">
+        <datalist id="veh">{% for v in vehicles %}<option value="{{ v }}">{% endfor %}</datalist></div>
+      <div><label class="en-lab" for="p">Product</label>
+        <select id="p" name="product" required class="en-in">
+          <option value="">Select product</option>
+          {% for code, name in [('HS','HS · Diesel'),('MS','MS · Petrol'),('X2','XP · Premium'),('XG','XG · XtraGreen'),('CNG','CNG')] %}
+          <option value="{{ code }}" {{ 'selected' if values.product == code }}>{{ name }}</option>{% endfor %}
+        </select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="en-lab" for="m">Entered as</label>
+          <select id="m" name="input_mode" class="en-in">
+            <option value="litres" {{ 'selected' if values.input_mode == 'litres' }}>Litres / kg</option>
+            <option value="amount" {{ 'selected' if values.input_mode == 'amount' }}>Amount ₹</option></select></div>
+        <div><label class="en-lab" for="q">Quantity</label>
+          <input id="q" name="quantity" type="number" step="0.01" min="0.01" inputmode="decimal" required class="en-in" value="{{ values.quantity }}"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="en-lab" for="d">Date</label>
+          <input id="d" name="date" type="date" max="{{ today }}" required class="en-in" value="{{ values.date }}"></div>
+        <div><label class="en-lab" for="t">Time</label>
+          <input id="t" name="time" type="time" required class="en-in" value="{{ values.time }}"></div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="min-height:52px;">Add credit sale</button>
+      <a href="{{ url_for('owner.entries', date_str=back_date) }}" class="btn" style="min-height:52px;display:flex;align-items:center;justify-content:center;">Cancel</a>
+    </form>
+
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="nav">
+    <a href="{{ url_for('dashboard.index') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>
+      </svg>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="{{ url_for('owner.tanks') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/>
+      </svg>
+      <span class="nav-label">Stock</span>
+    </a>
+    <a href="{{ url_for('credit.credit_home') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="6" width="18" height="13" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span class="nav-label">Credit</span>
+    </a>
+    <a href="{{ url_for('dashboard.summary') }}" class="nav-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/>
+      </svg>
+      <span class="nav-label">Summary</span>
+    </a>
+    <a href="{{ url_for('owner.more') }}" class="nav-tab active">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>
+      </svg>
+      <span class="nav-label">More</span>
+    </a>
+  </nav>
+</div>
+{% endblock %}

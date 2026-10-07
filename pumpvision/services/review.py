@@ -173,6 +173,35 @@ def check_sales_and_cash(now):
     return out
 
 
+def check_unrecorded_credit(now):
+    """Cash in hand far above its recent median: the usual sign of a credit fuel sale that
+    was made but never entered (Paytm stays near ₹175-200k whatever the sales, so extra
+    sales end up as 'cash'). A heuristic: it says 'ask', not 'wrong'."""
+    from pumpvision.blueprints.dashboard.routes import _cash_for_date, _credit_total, _product_sales
+    out = []
+    days = [now.date() - timedelta(days=1)] if now.time() >= time(8, 30) else []
+    days.append(now.date() - timedelta(days=2))
+    for d in days:
+        cash = _cash_for_date(d)
+        if cash is None:
+            continue
+        hist = [c for c in (_cash_for_date(d - timedelta(days=i)) for i in range(1, 15)) if c is not None]
+        if len(hist) < 7:
+            continue
+        med = statistics.median(hist)
+        excess = cash - med
+        if excess > 75_000 and cash > 1.25 * med:
+            lit = {p: v['litres'] for p, v in _product_sales(d).items()}
+            out.append(F(f"cash_high:{d}", "warn", "business",
+                         f"{d:%d %b}: cash in hand ₹{cash:,.0f} is ₹{excess:,.0f} above the usual (₹{med:,.0f})",
+                         f"Credit entered for the day: ₹{_credit_total(d):,.0f}. Sales: " +
+                         ", ".join(f"{p} {v:,.0f} L" for p, v in lit.items()) + ". If a credit fuel sale was made but not "
+                         "entered, cash is overstated by its amount and the customer's balance is understated.",
+                         "Ask the attendants. Add any missing sale under More → Manual entries → Add a credit sale.",
+                         audience="owner"))
+    return out
+
+
 def check_credit_maths(now):
     from pumpvision.models import CreditTransaction
     out = []
@@ -443,7 +472,7 @@ def collect_status(now):
     return out
 
 
-CHECKS = [check_data_freshness, check_totalizer_maths, check_sales_and_cash, check_credit_maths,
+CHECKS = [check_data_freshness, check_totalizer_maths, check_sales_and_cash, check_credit_maths, check_unrecorded_credit,
           check_attendant_vs_boundary, check_cng, check_regulatory,
           check_infra, check_vps]
 

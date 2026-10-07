@@ -26,8 +26,10 @@ def rate_map(day: date | None = None) -> dict:
     return rates
 
 
-def record_sale(customer, vehicle_number, product, input_mode, quantity_raw, entered_by, rates=None):
+def record_sale(customer, vehicle_number, product, input_mode, quantity_raw, entered_by, rates=None, when=None):
     """Validate and save one credit sale and add it to the customer's balance.
+
+    `when` backdates the sale (owner correction of a forgotten entry); default is now.
 
     Returns (transaction, errors). errors are short codes -- no_vehicle, bad_product,
     no_rate, qty_not_number, qty_not_positive -- for each screen to word in its own
@@ -65,7 +67,7 @@ def record_sale(customer, vehicle_number, product, input_mode, quantity_raw, ent
     else:
         litres, amount = round(quantity / rate, 3), round(quantity, 2)
 
-    now = datetime.now()
+    now = when or datetime.now()
     txn = CreditTransaction(
         customer_id=customer.customer_id,
         vehicle_number=vehicle_number,

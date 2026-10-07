@@ -232,3 +232,62 @@ def entry_remove(kind, entry_id):
         return back
     return render_template("owner/entry_remove.html", kind=kind, entry_id=entry_id,
                            headline=headline, consequence=consequence, back_date=back_date)
+
+
+@owner_bp.route("/entries/credit/add", methods=["GET", "POST"])
+@login_required
+@owner_required
+def entry_add_credit():
+    """Enter a credit sale that was made but never entered, on the day it happened.
+
+    The attendant and manager screens always stamp 'now'; this lets the owner put it
+    on the right day and time, at that day's rate, so that day's cash and the
+    customer's balance are both corrected.
+    """
+    from datetime import date, datetime, time, timedelta
+    from flask_login import current_user
+    from pumpvision.models import Customer
+    from pumpvision.services.credit_sale import rate_map, record_sale
+
+    customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
+    today = date.today()
+    op_date = _entries_date(request.values.get("date"))
+    values = {"customer_id": "", "vehicle_number": "", "product": "", "input_mode": "litres", "quantity": "",
+              "date": op_date.isoformat(), "time": "18:00"}
+
+    if request.method == "POST":
+        values.update({k: request.form.get(k, "").strip() for k in values})
+        errors = []
+        customer = next((c for c in customers if str(c.customer_id) == values["customer_id"]), None)
+        if customer is None:
+            errors.append("Choose a customer.")
+        try:
+            when = datetime.combine(date.fromisoformat(values["date"]), time.fromisoformat(values["time"]))
+        except ValueError:
+            when = None
+            errors.append("Enter a valid date and time.")
+        if when and when > datetime.now():
+            errors.append("The sale cannot be in the future.")
+        if not errors:
+            txn, errs = record_sale(
+                customer, values["vehicle_number"], values["product"],
+                "litres" if values["input_mode"] == "litres" else "amount", values["quantity"],
+                f"{current_user.first_name or current_user.username} (added later)",
+                rates=rate_map(when.date()), when=when,
+            )
+            if txn:
+                # a sale before 06:00 belongs to the previous operational day
+                day = when.date() if when.time() >= time(6, 0) else when.date() - timedelta(days=1)
+                flash(f"Credit sale of ₹{txn.amount:,.2f} added to {customer.company_name} on "
+                      f"{when:%d %b} {when:%H:%M}. Cash and the customer's balance are updated.", "ok")
+                return redirect(url_for("owner.entries", date_str=day.isoformat()))
+            msgs = {"no_vehicle": "Enter the vehicle number.", "bad_product": "Choose the product.",
+                    "no_rate": "No price is known for that product on that day.",
+                    "qty_not_number": "Enter the quantity as a number.", "qty_not_positive": "Quantity must be above zero."}
+            errors += [msgs.get(e, e) for e in errs]
+        for e in errors:
+            flash(e, "error")
+
+    vehicles = sorted({v.vehicle_number for c in customers for v in c.vehicles if v.is_active})
+    return render_template("owner/entry_add_credit.html", customers=customers, vehicles=vehicles,
+                           values=values, back_date=op_date.isoformat(), today=today.isoformat())
