@@ -76,15 +76,15 @@
     </div>
     {% endfor %}
 
-    {% if cng %}
+    {% for c in cng %}
     <div class="mc-card">
-      <div class="mc-head"><span class="mc-name">CNG</span><span class="mc-badge missing">no IRAS</span></div>
+      <div class="mc-head"><span class="mc-name">CNG {{ c.nozzle_no }}</span><span class="mc-badge missing">no IRAS</span></div>
       <div class="mc-grid">
-        <span>Closing<b>{{ '{:,.1f}'.format(cng.closing_reading) }} kg</b></span>
-        <span>Sold (attendant)<b>{{ '{:,.1f}'.format(cng.kg_sold) }} kg</b></span>
+        <span>Closing<b>{{ '{:,.1f}'.format(c.closing_reading) }} kg</b></span>
+        <span>Sold (attendant)<b>{{ '{:,.1f}'.format(c.kg_sold) }} kg</b></span>
       </div>
     </div>
-    {% endif %}
+    {% endfor %}
 
     <p class="mc-help">
       IRAS records each meter at exactly 06:00. Attendants read it later, so their figure includes

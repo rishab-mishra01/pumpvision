@@ -175,3 +175,60 @@ def scan_start():
 def scan_status():
     from pumpvision import scan
     return jsonify(scan.status())
+
+
+# ─── Manual entries: review and remove ────────────────────────────────────────
+
+def _entries_date(date_str):
+    from datetime import date, timedelta
+    try:
+        return date.fromisoformat(date_str) if date_str else date.today() - timedelta(days=1)
+    except ValueError:
+        return date.today() - timedelta(days=1)
+
+
+@owner_bp.route("/entries")
+@owner_bp.route("/entries/<date_str>")
+@login_required
+@owner_required
+def entries(date_str=None):
+    from datetime import date, timedelta
+    from pumpvision.services.entries import list_entries
+
+    op_date = _entries_date(date_str)
+    today = date.today()
+    return render_template(
+        "owner/entries.html",
+        op_date=op_date,
+        data=list_entries(op_date),
+        prev_date=(op_date - timedelta(days=1)).isoformat(),
+        next_date=(op_date + timedelta(days=1)).isoformat() if op_date < today else None,
+    )
+
+
+@owner_bp.route("/entries/<kind>/<int:entry_id>/remove", methods=["GET", "POST"])
+@login_required
+@owner_required
+def entry_remove(kind, entry_id):
+    from flask import abort, current_app
+    from flask_login import current_user
+    from pumpvision.services import entries as svc
+
+    if kind not in svc.KINDS:
+        abort(404)
+    back_date = request.values.get("date", "")
+    back = redirect(url_for("owner.entries", date_str=back_date or None))
+
+    if request.method == "POST":
+        ok, message = svc.remove(kind, entry_id)
+        if ok:
+            current_app.logger.info("entry removed: %s #%s by %s", kind, entry_id, current_user.username)
+        flash(message, "ok" if ok else "error")
+        return back
+
+    entry, headline, consequence = svc.describe(kind, entry_id)
+    if entry is None:
+        flash("That entry was already removed.", "error")
+        return back
+    return render_template("owner/entry_remove.html", kind=kind, entry_id=entry_id,
+                           headline=headline, consequence=consequence, back_date=back_date)

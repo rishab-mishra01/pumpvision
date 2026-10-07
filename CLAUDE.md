@@ -190,8 +190,9 @@ CNG has no underground tank.
 Only DU 9 has receipt printers. NPND interlock disabled on all pumps.
 
 ### CNG Dispenser
-One nozzle. Not in IRAS. No ISS records. Unit: kg. RSP: static (`cng_rsp_per_kg` in `app_settings`).
-Attendant label: **CNG** (no suffix — single nozzle).
+**Two nozzles** (corrected 2026-10-06; this file used to say one). Not in IRAS. No ISS records.
+Unit: kg. RSP: static (`cng_rsp_per_kg` in `app_settings`). Attendant labels: **CNG 1**, **CNG 2**.
+Opening meters seeded 2026-10-05: nozzle 1 = 678,287.53 kg, nozzle 2 = 312,254.38 kg.
 No pump test deduction for CNG.
 
 ---
@@ -214,11 +215,13 @@ Kept for future cross-checks and variance analysis. Not used by any dashboard ro
 The attendant enters the CNG meter reading (in kg) at shift close, exactly like liquid fuel.
 Opening reading for day N = closing reading from day N−1. First-ever entry: manual opening.
 
-### Schema: `cng_shift_readings` ✓ built (migration `2fc50a7d52a6`)
+### Schema: `cng_shift_readings` ✓ built (migration `2fc50a7d52a6`; `nozzle_no` added by `e5f6a1b2c3d4`)
+One row **per nozzle per day**, unique on `(op_date, nozzle_no)`. Opening for a nozzle = its own previous-day closing.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | Integer PK | |
 | op_date | Date NOT NULL | Operational date |
+| nozzle_no | Integer NOT NULL | 1 or 2 |
 | opening_reading | Float NOT NULL | Meter kg at 06:00 |
 | closing_reading | Float NOT NULL | Meter kg at shift close |
 | kg_sold | Float NOT NULL | closing − opening (computed) |
@@ -234,7 +237,8 @@ No IRAS price lookup. CNG RSP does not appear in the Price (PRM) table.
 
 ### Shift Close Flow
 CNG appears as a 5th product tile on the product selection screen.
-Selecting CNG → numpad directly (no DU selection step, same pattern as X2/XG).
+Selecting CNG → `/attendant/shift/cng` → numpad for nozzle 1, then nozzle 2 (`/shift/cng/<n>`);
+the tile shows DONE only when both are entered. The summary shows one card per nozzle plus the kg total.
 Numpad unit label: **kg** (not L). Delta label: **kg sold**.
 CNG row appears in shift close summary. Invalid if closing < opening → warn-100 block.
 
@@ -963,7 +967,16 @@ op_date · transaction_time · logged_by · created_at
 
 ### `expenses`
 amount · category · description · op_date · logged_by · created_at
-Categories: Staff / Maintenance / Utilities / Supplies / Misc (configurable via `app_settings`)
+Categories: Staff / Maintenance / Utilities / Supplies / EMI / Misc (configurable via `app_settings`).
+`sub_category` (added 2026-10-07): second dropdown, defined in `constants.EXPENSE_SUBCATEGORIES` — edit that dict
+(and `sub_<value>` labels in `i18n_manager.py`) as real expense types become clear.
+
+### `fuel_tests` / `mock_drills` (migration `e5f6a1b2c3d4`, 2026-10-07)
+`fuel_tests`: fuel drawn off for testing (attendant logs it on the shift summary). Not a sale:
+`_product_sales()` subtracts it from net litres. `mock_drills`: manager records each drill; one is mandatory
+every 3 months (`services/regulatory.py`). Both show on the owner dashboard's **Regulatory** tab.
+Owner can review/remove any manual entry (expense, lube, credit sale, payment, test) at More → Manual
+entries (`services/entries.py` undoes balance effects). The web app skips bootstrap, so run the migration by hand on the evo.
 
 ### `fleet_card_transactions`
 card_identifier · amount · op_date · transaction_time · logged_by · notes · created_at
@@ -1567,6 +1580,10 @@ Trucks: MP17HH4740 (regular) · MP53HA2180 · MP20ZQ9560. Supply point: Depot 33
 - `scripts/vps_run_completed_shift.sh` — VPS cron wrapper; `flock` + per-day log, calls the script below
 - `scripts/vps_run_atg_snapshot.sh` — VPS cron wrapper; shares the `daily_scrape` lock, non-blocking
 - `scripts/vps_run_sdms_lookback.sh` — VPS cron wrapper; CNG lookback probes, Mon–Sat
+- `scripts/reconcile_totalizers.py` + `scripts/vps_run_reconcile.sh` — daily 08:00 IST (`30 2 * * *` UTC) READ-ONLY check of
+  `nozzle_totalizers` and attendant closings against IRAS's Shift Totalizer files (`/data/iras_data/ShiftTotalizer`); logs to
+  `/data/logs/reconcile_<date>.log`, raises an owner `recon_alert`. Added 2026-10-06 after nozzle 16 was carried forward wrongly
+  (Oct 3 DB 586,165.89 vs IRAS 587,480.78). Boundary rows carry forward silently when ISS has no data, so they can be stale.
 - `scripts/run_completed_shift.py` — completed-shift logic (IST op\_date auto-calc); called by the wrapper
 - `scripts/run_atg_snapshot.py` — ATG snapshot logic; called by the wrapper
 - `scripts/recover_atg_from_logs.py` — rebuilds ATG readings from cron logs when DB writes were lost

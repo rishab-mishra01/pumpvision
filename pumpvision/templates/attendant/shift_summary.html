@@ -143,12 +143,12 @@
   </div>
 
   <!-- CNG card (if entered) -->
-  {% if cng_reading %}
+  {% for cng_reading in cng_rows %}
   <div class="nozzle-summary-card" style="margin:8px 20px 0;border-left:3px solid #1d4ed8;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
       <div style="flex:1;min-width:0;">
         <div style="font-family:var(--font-sans);font-weight:700;font-size:1rem;
-                    color:#1d4ed8;margin-bottom:10px;">CNG</div>
+                    color:#1d4ed8;margin-bottom:10px;">CNG {{ cng_reading.nozzle_no }}</div>
         <div style="display:grid;grid-template-columns:auto auto;column-gap:20px;row-gap:2px;">
           <p class="eyebrow" style="margin:0;">{{ hi.opening_short }}</p>
           <p class="eyebrow" style="margin:0;">{{ hi.closing_short }}</p>
@@ -171,13 +171,13 @@
                      font-variant-numeric:tabular-nums;">
           ₹ {{ "{:,.0f}".format(cng_reading.revenue) }}
         </span>
-        <a href="{{ url_for('attendant.shift_cng_numpad') }}"
+        <a href="{{ url_for('attendant.shift_cng_numpad', nozzle_no=cng_reading.nozzle_no) }}"
            style="font-family:var(--font-sans);font-size:13px;font-weight:600;
                   color:var(--saffron-600);text-decoration:none;">{{ hi.edit }}</a>
       </div>
     </div>
   </div>
-  {% endif %}
+  {% endfor %}
 
   <!-- Product totals card -->
   <div style="margin:14px 20px 0;
@@ -199,17 +199,52 @@
         </span>
       </div>
       {% endfor %}
-      {% if cng_reading %}
+      {% if cng_rows %}
       <div style="display:flex;align-items:baseline;gap:8px;">
         <span style="font-family:var(--font-mono);font-weight:700;font-size:1rem;
                      color:#93c5fd;font-variant-numeric:tabular-nums;">CNG</span>
         <span style="font-family:var(--font-mono);font-size:13px;
                      color:var(--paper-200);font-variant-numeric:tabular-nums;">
-          {{ "{:,.1f}".format(cng_reading.kg_sold) }}&thinsp;kg
+          {{ "{:,.1f}".format(cng_kg) }}&thinsp;kg
         </span>
       </div>
       {% endif %}
     </div>
+  </div>
+
+  <!-- Fuel taken for testing: out of the tank, not sold -->
+  <div style="margin:14px 20px 0;padding:16px;background:var(--paper-100);
+              border:1px solid var(--paper-300);border-radius:var(--r-card);">
+    <p style="font-family:var(--font-sans);font-weight:600;font-size:14px;color:var(--ink-900);margin:0 0 2px;">{{ hi.test_heading }}</p>
+    <p style="font-family:var(--font-sans);font-size:12px;color:var(--ink-500);margin:0 0 12px;line-height:1.5;">{{ hi.test_help }}</p>
+    {% for t in tests %}
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--paper-300);
+                font-family:var(--font-sans);font-size:14px;color:var(--ink-900);">
+      <span style="font-family:var(--font-mono);font-weight:700;">{{ t.product }}</span>
+      <span style="flex:1;color:var(--ink-500);font-size:12px;">{{ t.note or '' }}</span>
+      <b style="font-family:var(--font-mono);">{{ "%g"|format(t.litres) }} L</b>
+      {% if t.logged_by == current_user.id %}
+      <form method="POST" action="{{ url_for('attendant.shift_testing_delete', test_id=t.id) }}" style="margin:0;">
+        <button type="submit" style="min-height:44px;padding:0 12px;border:1px solid var(--paper-300);border-radius:var(--r-card);
+                background:#fff;color:var(--error-600);font-size:13px;font-weight:600;">{{ hi.test_remove }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <form method="POST" action="{{ url_for('attendant.shift_testing_add') }}"
+          style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+      <select name="product" required aria-label="{{ hi.test_product }}"
+              style="min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
+        <option value="">{{ hi.test_product }}</option>
+        {% for code in ['HS','MS','X2','XG'] %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+      </select>
+      <input type="number" name="litres" step="0.01" min="0.01" max="100" inputmode="decimal" required
+             placeholder="{{ hi.test_litres }}" aria-label="{{ hi.test_litres }}"
+             style="min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
+      <input type="text" name="note" maxlength="200" placeholder="{{ hi.test_note }}" aria-label="{{ hi.test_note }}"
+             style="grid-column:1 / -1;min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
+      <button type="submit" class="btn btn-ghost" style="grid-column:1 / -1;min-height:52px;">{{ hi.test_add }}</button>
+    </form>
   </div>
 
   <!-- Warnings -->

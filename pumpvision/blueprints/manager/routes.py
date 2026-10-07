@@ -9,7 +9,12 @@ from pumpvision.decorators import manager_required
 from pumpvision.i18n_manager import tr
 from pumpvision.services.operational import get_operational_date
 
-DEFAULT_EXPENSE_CATEGORIES = ["Staff", "Maintenance", "Utilities", "Supplies", "Misc"]
+from pumpvision.constants import EXPENSE_SUBCATEGORIES
+from pumpvision.services.regulatory import (
+    MOCK_DRILL_INTERVAL_DAYS, drill_needs_attention, mock_drill_status,
+)
+
+DEFAULT_EXPENSE_CATEGORIES = list(EXPENSE_SUBCATEGORIES)
 
 manager_bp = Blueprint("manager", __name__)
 
@@ -97,6 +102,8 @@ def home():
             "date_str": _fmt_short(pmt.payment_date),
         })
 
+    drill = mock_drill_status()
+
     return render_template(
         "manager/home.html",
         greeting=_greeting(),
@@ -107,6 +114,10 @@ def home():
         expenses_done=expenses_done,
         paytm_done=paytm_done,
         pending_payments=pending_with_customers,
+        drill=drill,
+        drill_attention=drill_needs_attention(drill),
+        drill_due_str=_fmt_date(drill["due"]) if drill["due"] else "",
+        drill_last_str=_fmt_date(drill["last"]) if drill["last"] else "",
     )
 
 
@@ -230,6 +241,9 @@ def _expense_categories():
     if not setting or not setting.value.strip():
         return list(DEFAULT_EXPENSE_CATEGORIES)
     cats = [c.strip() for c in setting.value.split(",") if c.strip()]
+    # A category that has sub-categories defined in code (e.g. EMI) is always offered,
+    # even if the stored setting predates it.
+    cats += [c for c in DEFAULT_EXPENSE_CATEGORIES if c not in cats]
     return cats or list(DEFAULT_EXPENSE_CATEGORIES)
 
 
@@ -245,6 +259,7 @@ def expense():
     form_values = {
         "amount": "",
         "category": categories[0] if categories else "",
+        "sub_category": "",
         "description": "",
         "op_date": today_op.isoformat(),
     }
@@ -252,12 +267,14 @@ def expense():
     if request.method == "POST":
         raw_amount = request.form.get("amount", "").strip()
         category = request.form.get("category", "").strip()
+        sub_category = request.form.get("sub_category", "").strip()
         description = request.form.get("description", "").strip()[:200]
         op_date_str = request.form.get("op_date", "").strip()
 
         form_values.update({
             "amount": raw_amount,
             "category": category,
+            "sub_category": sub_category,
             "description": description,
             "op_date": op_date_str or today_op.isoformat(),
         })
@@ -271,6 +288,8 @@ def expense():
             error = tr("err_amount")
         elif category not in categories:
             error = tr("err_category")
+        elif EXPENSE_SUBCATEGORIES.get(category) and sub_category not in EXPENSE_SUBCATEGORIES[category]:
+            error = tr("err_subcategory")
         else:
             try:
                 op_date = date.fromisoformat(op_date_str) if op_date_str else today_op
@@ -283,18 +302,62 @@ def expense():
             db.session.add(Expense(
                 amount=amount,
                 category=category,
+                sub_category=sub_category or None,
                 description=description or None,
                 op_date=op_date,
                 logged_by=current_user.id,
             ))
             db.session.commit()
-            flash(tr("expense_logged", amount=f"{amount:,.2f}", category=i18n.label("cat", category)), "ok")
+            shown = i18n.label("cat", category)
+            if sub_category:
+                shown += f" / {i18n.label('sub', sub_category)}"
+            flash(tr("expense_logged", amount=f"{amount:,.2f}", category=shown), "ok")
             return redirect(url_for("manager.home"))
 
     return render_template(
         "manager/expense.html",
         categories=categories,
+        subcategories=EXPENSE_SUBCATEGORIES,
         values=form_values,
+    )
+
+
+@manager_bp.route("/drill/", methods=["GET", "POST"])
+@login_required
+@manager_required
+def drill():
+    """Record a completed mock drill. One is mandatory every three months."""
+    from pumpvision.models import MockDrill, db
+
+    today = date.today()
+    values = {"drill_date": today.isoformat(), "notes": ""}
+
+    if request.method == "POST":
+        raw_date = request.form.get("drill_date", "").strip()
+        notes = request.form.get("notes", "").strip()[:300]
+        values.update({"drill_date": raw_date or today.isoformat(), "notes": notes})
+        try:
+            drill_date = date.fromisoformat(raw_date)
+        except ValueError:
+            drill_date = None
+        if drill_date is None or drill_date > today:
+            flash(tr("err_drill_date"), "error")
+        else:
+            db.session.add(MockDrill(drill_date=drill_date, notes=notes or None, logged_by=current_user.id))
+            db.session.commit()
+            flash(tr("drill_logged", date=_fmt_date(drill_date)), "ok")
+            return redirect(url_for("manager.home"))
+
+    status = mock_drill_status()
+    history = MockDrill.query.order_by(MockDrill.drill_date.desc(), MockDrill.id.desc()).limit(8).all()
+    return render_template(
+        "manager/drill.html",
+        values=values,
+        status=status,
+        due_str=_fmt_date(status["due"]) if status["due"] else "",
+        history=[(_fmt_date(d.drill_date), d.notes) for d in history],
+        interval_months=MOCK_DRILL_INTERVAL_DAYS // 30,
+        today=today.isoformat(),
     )
 
 

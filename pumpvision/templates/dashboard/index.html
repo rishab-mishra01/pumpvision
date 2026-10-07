@@ -31,12 +31,11 @@
 
       <!-- Price ticker -->
       <div class="dash-ticker2">
-        {% for code in ['HS', 'MS', 'X2', 'XG'] %}
+        {% for code, name in [('HS', 'Diesel'), ('MS', 'Petrol'), ('X2', 'Premium'), ('XG', 'XtraGreen'), ('CNG', 'CNG / kg')] %}
         <span class="t">
-          <span class="code">{{ code }}</span>
-          <span class="px">{{ "%.2f"|format(prices[code]) }}</span>
+          <span class="code">{{ name }}</span>
+          <span class="px">₹{{ "%.2f"|format(prices[code]) }}</span>
         </span>
-        {% if not loop.last %}<span class="sep"></span>{% endif %}
         {% endfor %}
       </div>
 
@@ -61,6 +60,7 @@
       <button type="button" data-cat="petrol" class="active">Petrol</button>
       <button type="button" data-cat="diesel">Diesel</button>
       <button type="button" data-cat="cng">CNG + Lube</button>
+      <button type="button" data-cat="reg">Regulatory{% if drill.state in ('never', 'overdue', 'soon') %}<span class="reg-dot"></span>{% endif %}</button>
     </div>
 
     <!-- PETROL panel: MS + X2 -->
@@ -145,6 +145,40 @@
           {% endif %}
         </div>
 
+      </div>
+    </div>
+
+    <!-- REGULATORY panel: mock drill + fuel testing -->
+    <div class="dash-cat" data-cat-panel="reg">
+      <div class="reg-card {{ 'bad' if drill.state in ('never', 'overdue') else 'warn' if drill.state == 'soon' }}">
+        <div class="reg-eb">Mock drill · mandatory every 3 months</div>
+        {% if drill.state == 'never' %}
+        <div class="reg-big">None recorded</div>
+        <div class="reg-sub">The manager records it in the app once done.</div>
+        {% elif drill.state == 'overdue' %}
+        <div class="reg-big">Overdue by {{ -drill.days_left }} day{{ 's' if drill.days_left != -1 }}</div>
+        <div class="reg-sub">Was due {{ drill.due.strftime('%-d %b %Y') }} · last done {{ drill.last.strftime('%-d %b %Y') }}</div>
+        {% else %}
+        <div class="reg-big">Due in {{ drill.days_left }} day{{ 's' if drill.days_left != 1 }}</div>
+        <div class="reg-sub">Due {{ drill.due.strftime('%-d %b %Y') }} · last done {{ drill.last.strftime('%-d %b %Y') }}</div>
+        {% endif %}
+      </div>
+
+      <div class="reg-card">
+        <div class="reg-eb">Fuel taken for testing · last 30 days</div>
+        {% if recent_tests %}
+        <div class="reg-big">{{ "%.1f"|format(tests_total) }} L <span class="reg-unit">not sold</span></div>
+        {% for t in recent_tests %}
+        <div class="reg-row">
+          <span>{{ t.op_date.strftime('%-d %b') }}</span>
+          <span class="reg-p">{{ t.product }}</span>
+          <span class="reg-note">{{ t.note or '' }}</span>
+          <b>{{ "%.1f"|format(t.litres) }} L</b>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="reg-sub">No testing logged in the last 30 days.</div>
+        {% endif %}
       </div>
     </div>
 

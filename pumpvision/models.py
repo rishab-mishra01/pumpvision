@@ -322,7 +322,8 @@ class Expense(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     amount = db.Column(db.Float, nullable=False)
-    category = db.Column(db.String(50), nullable=False)  # Staff/Maintenance/Utilities/Supplies/Misc
+    category = db.Column(db.String(50), nullable=False)  # Staff/Maintenance/Utilities/Supplies/EMI/Misc
+    sub_category = db.Column(db.String(50), nullable=True)  # see constants.EXPENSE_SUBCATEGORIES
     description = db.Column(db.String(200))
     op_date = db.Column(db.Date, nullable=False)
     logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -353,9 +354,11 @@ class FleetCardTransaction(db.Model):
 class CngShiftReading(db.Model):
     """Attendant-entered CNG meter reading at shift close."""
     __tablename__ = 'cng_shift_readings'
+    __table_args__ = (db.UniqueConstraint('op_date', 'nozzle_no', name='uq_cng_shift_op_date_nozzle'),)
 
     id = db.Column(db.Integer, primary_key=True)
-    op_date = db.Column(db.Date, nullable=False, unique=True, index=True)
+    op_date = db.Column(db.Date, nullable=False, index=True)
+    nozzle_no = db.Column(db.Integer, nullable=False, default=1, server_default='1')  # CNG has two nozzles: 1, 2
     opening_reading = db.Column(db.Float, nullable=False)
     closing_reading = db.Column(db.Float, nullable=False)
     kg_sold = db.Column(db.Float, nullable=False)
@@ -405,3 +408,33 @@ class TankReading(db.Model):
     __table_args__ = (
         db.UniqueConstraint('scraped_at', 'tank_id', name='uq_tank_reading_snapshot'),
     )
+
+
+# ─────────────────────────────────────────────
+# REGULATORY
+# ─────────────────────────────────────────────
+
+class FuelTest(db.Model):
+    """Fuel drawn off for testing (quality/density checks). It leaves the tank and
+    passes through the nozzle, but it is not a sale: net sales litres = totalizer
+    difference - pump test - the tests logged here."""
+    __tablename__ = 'fuel_tests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    op_date = db.Column(db.Date, nullable=False, index=True)
+    product = db.Column(db.String(5), nullable=False)  # HS / MS / X2 / XG
+    litres = db.Column(db.Float, nullable=False)
+    note = db.Column(db.String(200))
+    logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MockDrill(db.Model):
+    """A completed fire/safety mock drill. One is mandatory every 3 months."""
+    __tablename__ = 'mock_drills'
+
+    id = db.Column(db.Integer, primary_key=True)
+    drill_date = db.Column(db.Date, nullable=False, index=True)
+    notes = db.Column(db.String(300))
+    logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

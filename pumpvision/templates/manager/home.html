@@ -24,6 +24,9 @@
           (shift_readings_done, none, t('task_shift'), t('task_shift_sub', date=prev_str)),
           (expenses_done, url_for('manager.expense'), t('task_expense'), today_str),
           (paytm_done, none, t('task_paytm'), t('task_paytm_sub', date=prev_str)),
+          (not drill_attention, url_for('manager.drill'), t('task_drill'),
+            t('drill_never') if drill.state == 'never' else
+            (t('drill_overdue', date=drill_due_str) if drill.state == 'overdue' else t('drill_due_on', date=drill_due_str))),
         ] %}
         {# Readings and the Paytm report are owner pages, so for the manager those two rows only show status. #}
         {% for done, href, title, sub in tasks %}

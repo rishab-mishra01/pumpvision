@@ -24,6 +24,15 @@
         {% endfor %}
       </select>
     </div>
+    <div id="exp-sub-wrap">
+      {{ lab(t('sub_category'), 'exp-sub') }}
+      <select id="exp-sub" name="sub_category" class="mg-input">
+        <option value="">{{ t('choose_sub') }}</option>
+        {% for cat, subs in subcategories.items() %}{% for sub in subs %}
+        <option value="{{ sub }}" data-cat="{{ cat }}" {% if sub == values.sub_category and cat == values.category %}selected{% endif %}>{{ label('sub', sub) }}</option>
+        {% endfor %}{% endfor %}
+      </select>
+    </div>
     <div>
       {{ lab(t('description'), 'exp-description', optional=True) }}
       <input type="text" id="exp-description" name="description" maxlength="200" value="{{ values.description }}"
@@ -37,4 +46,24 @@
   </form>
 </div>
 {{ nav('expense') }}
+<script>
+  (function () {
+    var cat = document.getElementById('exp-category');
+    var sub = document.getElementById('exp-sub');
+    var wrap = document.getElementById('exp-sub-wrap');
+    function sync() {
+      var shown = 0;
+      Array.prototype.forEach.call(sub.options, function (o) {
+        if (!o.dataset.cat) return;
+        var on = o.dataset.cat === cat.value;
+        o.hidden = !on; o.disabled = !on;
+        if (on) shown++; else if (o.selected) sub.value = '';
+      });
+      wrap.style.display = shown ? '' : 'none';
+      sub.required = shown > 0;
+    }
+    cat.addEventListener('change', function () { sub.value = ''; sync(); });
+    sync();
+  })();
+</script>
 {% endblock %}

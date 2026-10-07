@@ -137,7 +137,7 @@
 
     <!-- CNG tile — full width row -->
     {% set cng_done = product_done.get('CNG', False) %}
-    <a href="{{ url_for('attendant.shift_cng_numpad') if not all_submitted else '#' }}"
+    <a href="{{ url_for('attendant.shift_cng_start') if not all_submitted else '#' }}"
        class="prod-tile"
        style="min-height:72px;flex-direction:row;align-items:center;gap:14px;padding:14px 16px;">
       <div style="width:32px;height:32px;border-radius:var(--r-card);

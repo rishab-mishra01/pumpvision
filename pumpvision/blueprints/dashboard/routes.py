@@ -10,10 +10,11 @@ from sqlalchemy import and_, func, or_
 
 from pumpvision.decorators import owner_required
 from pumpvision.models import (
-    AppSetting, CreditTransaction, Expense,
+    AppSetting, CreditTransaction, Expense, FuelTest,
     LubeTransaction, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db,
 )
 from pumpvision.services.prices import get_rsp
+from pumpvision.services.regulatory import mock_drill_status, tested_litres
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -38,9 +39,11 @@ def _product_sales(op_date):
             pump_test = float(setting.value) if setting else 0.0
             litres[product] += max(0.0, t_close - t_open - pump_test)
 
+    # Fuel drawn off for testing went through the nozzle but was not sold.
+    tested = tested_litres(op_date)
     out = {}
     for p in ('HS', 'MS', 'X2', 'XG'):
-        l = round(litres[p], 2)
+        l = round(max(0.0, litres[p] - tested.get(p, 0.0)), 2)
         rsp = get_rsp(p, op_date) or 0.0
         out[p] = {'litres': l, 'revenue': round(l * rsp, 2), 'rsp': rsp}
     return out
@@ -192,6 +195,7 @@ def summary(date_str=None):
     next_date = (op_date + timedelta(days=1)).isoformat() if op_date < yesterday else None
 
     products = _product_sales(op_date)
+    tested = tested_litres(op_date)
     cng = _cng_sdms(op_date)
     has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
 
@@ -224,6 +228,7 @@ def summary(date_str=None):
     return render_template(
         "owner/summary.html",
         op_date=op_date,
+        tested=tested,
         prev_date=prev_date,
         next_date=next_date,
         has_data=has_data,
@@ -284,8 +289,16 @@ def index():
 
     has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
 
+    drill = mock_drill_status()
+    recent_tests = FuelTest.query.filter(
+        FuelTest.op_date >= date.today() - timedelta(days=30)
+    ).order_by(FuelTest.op_date.desc(), FuelTest.id.desc()).all()
+
     return render_template(
         "dashboard/index.html",
+        drill=drill,
+        recent_tests=recent_tests,
+        tests_total=round(sum(t.litres for t in recent_tests), 2),
         op_date=op_date,
         products=products,
         cng=cng,

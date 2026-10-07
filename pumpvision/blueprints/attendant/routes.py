@@ -35,11 +35,14 @@ def _initials(name: str) -> str:
     return ''.join(w[0].upper() for w in words[:2])
 
 
-def _cng_opening_reading(op_date: date):
-    """Opening kg for CNG: closing reading from previous day, or None for first entry."""
+CNG_NOZZLES = (1, 2)
+
+
+def _cng_opening_reading(op_date: date, nozzle_no: int = 1):
+    """Opening kg for one CNG nozzle: its closing reading from the previous day, or None for first entry."""
     from pumpvision.models import CngShiftReading
     prev = op_date - timedelta(days=1)
-    row = CngShiftReading.query.filter_by(op_date=prev).first()
+    row = CngShiftReading.query.filter_by(op_date=prev, nozzle_no=nozzle_no).first()
     return row.closing_reading if row else None
 
 
@@ -546,15 +549,31 @@ def transaction_confirmed(transaction_id):
 
 # ─── Shift close (new flow) ───────────────────────────────────────────────────
 
-@attendant_bp.route("/shift/cng", methods=["GET", "POST"])
+@attendant_bp.route("/shift/cng", strict_slashes=False)
 @login_required
 @attendant_required
-def shift_cng_numpad():
-    from pumpvision.models import AppSetting, CngShiftReading, db
+def shift_cng_start():
+    from pumpvision.models import CngShiftReading
 
     op_date = _shift_op_date()
-    opening = _cng_opening_reading(op_date)
-    existing = CngShiftReading.query.filter_by(op_date=op_date).first()
+    done = {r.nozzle_no for r in CngShiftReading.query.filter_by(op_date=op_date)}
+    first_missing = next((n for n in CNG_NOZZLES if n not in done), CNG_NOZZLES[0])
+    return redirect(url_for("attendant.shift_cng_numpad", nozzle_no=first_missing))
+
+
+@attendant_bp.route("/shift/cng/<int:nozzle_no>", methods=["GET", "POST"])
+@login_required
+@attendant_required
+def shift_cng_numpad(nozzle_no):
+    from pumpvision.models import AppSetting, CngShiftReading, db
+
+    if nozzle_no not in CNG_NOZZLES:
+        return redirect(url_for("attendant.shift_select_product"))
+
+    op_date = _shift_op_date()
+    opening = _cng_opening_reading(op_date, nozzle_no)
+    existing = CngShiftReading.query.filter_by(op_date=op_date, nozzle_no=nozzle_no).first()
+    here = url_for("attendant.shift_cng_numpad", nozzle_no=nozzle_no)
 
     if request.method == "POST":
         raw = request.form.get("closing_reading", "").strip()
@@ -562,12 +581,12 @@ def shift_cng_numpad():
             closing = float(raw)
         except (ValueError, TypeError):
             flash(HI["flash_valid_number"], "error")
-            return redirect(url_for("attendant.shift_cng_numpad"))
+            return redirect(here)
 
         if opening is not None and closing < opening:
             flash(HI["flash_closing_ge_opening_kg"].format(
                 closing=f"{closing:.1f}", opening=f"{opening:.1f}"), "error")
-            return redirect(url_for("attendant.shift_cng_numpad"))
+            return redirect(here)
 
         s = db.session.get(AppSetting, "cng_rsp_per_kg")
         rsp = float(s.value) if s else 87.0
@@ -584,6 +603,7 @@ def shift_cng_numpad():
         else:
             db.session.add(CngShiftReading(
                 op_date=op_date,
+                nozzle_no=nozzle_no,
                 opening_reading=eff_opening,
                 closing_reading=closing,
                 kg_sold=kg_sold,
@@ -592,12 +612,17 @@ def shift_cng_numpad():
                 submitted_by=current_user.id,
             ))
         db.session.commit()
+        # Take the other nozzle next if it is still missing.
+        done = {r.nozzle_no for r in CngShiftReading.query.filter_by(op_date=op_date)}
+        nxt = next((n for n in CNG_NOZZLES if n not in done), None)
+        if nxt:
+            return redirect(url_for("attendant.shift_cng_numpad", nozzle_no=nxt))
         return redirect(url_for("attendant.shift_select_product"))
 
     return render_template(
         "attendant/shift_numpad.html",
-        nozzle="CNG",
-        det={"db_label": "CNG", "nozzle_no": None, "db_product": "CNG", "color": "#2a6fa3"},
+        nozzle=f"CNG {nozzle_no}",
+        det={"db_label": f"CNG{nozzle_no}", "nozzle_no": None, "db_product": "CNG", "color": "#2a6fa3"},
         opening=opening,
         existing_value=existing.closing_reading if existing else None,
         back_url=url_for("attendant.shift_select_product"),
@@ -632,7 +657,7 @@ def shift_select_product():
             ).first() is not None
             for n in info["nozzles"]
         )
-    product_done['CNG'] = CngShiftReading.query.filter_by(op_date=op_date).first() is not None
+    product_done['CNG'] = CngShiftReading.query.filter_by(op_date=op_date).count() >= len(CNG_NOZZLES)
 
     return render_template(
         "attendant/shift_select_product.html",
@@ -754,7 +779,10 @@ def shift_summary():
     from pumpvision.models import CngShiftReading, ManualTotalizerReading
 
     op_date = _shift_op_date()
-    cng_reading = CngShiftReading.query.filter_by(op_date=op_date).first()
+    cng_rows = (CngShiftReading.query.filter_by(op_date=op_date)
+                .order_by(CngShiftReading.nozzle_no).all())
+    cng_kg = sum(r.kg_sold for r in cng_rows)
+    cng_revenue = sum(r.revenue for r in cng_rows)
     nozzle_rows = []
     for nozzle_name in _NOZZLE_ORDER:
         det = _SHIFT_NOZZLE[nozzle_name]
@@ -788,6 +816,12 @@ def shift_summary():
         "XG": xg_net,
     }
 
+    # Fuel drawn off for testing passed through the nozzle but was not sold.
+    from pumpvision.models import FuelTest
+    tests = FuelTest.query.filter_by(op_date=op_date).order_by(FuelTest.id).all()
+    for t in tests:
+        product_totals[t.product] = max(0.0, product_totals[t.product] - t.litres)
+
     all_entered = all(r["closing"] is not None for r in nozzle_rows)
     any_drafts  = any(r["closing"] is not None for r in nozzle_rows)
     warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5]
@@ -797,13 +831,56 @@ def shift_summary():
         "attendant/shift_summary.html",
         nozzle_rows=nozzle_rows,
         product_totals=product_totals,
-        cng_reading=cng_reading,
+        tests=tests,
+        cng_rows=cng_rows,
+        cng_kg=cng_kg,
+        cng_revenue=cng_revenue,
         op_date=op_date,
         all_entered=all_entered,
         any_drafts=any_drafts,
         warnings=warnings,
         display_name=display_name,
     )
+
+
+@attendant_bp.route("/shift/testing", methods=["POST"])
+@login_required
+@attendant_required
+def shift_testing_add():
+    """Log fuel drawn off for testing: out of the tank, not a sale."""
+    import math
+    from pumpvision.models import FuelTest, db
+
+    product = request.form.get("product", "").strip().upper()
+    note = request.form.get("note", "").strip()[:200]
+    try:
+        litres = float(request.form.get("litres", ""))
+    except ValueError:
+        litres = 0.0
+    if product not in _SHIFT_PRODUCT:
+        flash(HI["err_test_product"], "error")
+    elif not math.isfinite(litres) or not 0 < litres <= 100:
+        flash(HI["err_test_litres"], "error")
+    else:
+        db.session.add(FuelTest(op_date=_shift_op_date(), product=product, litres=round(litres, 2),
+                                note=note or None, logged_by=current_user.id))
+        db.session.commit()
+        flash(HI["flash_test_saved"], "success")
+    return redirect(url_for("attendant.shift_summary"))
+
+
+@attendant_bp.route("/shift/testing/<int:test_id>/delete", methods=["POST"])
+@login_required
+@attendant_required
+def shift_testing_delete(test_id):
+    """An attendant can take back their own testing entry for the shift being closed."""
+    from pumpvision.models import FuelTest, db
+
+    t = db.session.get(FuelTest, test_id)
+    if t and t.logged_by == current_user.id and t.op_date == _shift_op_date():
+        db.session.delete(t)
+        db.session.commit()
+    return redirect(url_for("attendant.shift_summary"))
 
 
 @attendant_bp.route("/shift/submit", methods=["POST"])

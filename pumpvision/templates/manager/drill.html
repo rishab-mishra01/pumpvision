@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav, lab with context %}
+{% block title %}{{ t('title_drill') }} — Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+<div class="mg-page">
+  {{ topbar(t('title_drill')) }}
+  {{ flashes() }}
+  <div class="mg-body">
+    <div class="mg-card" style="padding:14px 16px;border-left:3px solid {{ 'var(--error-600)' if status.state in ('never', 'overdue') else 'var(--warn-600)' if status.state == 'soon' else 'var(--ok-600)' }};">
+      <b style="font-family:var(--font-sans);font-size:15px;color:var(--ink-900);">
+        {% if status.state == 'never' %}{{ t('drill_never') }}
+        {% elif status.state == 'overdue' %}{{ t('drill_overdue', date=due_str) }}
+        {% else %}{{ t('drill_due_on', date=due_str) }}{% endif %}
+      </b>
+      <p class="mg-note" style="margin:4px 0 0;">{{ t('drill_rule', months=interval_months) }}</p>
+    </div>
+
+    <form method="POST" style="display:flex;flex-direction:column;gap:16px;">
+      <div>
+        {{ lab(t('drill_date'), 'drill-date') }}
+        <input type="date" id="drill-date" name="drill_date" value="{{ values.drill_date }}" max="{{ today }}" required class="mg-input">
+      </div>
+      <div>
+        {{ lab(t('drill_notes'), 'drill-notes', optional=True) }}
+        <input type="text" id="drill-notes" name="notes" maxlength="300" value="{{ values.notes }}" class="mg-input">
+      </div>
+      <button type="submit" class="mg-submit">{{ t('log_drill') }}</button>
+    </form>
+
+    {% if history %}
+    <div>
+      <p class="mg-h">{{ t('drill_history') }}</p>
+      <div class="mg-card">
+        {% for d, notes in history %}
+        <div class="mg-row"><span style="flex:1;"><b>{{ d }}</b>{% if notes %}<small>{{ notes }}</small>{% endif %}</span></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{{ nav('home') }}
+{% endblock %}

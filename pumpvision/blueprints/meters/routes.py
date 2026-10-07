@@ -38,7 +38,7 @@ def day(date_str):
         ManualTotalizerReading.is_locked == True,  # noqa: E712
         ManualTotalizerReading.nozzle_no != None,  # noqa: E711
     ).count() >= 6
-    cng = CngShiftReading.query.filter_by(op_date=op_date).first()
+    cng = CngShiftReading.query.filter_by(op_date=op_date).order_by(CngShiftReading.nozzle_no).all()
 
     AppNotification.query.filter_by(
         reference_date=op_date, notification_type="shift_close"

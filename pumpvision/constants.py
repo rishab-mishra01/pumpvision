@@ -27,3 +27,17 @@ PUMP_TEST_NOZZLES = {
     17: "XP (Nozzle 17)",
     18: "MS 1 (Nozzle 18)",
 }
+
+
+# Expense category -> sub-category dropdown. Edit freely as the real expense types
+# become clear; the stored value is the English text, labels live in i18n_manager
+# (sub_<value>) and fall back to the value itself. A category with no entry (or an
+# empty list) shows no sub-category dropdown.
+EXPENSE_SUBCATEGORIES = {
+    "Staff":       ["Salary", "Advance", "Other"],
+    "Maintenance": ["Dispenser / Pump", "Tank & Pipeline", "Electrical", "Building", "Other"],
+    "Utilities":   ["Electricity", "Water", "Phone / Internet", "Other"],
+    "Supplies":    ["Stationery", "Cleaning", "Printing", "Other"],
+    "EMI":         ["Tanker EMI", "Loan EMI", "Vehicle EMI", "Other"],
+    "Misc":        [],
+}
