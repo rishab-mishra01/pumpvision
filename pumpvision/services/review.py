@@ -223,7 +223,9 @@ def check_bulk_dispense(now):
             rate = get_rsp(prod, d) or 0.0
             fleet_l = fleet_amt / rate if rate else 0.0
             covered = credit_l + fleet_l
-            if covered >= total:
+            # the burst also holds ~100-150 L of ordinary sales, and fleet litres are estimated
+            # from the day's price, so treat 85% coverage as covered (checked on 2 Oct 2026).
+            if covered >= 0.85 * total:
                 continue
             first, last = bursts[0][0], bursts[-1][0]
             out.append(F(f"bulk:{prod}:{d}", "warn", "business",
