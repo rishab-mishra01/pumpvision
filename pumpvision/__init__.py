@@ -61,6 +61,7 @@ def create_app():
     from .blueprints.meters.routes import meters_bp
     from .blueprints.owner.routes import owner_bp
     from .blueprints.manager.routes import manager_bp
+    from .blueprints.dev.routes import dev_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -71,6 +72,7 @@ def create_app():
     app.register_blueprint(meters_bp, url_prefix="/meters")
     app.register_blueprint(owner_bp, url_prefix="/owner")
     app.register_blueprint(manager_bp, url_prefix="/manager")
+    app.register_blueprint(dev_bp, url_prefix="/dev")
 
     @app.template_filter('inr')
     def inr_filter(v):

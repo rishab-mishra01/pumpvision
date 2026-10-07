@@ -1699,3 +1699,19 @@ Spec contract (all five required on every delegation):
 Objective · Files · Interfaces · Constraints · Verification command
 
 Cost discipline: emit specs and decisions only. No narration. Delegate immediately.
+
+
+## Review agent + developer dashboard (added 2026-10-07)
+
+- `services/review.py`: runs every 4 h on the evo (`10 */4 * * *` → `scripts/run_review.sh`). Checks data freshness,
+  meter maths (backwards/flat/product swings), sales & cash, credit maths, attendant-vs-boundary, CNG, mock drill,
+  infra (disk, backup, 500s), and scraper health read from the VPS logs over the tailnet. It also refreshes a
+  **status board** (`review_status`) of every scraper, service and backend function (the real functions are run read-only).
+- Findings live in `review_findings` (one row per condition key; resolved when the check stops reporting it).
+  `audience='dev'` = technical → **developer dashboard only** (`/dev/`, role `developer`, `scripts/create_dev_user.py`).
+  `audience='owner'` = business-related only (mock drill, negative cash, big testing volume) → also an owner alert
+  (`app_notifications` type `review_alert`, shown on Credit home). Reconcile mismatches are dev-only.
+- `scripts/reconcile_totalizers.py` (VPS 08:00 IST) now writes dev findings instead of owner alerts.
+- **Boundary guard** (`scrapers/iras_iss_exporter.py`): the ISS backward search raises `StaleBoundaryError` and saves
+  nothing if the newest data is > 8 h before 06:00 (IRAS lag, 2026-10-06). Shift Totalizer parsing takes the earliest
+  `O` row and latest `C` row (the file has a 00:40 shift-change row *and* a 23:58 midnight close).

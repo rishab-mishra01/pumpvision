@@ -438,3 +438,45 @@ class MockDrill(db.Model):
     notes = db.Column(db.String(300))
     logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# REVIEW AGENT / DEVELOPER DASHBOARD
+# ─────────────────────────────────────────────
+
+class ReviewFinding(db.Model):
+    """One standing issue found by the 4-hourly review (or the reconcile job).
+
+    `key` names the condition, so the same problem seen on every run updates one row
+    instead of piling up; a row is resolved when its check stops reporting it.
+    audience 'dev' = technical (developer dashboard only); 'owner' = business-related,
+    also raised as an owner alert."""
+    __tablename__ = 'review_findings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(120), nullable=False, unique=True)
+    source = db.Column(db.String(40), nullable=False)       # check name, or 'recon'
+    severity = db.Column(db.String(10), nullable=False)     # critical / warn / info
+    category = db.Column(db.String(20), nullable=False)     # data / maths / reconciliation / infra / regulatory / business
+    audience = db.Column(db.String(10), nullable=False, default='dev')
+    title = db.Column(db.String(200), nullable=False)
+    detail = db.Column(db.Text)
+    suggestion = db.Column(db.Text)
+    first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    occurrences = db.Column(db.Integer, nullable=False, default=1)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    acknowledged_at = db.Column(db.DateTime, nullable=True)
+    notification_id = db.Column(db.Integer, nullable=True)  # owner alert raised for it
+
+
+class ReviewStatus(db.Model):
+    """Latest health of one backend component (scraper, service or function), refreshed
+    by every review run. status: ok / warn / fail."""
+    __tablename__ = 'review_status'
+
+    component = db.Column(db.String(60), primary_key=True)
+    grp = db.Column(db.String(20), nullable=False)          # scraper / service / function
+    status = db.Column(db.String(8), nullable=False)
+    detail = db.Column(db.String(300))
+    checked_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

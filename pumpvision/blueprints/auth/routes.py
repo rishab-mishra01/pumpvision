@@ -9,6 +9,8 @@ def _role_home():
         return redirect(url_for("attendant.home"))
     if current_user.role == "manager":
         return redirect(url_for("manager.home"))
+    if current_user.role == "developer":
+        return redirect(url_for("dev.index"))
     return redirect(url_for("dashboard.index"))
 
 
@@ -59,6 +61,8 @@ def logout_confirm():
         home = url_for("attendant.home")
     elif current_user.role == "manager":
         home = url_for("manager.home")
+    elif current_user.role == "developer":
+        home = url_for("dev.index")
     else:
         home = url_for("dashboard.index")
     if current_user.role == "manager":

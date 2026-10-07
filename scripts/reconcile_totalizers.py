@@ -1,8 +1,8 @@
 """Reconcile the nozzle totalizer chain against IRAS's own Shift Totalizer files.
 
 READ-ONLY on totalizer data: it never corrects a value, it only reports. The one
-write is an owner alert (app_notifications, type 'recon_alert') when something
-disagrees.
+write is a technical finding on the developer dashboard (review_findings) when
+something disagrees; it never alerts the owner.
 
 Row convention: nozzle_totalizers.operational_date = D holds the meter at the
 06:00 boundary that OPENS day D (= the closing of D-1).
@@ -152,20 +152,36 @@ def main():
     for d, n, kind, msg in problems:
         print(f"  {kind:9s}{d} nozzle {n}: {msg}")
 
-    if problems and not args.no_alert:
-        nozz = sorted({n for _, n, _, _ in problems})
-        first = min(d for d, _, _, _ in problems)
-        msg = (f"Totalizer reconciliation: {len(problems)} issue(s) from {first:%d %b}, "
-               f"nozzle {', '.join(map(str, nozz))}. See /data/logs/reconcile_{today}.log on the VPS.")[:500]
-        with eng.begin() as c:
-            dup = c.execute(text(
-                "select 1 from app_notifications where notification_type='recon_alert' "
-                "and message=:m and created_at > now() - interval '20 hours'"), {"m": msg}).first()
-            if not dup:
+    if not args.no_alert:
+        # Technical findings go to the developer dashboard (review_findings), never to the owner.
+        SEV = {"ATTENDANT": "warn"}
+        FIX = {
+            "MISMATCH": "The stored boundary differs from IRAS's own Shift Totalizer file: correct the nozzle_totalizers row to the file value (after a pg_dump).",
+            "BACKWARDS": "A meter cannot run backwards: one of the two stored boundaries is wrong; compare with the Shift Totalizer file.",
+            "MISSING": "Re-run `daily_scrape.py --completed-shift --date <date>` on the VPS.",
+            "ATTENDANT": "Attendant mis-keyed, or the stored boundary is wrong: check against the Shift Totalizer file.",
+        }
+        keys = []
+        try:
+            with eng.begin() as c:
+                for d, n, kind, msg in problems:
+                    key = f"recon:{kind}:{n}:{d}"
+                    keys.append(key)
+                    c.execute(text(
+                        "insert into review_findings (key, source, severity, category, audience, title, detail, suggestion, "
+                        "first_seen, last_seen, occurrences) values (:k, 'recon', :sev, 'reconciliation', 'dev', :t, :d, :f, "
+                        "now() at time zone 'utc', now() at time zone 'utc', 1) "
+                        "on conflict (key) do update set last_seen = now() at time zone 'utc', occurrences = review_findings.occurrences + 1, "
+                        "detail = excluded.detail, resolved_at = null"),
+                        {"k": key, "sev": SEV.get(kind, "critical"), "t": f"Reconcile {kind}: {d:%d %b} nozzle {n}",
+                         "d": msg, "f": FIX.get(kind, "")})
                 c.execute(text(
-                    "insert into app_notifications (message, notification_type, reference_date, created_at, is_read) "
-                    "values (:m, 'recon_alert', :d, now() at time zone 'utc', false)"), {"m": msg, "d": first})
-                print("  alert raised")
+                    "update review_findings set resolved_at = now() at time zone 'utc' "
+                    "where source = 'recon' and resolved_at is null and not (key = any(:keys))"), {"keys": keys})
+            if problems:
+                print(f"  {len(problems)} finding(s) recorded for the developer dashboard")
+        except Exception as e:                                   # noqa: BLE001
+            print(f"  [WARN] could not record findings: {e}")
     sys.exit(2 if problems else 0)
 
 

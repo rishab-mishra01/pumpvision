@@ -28,3 +28,12 @@ def manager_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated
+
+
+def developer_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != "developer":
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated

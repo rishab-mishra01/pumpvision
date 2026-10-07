@@ -10,7 +10,7 @@ from pumpvision.decorators import owner_required
 credit_bp = Blueprint("credit", __name__)
 
 # AppNotification types shown on the Credit home (the Meters badge counts only shift_close).
-ALERT_TYPES = ("credit_alert", "lube_alert", "price_alert", "shift_alert", "meter_alert")
+ALERT_TYPES = ("credit_alert", "lube_alert", "price_alert", "shift_alert", "meter_alert", "review_alert")
 
 
 @credit_bp.route("/home")

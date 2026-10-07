@@ -18,6 +18,7 @@ USAGE:
 
 import asyncio
 import io
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -54,6 +55,18 @@ SHIFT_DATES = [
 ]
 
 SHIFT_START_HR = 6   # shifts start at 6 AM
+
+# The outlet sells until about 01:00, so on a healthy portal the newest ISS data before the
+# 06:00 boundary is only hours old. If the first data found is older than this, the portal
+# is lagging (2026-10-06: nothing after 17:30 for ~24 h) and the boundary built from it
+# would be short by the missing sales -- better to fail, retry later and use IRAS's own
+# Shift Totalizer file.
+STALE_BOUNDARY_HOURS = float(os.environ.get("BOUNDARY_STALE_HOURS", "8"))
+BUSY_NOZZLES = {7, 15, 17, 18}   # sell all day; the quiet ones (11, 16) may legitimately be old
+
+
+class StaleBoundaryError(RuntimeError):
+    """The ISS search only found data too old to be the 06:00 boundary."""
 
 # "boundary" → find last transaction before 6am (backwards search, one file per date)
 # "full"     → export all 48 half-hour windows of the shift
@@ -920,6 +933,8 @@ async def run_boundary(page, output_dir: Path, shift_date: str) -> dict:
         await ensure_iss_archive_mode(page, shift_date)
         print(f"\n[boundary] {shift_date}: ISS backward search for nozzles {sorted(remaining)}")
         wins = boundary_windows(shift_date, SHIFT_START_HR)
+        searched = set(remaining)
+        newest_end = None   # end of the newest window that had any data
 
         for (fd, fh, fm, td, th, tm) in wins[1:]:   # skip step-0 (06:00-06:30 = new shift)
             if not remaining:
@@ -934,6 +949,8 @@ async def run_boundary(page, output_dir: Path, shift_date: str) -> dict:
             if result is True:
                 fpath = output_dir / filename_safe(fd, fh, fm, td, th, tm)
                 window_data = parse_totalizer_ends(fpath)
+                if window_data and newest_end is None:
+                    newest_end = datetime.strptime(f"{td} {th:02d}:{tm:02d}", "%Y-%m-%d %H:%M")
                 for nozzle, tot_end in window_data.items():
                     if nozzle in remaining:
                         found[nozzle] = tot_end
@@ -941,6 +958,15 @@ async def run_boundary(page, output_dir: Path, shift_date: str) -> dict:
                         print(f"    [+] Nozzle {nozzle}: Totalizer End = {tot_end}")
 
             await asyncio.sleep(DELAY_BETWEEN)
+
+        boundary_dt = datetime.strptime(shift_date, "%Y-%m-%d").replace(hour=SHIFT_START_HR)
+        age_h = None if newest_end is None else (boundary_dt - newest_end).total_seconds() / 3600
+        if searched & BUSY_NOZZLES and (age_h is None or age_h > STALE_BOUNDARY_HOURS):
+            seen = "no ISS data at all in the last 24 h" if age_h is None else \
+                   f"newest ISS data ends {newest_end:%d %b %H:%M}, {age_h:.1f} h before the boundary"
+            raise StaleBoundaryError(
+                f"[STALE] {shift_date}: {seen} (limit {STALE_BOUNDARY_HOURS:g} h) — IRAS data is "
+                f"lagging; boundary NOT saved. Retry later or use the Shift Totalizer file.")
 
         if remaining:
             print(f"  [WARN] No ISS data found for nozzles: {sorted(remaining)} — attempting carry-forward from DB")
