@@ -173,32 +173,67 @@ def check_sales_and_cash(now):
     return out
 
 
-def check_unrecorded_credit(now):
-    """Cash in hand far above its recent median: the usual sign of a credit fuel sale that
-    was made but never entered (Paytm stays near ₹175-200k whatever the sales, so extra
-    sales end up as 'cash'). A heuristic: it says 'ask', not 'wrong'."""
-    from pumpvision.blueprints.dashboard.routes import _cash_for_date, _credit_total, _product_sales
+# A single ATG reading interval (~30 min) normally loses at most ~300 L of diesel and ~150 L of
+# petrol. Bigger drops are bulk dispenses: someone filling a tanker, drums or a fleet vehicle.
+BULK_DROP_L = {'HS': 500.0, 'MS': 400.0, 'X2': 150.0, 'XG': 150.0}
+TANK_PRODUCT = {1: 'HS', 2: 'MS', 3: 'X2', 4: 'XG'}
+
+
+def check_bulk_dispense(now):
+    """Bulk sales seen on the tank gauge that no credit sale or fleet-card posting covers.
+
+    Cash in hand cannot reveal a forgotten credit sale (it swings +-65k a day), but the tank
+    gauge can: it shows the litres leaving. Paytm payments are small, so a bulk dispense is
+    paid by credit, fleet card or cash. If the day's credit sales + fleet-card litres cover
+    it, fine; otherwise the owner is asked to confirm it was recorded."""
+    from pumpvision.blueprints.dashboard.routes import _fleet_total
+    from pumpvision.models import CreditTransaction, TankReading, db
+    from pumpvision.services.prices import get_rsp
     out = []
-    days = [now.date() - timedelta(days=1)] if now.time() >= time(8, 30) else []
-    days.append(now.date() - timedelta(days=2))
+    days = [now.date() - timedelta(days=2)]
+    if now.time() >= time(7, 0):
+        days.append(now.date() - timedelta(days=1))
     for d in days:
-        cash = _cash_for_date(d)
-        if cash is None:
-            continue
-        hist = [c for c in (_cash_for_date(d - timedelta(days=i)) for i in range(1, 15)) if c is not None]
-        if len(hist) < 7:
-            continue
-        med = statistics.median(hist)
-        excess = cash - med
-        if excess > 75_000 and cash > 1.25 * med:
-            lit = {p: v['litres'] for p, v in _product_sales(d).items()}
-            out.append(F(f"cash_high:{d}", "warn", "business",
-                         f"{d:%d %b}: cash in hand ₹{cash:,.0f} is ₹{excess:,.0f} above the usual (₹{med:,.0f})",
-                         f"Credit entered for the day: ₹{_credit_total(d):,.0f}. Sales: " +
-                         ", ".join(f"{p} {v:,.0f} L" for p, v in lit.items()) + ". If a credit fuel sale was made but not "
-                         "entered, cash is overstated by its amount and the customer's balance is understated.",
-                         "Ask the attendants. Add any missing sale under More → Manual entries → Add a credit sale.",
-                         audience="owner"))
+        start, end = datetime.combine(d, time(6, 0)), datetime.combine(d + timedelta(days=1), time(6, 0))
+        rows = TankReading.query.filter(TankReading.scraped_at >= start - timedelta(hours=1),
+                                        TankReading.scraped_at < end).order_by(TankReading.tank_id, TankReading.scraped_at).all()
+        by_tank = {}
+        for r in rows:
+            by_tank.setdefault(r.tank_id, []).append(r)
+        for tank, rs in by_tank.items():
+            prod = TANK_PRODUCT.get(tank)
+            limit = BULK_DROP_L.get(prod)
+            if not limit:
+                continue
+            bursts = []
+            for a_, b_ in zip(rs, rs[1:]):
+                mins = (b_.scraped_at - a_.scraped_at).total_seconds() / 60
+                if a_.volume_litres is None or b_.volume_litres is None or not 10 <= mins <= 75 or b_.scraped_at < start:
+                    continue
+                drop = a_.volume_litres - b_.volume_litres
+                if drop >= limit:
+                    bursts.append((b_.scraped_at, drop))
+            if not bursts:
+                continue
+            total = sum(x for _, x in bursts)
+            credit_l = db.session.query(func.coalesce(func.sum(CreditTransaction.litres), 0.0)).filter(
+                CreditTransaction.product == prod, CreditTransaction.is_legacy_entry.isnot(True),
+                CreditTransaction.transaction_date.in_([d, d + timedelta(days=1)])).scalar() or 0.0
+            fleet_amt, _ = _fleet_total(d)
+            rate = get_rsp(prod, d) or 0.0
+            fleet_l = fleet_amt / rate if rate else 0.0
+            covered = credit_l + fleet_l
+            if covered >= total:
+                continue
+            first, last = bursts[0][0], bursts[-1][0]
+            out.append(F(f"bulk:{prod}:{d}", "warn", "business",
+                         f"{d:%d %b}: {total:,.0f} L of {prod} left the tank in a short burst around {first:%H:%M} — check it was recorded",
+                         f"{len(bursts)} reading interval(s) between {first:%H:%M} and {last:%H:%M} each lost {limit:,.0f}+ L. "
+                         f"Credit sales entered for {prod}: {credit_l:,.0f} L; fleet-card postings that day ≈ {fleet_l:,.0f} L. "
+                         "A bulk fill is paid by credit, fleet card or cash (Paytm payments are small), so an unentered "
+                         "credit sale leaves cash overstated and the customer's balance short.",
+                         "Ask the attendants who was served. Add a missing credit sale under More → Manual entries → "
+                         "Add a credit sale (it can be dated to that day).", audience="owner"))
     return out
 
 
@@ -472,7 +507,7 @@ def collect_status(now):
     return out
 
 
-CHECKS = [check_data_freshness, check_totalizer_maths, check_sales_and_cash, check_credit_maths, check_unrecorded_credit,
+CHECKS = [check_data_freshness, check_totalizer_maths, check_sales_and_cash, check_credit_maths, check_bulk_dispense,
           check_attendant_vs_boundary, check_cng, check_regulatory,
           check_infra, check_vps]
 

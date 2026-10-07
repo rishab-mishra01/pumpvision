@@ -1715,3 +1715,8 @@ Cost discipline: emit specs and decisions only. No narration. Delegate immediate
 - **Boundary guard** (`scrapers/iras_iss_exporter.py`): the ISS backward search raises `StaleBoundaryError` and saves
   nothing if the newest data is > 8 h before 06:00 (IRAS lag, 2026-10-06). Shift Totalizer parsing takes the earliest
   `O` row and latest `C` row (the file has a 00:40 shift-change row *and* a 23:58 midnight close).
+- **Forgotten credit sales** (found 2026-10-07: 1,530 L on 6 Oct never entered; the credit table has no rows since the 30 Sep
+  cutover): the owner can add one on its real day/time under More → Manual entries → "Add a credit sale for this day"
+  (`record_sale(when=...)`). `check_bulk_dispense` watches the diesel/petrol tank gauge for bulk bursts (HS ≥ 500 L,
+  MS ≥ 400 L per ~30-min reading) that credit sales + fleet-card litres do not cover, and alerts the owner. Cash in hand
+  cannot reveal this (±₹65k daily swing), so there is deliberately no cash-based check.
