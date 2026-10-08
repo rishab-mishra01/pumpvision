@@ -5,6 +5,8 @@ auth_bp = Blueprint("auth", __name__)
 
 
 def _role_home():
+    if current_user.role == "super_admin":
+        return redirect(url_for("super_admin.overview"))
     if current_user.role == "attendant":
         return redirect(url_for("attendant.home"))
     if current_user.role == "manager":
@@ -57,7 +59,9 @@ def logout_confirm():
     """Ask before signing out -- as a page, not a JS confirm(): the Android app's
     WebView has no WebChromeClient, so confirm() never shows there and froze the
     attendant home screen (2026-10-04)."""
-    if current_user.role == "attendant":
+    if current_user.role == "super_admin":
+        home = url_for("super_admin.overview")
+    elif current_user.role == "attendant":
         home = url_for("attendant.home")
     elif current_user.role == "manager":
         home = url_for("manager.home")

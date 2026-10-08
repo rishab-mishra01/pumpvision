@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Super Admin · {{ selected|title }} — Pumpvision{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/super-admin.css') }}">
+{% endblock %}
+
+{% block page %}
+<div class="sa-shell">
+  <header class="sa-header">
+    <a class="sa-brand" href="{{ url_for('super_admin.overview') }}" aria-label="Super Admin overview">
+      <span class="sa-brand__mark" aria-hidden="true"></span>
+      <span>pump<span>vision</span></span>
+    </a>
+    <a class="sa-logout" href="{{ url_for('auth.logout_confirm') }}">Logout</a>
+  </header>
+
+  <section class="sa-identity" aria-labelledby="sa-title">
+    <div>
+      <p class="sa-eyebrow">Unified console</p>
+      <h1 id="sa-title">Super Admin <span aria-hidden="true">·</span> Read-only preview</h1>
+      <p>No operational action can be submitted from this console.</p>
+    </div>
+    <span class="sa-readonly">View only</span>
+  </section>
+
+  {% set tabs = [
+    ('overview', 'Overview', 'super_admin.overview'),
+    ('admin', 'Admin', 'super_admin.admin_preview'),
+    ('manager', 'Manager', 'super_admin.manager_preview'),
+    ('attendant', 'Attendant', 'super_admin.attendant_preview'),
+    ('developer', 'Developer', 'super_admin.developer_preview'),
+  ] %}
+  <nav class="sa-tabs" aria-label="Dashboard previews">
+    {% for key, label, endpoint in tabs %}
+    <a href="{{ url_for(endpoint) }}" class="{{ 'is-active' if selected == key }}"
+       {% if selected == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <main class="sa-main">
+    <div class="sa-selected">
+      <span>Selected dashboard</span>
+      <strong>{{ selected|title }}</strong>
+    </div>
+    {% include 'super_admin/_' ~ selected ~ '.html' %}
+  </main>
+</div>
+{% endblock %}

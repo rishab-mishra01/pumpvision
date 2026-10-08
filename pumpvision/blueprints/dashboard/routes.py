@@ -255,6 +255,13 @@ def summary(date_str=None):
 @login_required
 @owner_required
 def index():
+    return render_template("dashboard/index.html", **dashboard_view_data(
+        first_name=current_user.first_name or 'there'
+    ))
+
+
+def dashboard_view_data(first_name="there"):
+    """Build the owner dashboard's read-only data for normal and preview views."""
     op_date = date.today() - timedelta(days=1)
 
     products = _product_sales(op_date)
@@ -294,8 +301,7 @@ def index():
         FuelTest.op_date >= date.today() - timedelta(days=30)
     ).order_by(FuelTest.op_date.desc(), FuelTest.id.desc()).all()
 
-    return render_template(
-        "dashboard/index.html",
+    return dict(
         drill=drill,
         recent_tests=recent_tests,
         tests_total=round(sum(t.litres for t in recent_tests), 2),
@@ -317,5 +323,5 @@ def index():
         prices=prices,
         stock_alerts=_stock_watch(op_date),
         has_data=has_data,
-        first_name=current_user.first_name or 'there',
+        first_name=first_name,
     )

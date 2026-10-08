@@ -65,6 +65,11 @@ def _fmt_short(d) -> str:
 @login_required
 @manager_required
 def home():
+    return render_template("manager/home.html", **manager_home_data())
+
+
+def manager_home_data():
+    """Build the manager checklist without performing any operational action."""
     from pumpvision.models import (
         ManualTotalizerReading, Expense, PaytmTransaction, PaymentReceived, Customer
     )
@@ -104,8 +109,7 @@ def home():
 
     drill = mock_drill_status()
 
-    return render_template(
-        "manager/home.html",
+    return dict(
         greeting=_greeting(),
         today_str=_fmt_date(today_op),
         day_name=i18n.weekday(today_op),

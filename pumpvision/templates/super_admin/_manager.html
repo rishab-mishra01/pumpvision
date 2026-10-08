@@ -1,0 +1,25 @@
+{% set d = manager %}
+<div class="sa-heading"><div><p class="sa-eyebrow">Manager dashboard preview</p><h2>Daily operations checklist</h2></div><p>{{ d.day_name }} · {{ d.today_str }}</p></div>
+
+<section class="sa-section">
+  <h3>Today’s tasks</h3>
+  <div class="sa-checklist">
+    {% for done, title, detail in [
+      (d.shift_readings_done, 'Previous shift readings', d.prev_str),
+      (d.expenses_done, 'Expenses logged', d.today_str),
+      (d.paytm_done, 'Paytm report available', d.prev_str),
+      (not d.drill_attention, 'Mock drill current', d.drill_due_str or 'No drill recorded'),
+    ] %}
+    <article><span class="sa-check {{ 'is-done' if done }}" aria-label="{{ 'Complete' if done else 'Pending' }}">{{ '✓' if done else '!' }}</span><div><b>{{ title }}</b><span>{{ detail }}</span></div></article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="sa-section">
+  <h3>Pending bank-transfer verification</h3>
+  {% if d.pending_payments %}<div class="sa-list">
+    {% for item in d.pending_payments %}<article class="sa-list__row sa-list__row--warn"><div><b>{{ item.customer_name }}</b><span>{{ item.date_str }} · verification remains with the operational role</span></div><strong>₹{{ item.payment.amount|inr }}</strong></article>{% endfor %}
+  </div>{% else %}<div class="sa-empty">No bank transfers are pending verification.</div>{% endif %}
+</section>
+
+<div class="sa-unavailable"><b>Operational controls unavailable in preview</b><span>Expense, payment, lube, drill, credit-sale, and invoice actions are intentionally omitted.</span></div>

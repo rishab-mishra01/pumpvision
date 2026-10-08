@@ -1,0 +1,21 @@
+{% set d = developer %}
+<div class="sa-heading"><div><p class="sa-eyebrow">Developer dashboard preview</p><h2>Review and service health</h2></div><p>{% if d.last %}Last review {{ d.last.at }} IST{% else %}Awaiting first review{% endif %}</p></div>
+
+<div class="sa-stat-grid">
+  <article class="sa-stat sa-stat--fail"><strong>{{ d.counts.critical }}</strong><span>Critical</span></article>
+  <article class="sa-stat sa-stat--warn"><strong>{{ d.counts.warn }}</strong><span>Warnings</span></article>
+  <article class="sa-stat"><strong>{{ d.counts.info }}</strong><span>Information</span></article>
+</div>
+
+<section class="sa-section"><h3>Status board</h3>
+  {% if d.board %}{% for grp, rows in d.board.items() %}<h4 class="sa-subheading">{{ grp|title }}</h4><div class="sa-status-grid">
+    {% for item in rows %}<article><span class="sa-dot sa-dot--{{ item.status }}" aria-hidden="true"></span><div><b>{{ item.component }}</b><span>{{ item.detail }}</span></div></article>{% endfor %}
+  </div>{% endfor %}{% else %}<div class="sa-empty">Status board fills in after the first review run.</div>{% endif %}
+</section>
+
+<section class="sa-section"><h3>Open findings</h3>
+  {% if d.findings %}<div class="sa-list">{% for finding in d.findings %}<article class="sa-list__row sa-list__row--{{ finding.severity }}"><div><b>{{ finding.title }}</b><span>{{ finding.category|title }} · seen {{ finding.occurrences }}×{% if finding.acknowledged_at %} · acknowledged{% endif %}</span>{% if finding.detail %}<p>{{ finding.detail }}</p>{% endif %}</div><span class="sa-severity">{{ finding.severity }}</span></article>{% endfor %}</div>
+  {% else %}<div class="sa-empty">Nothing open. All checks passed on the last run.</div>{% endif %}
+</section>
+
+<div class="sa-unavailable"><b>Developer actions unavailable in preview</b><span>Running a review and acknowledging findings remain restricted to the developer role.</span></div>

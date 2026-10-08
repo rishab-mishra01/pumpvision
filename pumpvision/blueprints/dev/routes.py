@@ -15,6 +15,11 @@ _SEV_ORDER = {"critical": 0, "warn": 1, "info": 2}
 @login_required
 @developer_required
 def index():
+    return render_template("dev/dashboard.html", **developer_dashboard_data())
+
+
+def developer_dashboard_data():
+    """Build review/status data without running or acknowledging a review."""
     from pumpvision.models import AppSetting, ReviewFinding, ReviewStatus, db
 
     rows = ReviewFinding.query.filter(ReviewFinding.resolved_at.is_(None)).all()
@@ -32,8 +37,8 @@ def index():
     board = {}
     for st in ReviewStatus.query.order_by(ReviewStatus.component).all():
         board.setdefault(st.grp, []).append(st)
-    return render_template("dev/dashboard.html", board=board, findings=rows, resolved=resolved, last=last,
-                           counts=counts, now=datetime.utcnow())
+    return dict(board=board, findings=rows, resolved=resolved, last=last,
+                counts=counts, now=datetime.utcnow())
 
 
 @dev_bp.route("/ack/<int:finding_id>", methods=["POST"])

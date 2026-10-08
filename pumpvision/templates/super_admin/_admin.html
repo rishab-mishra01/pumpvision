@@ -1,0 +1,37 @@
+{% set d = admin %}
+<div class="sa-heading">
+  <div><p class="sa-eyebrow">Owner dashboard preview</p><h2>{{ d.op_date|dlong }} completed shift</h2></div>
+  <p>Read-only accounting summary</p>
+</div>
+
+<div class="sa-stat-grid">
+  <article class="sa-stat"><strong>₹{{ d.derived_cash|inr }}</strong><span>Derived cash</span></article>
+  <article class="sa-stat"><strong>₹{{ d.total_rev|inr }}</strong><span>Total revenue</span></article>
+  <article class="sa-stat"><strong>₹{{ d.paytm|inr }}</strong><span>Paytm</span></article>
+</div>
+
+<section class="sa-section">
+  <h3>Fuel sales</h3>
+  <div class="sa-metric-grid">
+    {% for code, label in [('HS', 'Diesel'), ('MS', 'Petrol'), ('X2', 'Premium'), ('XG', 'XtraGreen')] %}
+    <article><span>{{ code }} · {{ label }}</span><b>{{ d.products[code].litres|thousands }} L</b><small>₹{{ d.products[code].revenue|inr }} · ₹{{ '%.2f'|format(d.prices[code]) }}/L</small></article>
+    {% endfor %}
+    <article><span>CNG</span>{% if d.cng %}<b>{{ d.cng.kg_sold|int }} kg</b><small>₹{{ d.cng.revenue|inr }} · ₹{{ '%.2f'|format(d.prices.CNG) }}/kg</small>{% else %}<b>—</b><small>No reading</small>{% endif %}</article>
+    <article><span>Lubricants</span><b>{{ d.lube_units }} units</b><small>₹{{ d.lube_cash|inr }}</small></article>
+  </div>
+</section>
+
+<section class="sa-section">
+  <h3>Reconciliation snapshot</h3>
+  <div class="sa-breakdown">
+    <div><span>Credit extended</span><b>₹{{ d.credit|inr }}</b></div>
+    <div><span>Fleet card</span><b>{% if d.fleet_available %}₹{{ d.fleet|inr }}{% else %}Unavailable{% endif %}</b></div>
+    <div><span>Expenses</span><b>{% if d.expenses_available %}₹{{ d.expenses|inr }}{% else %}Not logged{% endif %}</b></div>
+  </div>
+</section>
+
+{% if d.stock_alerts %}
+<section class="sa-section"><h3>Stock watch</h3><div class="sa-list">
+  {% for alert in d.stock_alerts %}<article class="sa-list__row {{ 'sa-list__row--critical' if alert.urgent else 'sa-list__row--warn' }}"><div><b>{{ alert.product }}</b><span>{{ alert.days_int }} days remaining · order by {{ alert.order_by }}</span></div></article>{% endfor %}
+</div></section>
+{% endif %}

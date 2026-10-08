@@ -1,0 +1,49 @@
+<div class="sa-heading">
+  <div><p class="sa-eyebrow">Application health</p><h2>Operational overview</h2></div>
+  <p>{% if latest_check %}Checked {{ latest_check.strftime('%d %b %H:%M') }} UTC{% else %}Awaiting first review{% endif %}</p>
+</div>
+
+<div class="sa-stat-grid">
+  <article class="sa-stat sa-stat--ok"><strong>{{ status_counts.ok }}</strong><span>Healthy components</span></article>
+  <article class="sa-stat sa-stat--warn"><strong>{{ status_counts.warn }}</strong><span>Warnings</span></article>
+  <article class="sa-stat sa-stat--fail"><strong>{{ status_counts.fail }}</strong><span>Failures</span></article>
+</div>
+
+<section class="sa-section">
+  <h3>Dashboard previews</h3>
+  <div class="sa-link-grid">
+    <a href="{{ url_for('super_admin.admin_preview') }}"><b>Admin</b><span>Sales, cash, stock and regulatory summary</span></a>
+    <a href="{{ url_for('super_admin.manager_preview') }}"><b>Manager</b><span>Daily checklist and pending verification status</span></a>
+    <a href="{{ url_for('super_admin.attendant_preview') }}"><b>Attendant</b><span>Shift status without sale or closure controls</span></a>
+    <a href="{{ url_for('super_admin.developer_preview') }}"><b>Developer</b><span>Service board and review findings</span></a>
+  </div>
+</section>
+
+<section class="sa-section">
+  <h3>Latest operational and reconciliation warnings</h3>
+  {% if warnings %}
+  <div class="sa-list">
+    {% for finding in warnings %}
+    <article class="sa-list__row sa-list__row--{{ finding.severity }}">
+      <div><b>{{ finding.title }}</b><span>{{ finding.category|title }} · last seen {{ finding.last_seen.strftime('%d %b %H:%M') }} UTC</span></div>
+      <span class="sa-severity">{{ finding.severity }}</span>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="sa-empty">No open operational or reconciliation warnings.</div>
+  {% endif %}
+</section>
+
+<section class="sa-section">
+  <h3>Component status</h3>
+  {% if statuses %}
+  <div class="sa-status-grid">
+    {% for item in statuses %}
+    <article><span class="sa-dot sa-dot--{{ item.status }}" aria-hidden="true"></span><div><b>{{ item.component }}</b><span>{{ item.grp|title }} · {{ item.status|title }}</span></div></article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="sa-empty">The health board will appear after the first scheduled review.</div>
+  {% endif %}
+</section>

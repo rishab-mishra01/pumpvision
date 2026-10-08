@@ -109,16 +109,21 @@ def _greeting() -> str:
 @login_required
 @attendant_required
 def home():
+    return render_template("attendant/home.html", **attendant_home_data())
+
+
+def attendant_home_data(display_name=None):
+    """Build shift status for the attendant home and read-only previews."""
     from pumpvision.services.operational import get_operational_date
 
     current_op_date  = get_operational_date()
     previous_op_date = _shift_op_date()   # a missed day shows here first
     prev_shift_closed = _shift_closed(previous_op_date)
 
-    display_name = current_user.first_name or current_user.username
+    if display_name is None:
+        display_name = current_user.first_name or current_user.username
 
-    return render_template(
-        "attendant/home.html",
+    return dict(
         greeting=_greeting(),
         display_name=display_name,
         prev_shift_closed=prev_shift_closed,

@@ -1,0 +1,17 @@
+{% set d = attendant %}
+<div class="sa-heading"><div><p class="sa-eyebrow">Attendant dashboard preview</p><h2>Shift status</h2></div><p>Operational controls removed</p></div>
+
+<section class="sa-shift {{ 'is-closed' if d.prev_shift_closed }}">
+  <span class="sa-check {{ 'is-done' if d.prev_shift_closed }}" aria-hidden="true">{{ '✓' if d.prev_shift_closed else '!' }}</span>
+  <div><b>{{ d.prev_date_str }} shift {{ 'closed' if d.prev_shift_closed else 'not closed' }}</b><span>Current operational date: {{ d.curr_date_str }}</span></div>
+</section>
+
+<div class="sa-unavailable"><b>Attendant workflow unavailable in preview</b><span>Credit sale entry, meter entry, fuel testing, and shift submission mutate operational records and cannot be opened by Super Admin.</span></div>
+
+<section class="sa-section">
+  <h3>Original dashboard actions</h3>
+  <div class="sa-disabled-grid">
+    <div aria-disabled="true"><b>Log credit sale</b><span>Read-only preview</span></div>
+    <div aria-disabled="true"><b>Close shift</b><span>Read-only preview</span></div>
+  </div>
+</section>
