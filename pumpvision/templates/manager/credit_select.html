@@ -9,6 +9,7 @@
   {{ flashes() }}
   <div class="mg-body">
     <p class="mg-note" style="margin:0;">{{ t('credit_pick_help') }}</p>
+    <a href="{{ url_for('manager.backdated_credit') }}" class="mg-tile primary" style="min-height:60px;flex-direction:row;justify-content:flex-start;padding:0 16px;"><span><b>Add missed/backdated credit sale</b><small style="display:block;font-weight:400;margin-top:4px;">Historical price loads automatically</small></span></a>
     <input type="search" id="q" class="mg-input" placeholder="{{ t('search_ph') }}" autocomplete="off" aria-label="{{ t('search_aria') }}">
 
     <div class="mg-card" id="list">

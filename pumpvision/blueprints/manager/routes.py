@@ -496,6 +496,39 @@ def credit_sale(customer_id):
     )
 
 
+
+
+@manager_bp.route("/credit/backdated", methods=["GET", "POST"])
+@login_required
+@manager_required
+def backdated_credit():
+    from datetime import time
+    from pumpvision.models import Customer
+    from pumpvision.services.credit_sale import rate_map, record_sale
+    customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
+    today = date.today()
+    values = {"customer_id":"", "vehicle_number":"", "product":"", "input_mode":"litres", "quantity":"", "date":(today - timedelta(days=1)).isoformat(), "time":"18:00", "reason":""}
+    if request.method == "POST":
+        values.update({k: request.form.get(k, "").strip() for k in values}); errors=[]
+        customer=next((c for c in customers if str(c.customer_id)==values["customer_id"]), None)
+        if customer is None: errors.append("Choose a customer.")
+        if len(values["reason"]) < 5: errors.append("A reason of at least 5 characters is required.")
+        try: when=datetime.combine(date.fromisoformat(values["date"]), time.fromisoformat(values["time"]))
+        except ValueError: when=None; errors.append("Enter a valid date and time.")
+        if when and when > datetime.now(): errors.append("The sale cannot be in the future.")
+        if not errors:
+            txn, errs = record_sale(customer, values["vehicle_number"], values["product"], "litres" if values["input_mode"]=="litres" else "amount", values["quantity"], f"{current_user.first_name or current_user.username} (backdated: {values['reason']})", rates=rate_map(when.date()), when=when)
+            if txn:
+                flash(f"Backdated credit sale of ₹{txn.amount:,.2f} recorded and marked as added later.", "ok")
+                return redirect(url_for("manager.credit_done", transaction_id=txn.transaction_id))
+            messages={"no_vehicle":"Enter the vehicle number.","bad_product":"Choose the product.","no_rate":"No database price is available for that date and product.","qty_not_number":"Enter the quantity as a number.","qty_not_positive":"Quantity must be above zero."}; errors.extend(messages.get(x,x) for x in errs)
+        for error in errors: flash(error, "error")
+    try: selected=date.fromisoformat(values["date"])
+    except ValueError: selected=today
+    vehicles=sorted({v.vehicle_number for c in customers for v in c.vehicles if v.is_active})
+    return render_template("manager/credit_backdated.html", customers=customers, vehicles=vehicles, values=values, rates=rate_map(selected), today=today.isoformat())
+
+
 @manager_bp.route("/credit/done/<int:transaction_id>")
 @login_required
 @manager_required
