@@ -286,6 +286,13 @@ def check_cng(now):
         # (the two-nozzle set-up on 5-6 Oct 2026 seeded one), not a day of zero sales.
         if att and all(a.closing_reading == a.opening_reading for a in att):
             continue
+        if att and (s is None or (s.cng_kg_total or 0) <= 0):
+            kg = sum(a.kg_sold for a in att)
+            out.append(F(f"cng_backend_pending:{d}", "warn", "reconciliation",
+                         f"CNG {d:%d %b}: portal reading unavailable; using attendant shift-close reading",
+                         f"Attendant total is {kg:,.0f} kg.",
+                         "Keep using the shift-close value for calculations; reconcile it when the SDMS portal row arrives."))
+            continue
         if s and (s.cng_kg_total or 0) > 0 and att:
             kg = sum(a.kg_sold for a in att)
             if abs(kg - s.cng_kg_total) > max(30, 0.1 * s.cng_kg_total):

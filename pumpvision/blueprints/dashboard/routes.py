@@ -11,7 +11,7 @@ from sqlalchemy import and_, func, or_
 from pumpvision.decorators import owner_required
 from pumpvision.models import (
     AppSetting, CreditTransaction, Expense, FuelTest,
-    LubeTransaction, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db,
+    CngShiftReading, LubeTransaction, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db,
 )
 from pumpvision.services.prices import get_rsp
 from pumpvision.services.regulatory import mock_drill_status, tested_litres
@@ -69,9 +69,10 @@ def _fleet_total(op_date):
 
 def _cng_sdms(op_date):
     """
-    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue) or None if no SDMS data.
-    Reads from SdmsSummary DB first; falls back to local JSON for dev/debug compatibility.
-    Attendant CngShiftReading entries are preserved separately and not used for display.
+    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue, source) or None.
+    Prefer the portal SDMS reading. If it is unavailable, use the attendant's
+    shift-close reading for calculations until SDMS catches up; review.py reports
+    the pending reconciliation when both sources become available.
     """
     row = SdmsSummary.query.filter_by(op_date=op_date).first()
     if row is not None:
@@ -80,23 +81,33 @@ def _cng_sdms(op_date):
                 kg_sold=row.cng_kg_total,
                 rsp_per_kg=row.cng_rsp_per_kg or 93.40,
                 revenue=row.cng_revenue or 0.0,
+                source="sdms",
             )
-        return None
+        # Continue to JSON/manual fallback when the portal row is empty.
 
     # JSON fallback (local dev or pre-migration data)
     path = _PROJECT_ROOT / 'data' / 'sdms' / f'sdms_pad_{op_date:%Y-%m-%d}_summary.json'
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-        kg  = float(data.get('cng_kg_total', 0))
-        rsp = float(data.get('cng_rsp_per_kg', 93.40))
-        rev = float(data.get('cng_revenue', 0))
-        if kg <= 0:
-            return None
-        return SimpleNamespace(kg_sold=kg, rsp_per_kg=rsp, revenue=rev)
-    except (json.JSONDecodeError, ValueError, KeyError):
-        return None
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+            kg  = float(data.get('cng_kg_total', 0))
+            rsp = float(data.get('cng_rsp_per_kg', 93.40))
+            rev = float(data.get('cng_revenue', 0))
+            if kg > 0:
+                return SimpleNamespace(kg_sold=kg, rsp_per_kg=rsp, revenue=rev, source="sdms_json")
+        except (json.JSONDecodeError, ValueError, KeyError):
+            pass
+
+    # Shift-close fallback: authoritative for calculations until the portal
+    # backend supplies the corresponding SDMS summary.
+    readings = CngShiftReading.query.filter_by(op_date=op_date).all()
+    if readings:
+        kg = sum(r.kg_sold for r in readings)
+        revenue = sum(r.revenue for r in readings)
+        rsp = (revenue / kg) if kg > 0 else 93.40
+        return SimpleNamespace(kg_sold=kg, rsp_per_kg=rsp, revenue=revenue,
+                               source="attendant_shift_close")
+    return None
 
 
 def _credit_total(op_date):
