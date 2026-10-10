@@ -17,10 +17,45 @@ MANUAL_EARLY = timedelta(hours=1)     # a reading just before 06:00 still counts
 MANUAL_LATE = timedelta(hours=6)      # ...and one up to 6 h after; later is a different time
 
 
+def valid_manual_closes(day):
+    """{nozzle_no: value} of the staff's shift-close readings for `day` that really are its
+    06:00 close: taken within MANUAL_EARLY/MANUAL_LATE of the boundary. One taken a day or more
+    later (a missed shift closed late) is the meter at another time, so it is left out."""
+    from pumpvision.models import ManualTotalizerReading
+
+    boundary = datetime.combine(day + timedelta(days=1), time(6, 0))
+    return {r.nozzle_no: r.totalizer_value
+            for r in ManualTotalizerReading.query.filter_by(operational_date=day)
+            if r.nozzle_no is not None and r.recorded_at is not None
+            and -MANUAL_EARLY <= r.recorded_at - boundary <= MANUAL_LATE}
+
+
+def opening_reading(nozzle_no, op_date):
+    """Opening totalizer of a nozzle for shift op_date, by the same rule as the dashboard:
+    1. the staff's close of the previous shift (shift-close data is the source of truth);
+    2. if there is no valid one, IRAS's 06:00 reading (NozzleTotalizer dated op_date);
+    3. if IRAS has none either, the most recent earlier shift-close reading.
+    """
+    from pumpvision.models import ManualTotalizerReading, NozzleTotalizer
+
+    prev = valid_manual_closes(op_date - timedelta(days=1))
+    if nozzle_no in prev:
+        return prev[nozzle_no]
+    row = NozzleTotalizer.query.filter_by(nozzle_no=nozzle_no, operational_date=op_date).first()
+    if row:
+        return row.totalizer_end
+    row = (ManualTotalizerReading.query
+           .filter(ManualTotalizerReading.nozzle_no == nozzle_no,
+                   ManualTotalizerReading.operational_date < op_date)
+           .order_by(ManualTotalizerReading.operational_date.desc())
+           .first())
+    return row.totalizer_value if row else None
+
+
 def totalizers_for_day(op_date):
     """Return (opening, closing, manual_nozzles): {nozzle_no: value} dicts plus the set of
     nozzle numbers that used manual readings."""
-    from pumpvision.models import ManualTotalizerReading, NozzleTotalizer
+    from pumpvision.models import NozzleTotalizer
 
     next_date = op_date + timedelta(days=1)
     opening = {r.nozzle_no: r.totalizer_end
@@ -28,17 +63,7 @@ def totalizers_for_day(op_date):
     closing = {r.nozzle_no: r.totalizer_end
                for r in NozzleTotalizer.query.filter_by(operational_date=next_date)}
 
-    def manual(day):
-        # A manual reading stands for the 06:00 close of `day` only if it was taken near that
-        # boundary. One taken a day or more later (a missed shift closed late) is the meter at
-        # another time, so it is ignored and the machine's own scraped value is used instead.
-        boundary = datetime.combine(day + timedelta(days=1), time(6, 0))
-        return {r.nozzle_no: r.totalizer_value
-                for r in ManualTotalizerReading.query.filter_by(operational_date=day)
-                if r.nozzle_no is not None and r.recorded_at is not None
-                and -MANUAL_EARLY <= r.recorded_at - boundary <= MANUAL_LATE}
-
-    m_open, m_close = manual(op_date - timedelta(days=1)), manual(op_date)
+    m_open, m_close = valid_manual_closes(op_date - timedelta(days=1)), valid_manual_closes(op_date)
     used = set()
     for n in set(m_open) & set(m_close):
         opening[n], closing[n] = m_open[n], m_close[n]

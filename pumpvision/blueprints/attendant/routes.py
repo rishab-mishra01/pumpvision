@@ -47,23 +47,15 @@ def _cng_opening_reading(op_date: date, nozzle_no: int = 1):
 
 
 def _opening_reading(nozzle_no: int, op_date: date):
-    """Opening totalizer for a nozzle: the IRAS reading at 06:00 on op_date, else the
-    last ManualTotalizerReading.
+    """Opening totalizer for a nozzle -- the same rule the owner dashboard uses
+    (services/totalizers.opening_reading): the previous shift-close reading when it is a
+    valid 06:00 close, else IRAS's 06:00 reading, else the last earlier shift-close reading.
 
-    A NozzleTotalizer row dated D holds the meter at 06:00 on D (the owner
-    dashboard and the Meters screen read it that way). This used to look up D-1,
-    so the attendant saw a day-old opening and "litres sold" covering two days.
+    It used to prefer IRAS, so this screen and the dashboard could disagree by the litres
+    sold between IRAS's last transaction and the staff's reading (17 L on HS, Oct 9 2026).
     """
-    from pumpvision.models import NozzleTotalizer, ManualTotalizerReading
-    row = NozzleTotalizer.query.filter_by(nozzle_no=nozzle_no, operational_date=op_date).first()
-    if row:
-        return row.totalizer_end
-    row = (ManualTotalizerReading.query
-           .filter(ManualTotalizerReading.nozzle_no == nozzle_no,
-                   ManualTotalizerReading.operational_date < op_date)
-           .order_by(ManualTotalizerReading.operational_date.desc())
-           .first())
-    return row.totalizer_value if row else None
+    from pumpvision.services.totalizers import opening_reading
+    return opening_reading(nozzle_no, op_date)
 
 
 def _shift_closed(op_date: date) -> bool:
