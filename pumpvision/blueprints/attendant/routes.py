@@ -225,20 +225,24 @@ def shift_close():
 @attendant_required
 def shift_close_submit():
     from pumpvision.models import ManualTotalizerReading, AppNotification, db
+    from pumpvision.services.idle_nozzles import autoclose_idle
     op_date = _shift_op_date()
 
+    auto = autoclose_idle(op_date, ALL_LABELS)       # no sale per IRAS: no reading needed
     done_labels = {
         r.nozzle_label
         for r in ManualTotalizerReading.query.filter_by(operational_date=op_date).all()
     }
     if not all(label in done_labels for label in ALL_LABELS):
+        db.session.rollback()
         flash(HI["flash_record_all_products"], "error")
         return redirect(url_for("attendant.shift_close"))
 
     ManualTotalizerReading.query.filter_by(operational_date=op_date).update({"is_locked": True})
     now = datetime.now()
     db.session.add(AppNotification(
-        message=f"Day close submitted for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}.",
+        message=f"Day close submitted for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}."
+                + (f" No sale per IRAS, closed automatically: {', '.join(auto)}." if auto else ""),
         notification_type="shift_close",
         reference_date=op_date,
     ))
@@ -798,7 +802,10 @@ def shift_numpad(nozzle):
 def shift_summary():
     from pumpvision.models import CngShiftReading, ManualTotalizerReading
 
+    from pumpvision.services.idle_nozzles import iras_idle_nozzles
+
     op_date = _shift_op_date()
+    idle = iras_idle_nozzles(op_date)
     cng_rows = (CngShiftReading.query.filter_by(op_date=op_date)
                 .order_by(CngShiftReading.nozzle_no).all())
     cng_kg = sum(r.kg_sold for r in cng_rows)
@@ -819,6 +826,8 @@ def shift_summary():
             "closing": closing,
             "delta": delta,
             "is_locked": existing.is_locked if existing else False,
+            # no reading typed, and IRAS shows no movement: closes itself on submit
+            "auto_idle": existing is None and det["nozzle_no"] in idle,
         })
 
     def _delta(name):
@@ -841,7 +850,7 @@ def shift_summary():
     for t in tests:
         product_totals[t.product] = max(0.0, product_totals[t.product] - t.litres)
 
-    all_entered = all(r["closing"] is not None for r in nozzle_rows)
+    all_entered = all(r["closing"] is not None or r["auto_idle"] for r in nozzle_rows)
     any_drafts  = any(r["closing"] is not None for r in nozzle_rows)
     warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5]
     display_name = current_user.first_name or current_user.username
@@ -904,20 +913,25 @@ def shift_testing_delete(test_id):
 def shift_submit():
     from pumpvision.models import ManualTotalizerReading, AppNotification, db
 
+    from pumpvision.services.idle_nozzles import autoclose_idle
+
     op_date = _shift_op_date()
-    # Verify all 6 nozzles have a draft
+    # Nozzles IRAS shows unmoved are closed with the IRAS value; every other nozzle needs a draft.
+    auto = autoclose_idle(op_date, [_SHIFT_NOZZLE[n]["db_label"] for n in _NOZZLE_ORDER])
     for nozzle_name in _NOZZLE_ORDER:
         det = _SHIFT_NOZZLE[nozzle_name]
         if not ManualTotalizerReading.query.filter_by(
             operational_date=op_date, nozzle_label=det["db_label"]
         ).first():
+            db.session.rollback()
             flash(HI["flash_all_six_nozzles"], "error")
             return redirect(url_for("attendant.shift_summary"))
 
     now = datetime.now()
     ManualTotalizerReading.query.filter_by(operational_date=op_date).update({"is_locked": True})
     db.session.add(AppNotification(
-        message=f"Shift closed for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}.",
+        message=f"Shift closed for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}."
+                + (f" No sale per IRAS, closed automatically: {', '.join(auto)}." if auto else ""),
         notification_type="shift_close",
         reference_date=op_date,
     ))
