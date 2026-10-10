@@ -474,12 +474,12 @@ def credit_sale(customer_id):
         return redirect(url_for("manager.credit_select"))
 
     rates = rate_map()
-    values = {"vehicle_number": "", "product": "", "input_mode": "amount", "quantity": ""}
+    values = {"vehicle_number": "", "product": "", "input_mode": "litres", "quantity": ""}
     if request.method == "POST":
         values.update({k: request.form.get(k, "").strip() for k in values})
         txn, errors = record_sale(
             customer, values["vehicle_number"], values["product"],
-            "litres" if values["input_mode"] == "litres" else "amount",
+            "amount" if values["input_mode"] == "amount" else "litres",
             values["quantity"], current_user.first_name or current_user.username, rates=rates,
         )
         if txn:

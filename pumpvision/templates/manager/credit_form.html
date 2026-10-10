@@ -43,8 +43,8 @@
     <div>
       {{ lab(t('entered_as')) }}
       <div class="mg-chips" style="grid-template-columns:1fr 1fr;">
-        <label class="mg-chip"><input type="radio" name="input_mode" value="amount" {{ 'checked' if values.input_mode != 'litres' }}><span>{{ t('amount_rs') }}</span></label>
-        <label class="mg-chip"><input type="radio" name="input_mode" value="litres" {{ 'checked' if values.input_mode == 'litres' }}><span id="unitlabel">{{ t('litres') }}</span></label>
+        <label class="mg-chip"><input type="radio" name="input_mode" value="amount" {{ 'checked' if values.input_mode == 'amount' }}><span>{{ t('amount_rs') }}</span></label>
+        <label class="mg-chip"><input type="radio" name="input_mode" value="litres" {{ 'checked' if values.input_mode != 'amount' }}><span id="unitlabel">{{ t('litres') }}</span></label>
       </div>
     </div>
 
@@ -72,7 +72,7 @@
       if (!p) { prev.textContent = T.choose; return; }
       var rate = parseFloat(p.dataset.rate);
       if (!rate) { prev.textContent = T.norate.replace('{product}', p.value); return; }
-      var u = cng ? 'kg' : 'L', q = parseFloat(qty.value) || 0, byAmount = !m || m.value === 'amount';
+      var u = cng ? 'kg' : 'L', q = parseFloat(qty.value) || 0, byAmount = !!m && m.value === 'amount';
       var amount = byAmount ? q : q * rate, qtyOut = byAmount ? q / rate : q;
       prev.textContent = T.rate + ' ₹' + fmt(rate) + '/' + u + (q > 0 ? ' · ' + fmt(qtyOut) + ' ' + u + ' · ₹' + fmt(amount) : '');
     }
