@@ -43,7 +43,8 @@
       {% for a in alerts %}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-top:8px;">
         <span>{{ a.message }}</span>
-        <form method="post" action="{{ url_for('credit.dismiss_alert', alert_id=a.id) }}" style="flex:none;">
+        <form method="post" action="{{ url_for('credit.dismiss_alerts') }}" style="flex:none;">
+          {% for i in a.ids %}<input type="hidden" name="ids" value="{{ i }}">{% endfor %}
           <button type="submit" class="btn btn-secondary" style="padding:2px 10px;font-size:12px;">Dismiss</button>
         </form>
       </div>

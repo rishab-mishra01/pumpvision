@@ -37,6 +37,11 @@ def main():
 
     app = create_app()
     with app.app_context():
+        from pumpvision.services.alerts import clear_resolved
+        cleared = clear_resolved()                 # e.g. a price that arrived late, a shift closed since
+        if cleared:
+            db.session.commit()
+            print("cleared resolved alerts:", cleared)
         today = get_operational_date()
         if sys.argv[1] == "price":
             start = datetime.combine(today, time(6, 0))

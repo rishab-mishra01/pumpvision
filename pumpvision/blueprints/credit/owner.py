@@ -10,7 +10,7 @@ from pumpvision.decorators import owner_required
 credit_bp = Blueprint("credit", __name__)
 
 # AppNotification types shown on the Credit home (the Meters badge counts only shift_close).
-ALERT_TYPES = ("credit_alert", "lube_alert", "price_alert", "shift_alert", "meter_alert", "review_alert")
+from pumpvision.services.alerts import ALERT_TYPES  # noqa: E402
 
 
 @credit_bp.route("/home")
@@ -80,13 +80,9 @@ def credit_home():
         .all()
     )
 
-    # Open credit/lube alerts (unbilled sales, billing-rate errors, lube below cost).
-    alerts = (
-        AppNotification.query
-        .filter(AppNotification.notification_type.in_(ALERT_TYPES), AppNotification.is_read.is_(False))
-        .order_by(AppNotification.created_at.desc())
-        .all()
-    )
+    # Open alerts, with resolved ones dropped and day-by-day ones folded into one line each.
+    from pumpvision.services.alerts import alert_groups
+    alerts = alert_groups()
 
     return render_template(
         "credit/owner/credit_home.html",
@@ -108,6 +104,22 @@ def dismiss_alert(alert_id):
     alert = AppNotification.query.get_or_404(alert_id)
     if alert.notification_type in ALERT_TYPES:
         alert.is_read = True
+        db.session.commit()
+    return redirect(url_for("credit.credit_home"))
+
+
+@credit_bp.route("/alerts/dismiss", methods=["POST"])
+@login_required
+@owner_required
+def dismiss_alerts():
+    """Dismiss a grouped alert (all its ids) in one go."""
+    from pumpvision.models import AppNotification, db
+
+    ids = [int(i) for i in request.form.getlist("ids") if i.isdigit()]
+    if ids:
+        (AppNotification.query
+         .filter(AppNotification.id.in_(ids), AppNotification.notification_type.in_(ALERT_TYPES))
+         .update({"is_read": True}, synchronize_session=False))
         db.session.commit()
     return redirect(url_for("credit.credit_home"))
 
