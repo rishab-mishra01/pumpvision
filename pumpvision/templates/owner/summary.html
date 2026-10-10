@@ -72,7 +72,7 @@
       <div class="sum-prow" data-p="CNG">
         <span class="pcode"><span class="stripe"></span>CNG</span>
         {% if cng %}
-        <span class="calc">{{ cng.kg_sold | int }} kg<span class="x">×</span><span class="px">₹{{ "%.2f"|format(cng.rsp_per_kg) }}</span></span>
+        <span class="calc">{{ "%.2f"|format(cng.kg_sold) }} kg<span class="x">×</span><span class="px">₹{{ "%.2f"|format(cng.rsp_per_kg) }}</span></span>
         <span class="amt">₹ {{ cng.revenue | inr_full }}</span>
         {% else %}
         <span class="calc" style="color:var(--ink-3);font-style:italic;font-size:10.5px;">SDMS data unavailable</span>

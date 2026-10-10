@@ -125,7 +125,7 @@
           <div class="stripe"></div>
           <div class="code-row"><span class="code">CNG</span></div>
           {% if cng %}
-          <div class="litres">{{ cng.kg_sold | int }}<span class="u">kg</span></div>
+          <div class="litres">{{ "%.2f"|format(cng.kg_sold) }}<span class="u">kg</span></div>
           <div class="revenue">₹ {{ cng.revenue | inr }}</div>
           {% else %}
           <div class="litres" style="font-size:20px;color:var(--ink-3);">—</div>

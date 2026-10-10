@@ -24,11 +24,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 def _product_sales(op_date):
     """Per-product net litres and revenue for the given operational day."""
-    next_date = op_date + timedelta(days=1)
-    opening = {r.nozzle_no: r.totalizer_end
-               for r in NozzleTotalizer.query.filter_by(operational_date=op_date)}
-    closing = {r.nozzle_no: r.totalizer_end
-               for r in NozzleTotalizer.query.filter_by(operational_date=next_date)}
+    from pumpvision.services.totalizers import totalizers_for_day
+    opening, closing, _manual = totalizers_for_day(op_date)
 
     litres = defaultdict(float)
     for nozzle_no, product in _NOZZLE_PRODUCT.items():

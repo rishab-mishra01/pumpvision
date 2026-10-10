@@ -16,7 +16,7 @@
     {% for code, label in [('HS', 'Diesel'), ('MS', 'Petrol'), ('X2', 'Premium'), ('XG', 'XtraGreen')] %}
     <article><span>{{ code }} · {{ label }}</span><b>{{ d.products[code].litres|thousands }} L</b><small>₹{{ d.products[code].revenue|inr }} · ₹{{ '%.2f'|format(d.prices[code]) }}/L</small></article>
     {% endfor %}
-    <article><span>CNG</span>{% if d.cng %}<b>{{ d.cng.kg_sold|int }} kg</b><small>₹{{ d.cng.revenue|inr }} · ₹{{ '%.2f'|format(d.prices.CNG) }}/kg</small>{% else %}<b>—</b><small>No reading</small>{% endif %}</article>
+    <article><span>CNG</span>{% if d.cng %}<b>{{ "%.2f"|format(d.cng.kg_sold) }} kg</b><small>₹{{ d.cng.revenue|inr }} · ₹{{ '%.2f'|format(d.prices.CNG) }}/kg</small>{% else %}<b>—</b><small>No reading</small>{% endif %}</article>
     <article><span>Lubricants</span><b>{{ d.lube_units }} units</b><small>₹{{ d.lube_cash|inr }}</small></article>
   </div>
 </section>

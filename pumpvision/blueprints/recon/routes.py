@@ -67,12 +67,8 @@ def _checklist_status(op_date: date) -> dict:
 def _calculate(op_date: date) -> dict:
     next_date = op_date + timedelta(days=1)
 
-    opening_tots = {
-        r.nozzle_no: r.totalizer_end
-        for r in NozzleTotalizer.query.filter_by(operational_date=op_date).all()
-    }
-    closing_rows = NozzleTotalizer.query.filter_by(operational_date=next_date).all()
-    closing_tots = {r.nozzle_no: r.totalizer_end for r in closing_rows}
+    from pumpvision.services.totalizers import totalizers_for_day
+    opening_tots, closing_tots, _manual = totalizers_for_day(op_date)
 
     pump_tests = {}
     for nozzle_def in NOZZLE_ROWS:
