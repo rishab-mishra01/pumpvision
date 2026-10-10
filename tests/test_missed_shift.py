@@ -91,7 +91,7 @@ class MissedShiftNeverMislabelled(unittest.TestCase):
         with mock.patch(OPERATIONAL, return_value=date(2026, 10, 8)):
             html = c.get("/attendant/").get_data(as_text=True)
         self.assertIn("06 Oct", html)
-        self.assertIn("छूटी हुई शिफ्ट", html)
+        self.assertIn("छूटी या जमा न हुई शिफ्ट", html)
 
     # ---- calculations ignore a reading that is not from that boundary ----
     def _scraped(self, label_day, n, v):
