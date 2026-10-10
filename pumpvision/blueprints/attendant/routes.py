@@ -501,7 +501,7 @@ def log_sale_details(customer_id):
             customer,
             request.form.get("vehicle_number", ""),
             product,
-            request.form.get("input_mode", "amount"),
+            request.form.get("input_mode", "litres"),
             request.form.get("quantity", ""),
             current_user.first_name or current_user.username,
             rates=price_map,

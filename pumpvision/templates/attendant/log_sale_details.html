@@ -221,19 +221,19 @@
         <p class="eyebrow">{{ hi.dispensed_quantity }}</p>
         <div class="mode-toggle">
           <button type="button" id="btn-amount" onclick="setMode('amount')"
-                  class="mode-btn active">{{ hi.amount_rupees }}</button>
+                  class="mode-btn">{{ hi.amount_rupees }}</button>
           <button type="button" id="btn-litres" onclick="setMode('litres')"
-                  class="mode-btn">{{ hi.litres_L }}</button>
+                  class="mode-btn active">{{ hi.litres_L }}</button>
         </div>
       </div>
-      <input type="hidden" name="input_mode" id="input-mode-hidden" value="amount">
+      <input type="hidden" name="input_mode" id="input-mode-hidden" value="litres">
 
       <div style="background:var(--paper-100);border:1px solid var(--paper-300);
                   border-radius:var(--r-card);padding:20px 16px 14px;
                   position:relative;text-align:center;">
         <span id="currency-symbol"
               style="position:absolute;top:14px;left:16px;
-                     font-family:var(--font-sans);font-size:13px;color:var(--ink-500);">₹</span>
+                     font-family:var(--font-sans);font-size:13px;color:var(--ink-500);">L</span>
         <input type="number" name="quantity" id="quantity-input"
                step="0.01" min="0.01" inputmode="decimal"
                oninput="updateRateDisplay(); updateConfirmButton()"
@@ -295,7 +295,7 @@
 <script>
 const PRICE_MAP = {{ price_map | tojson }};
 let selectedProduct = null;
-let inputMode = 'amount';
+let inputMode = 'litres';
 
 const PRODUCT_CLS = { HS: 'HS', MS: 'MS', X2: 'X2', XG: 'XG' };
 
