@@ -75,7 +75,7 @@
         <span class="calc">{{ "%.2f"|format(cng.kg_sold) }} kg<span class="x">×</span><span class="px">₹{{ "%.2f"|format(cng.rsp_per_kg) }}</span></span>
         <span class="amt">₹ {{ cng.revenue | inr_full }}</span>
         {% else %}
-        <span class="calc" style="color:var(--ink-3);font-style:italic;font-size:10.5px;">SDMS data unavailable</span>
+        <span class="calc" style="color:var(--ink-3);font-style:italic;font-size:12px;">SDMS data unavailable</span>
         <span class="amt" style="color:var(--ink-3);">—</span>
         {% endif %}
       </div>
@@ -94,7 +94,7 @@
         {% if lube_cash > 0 %}
         <span class="amt">₹ {{ lube_cash | inr_full }}</span>
         {% else %}
-        <span class="amt" style="color:var(--ink-3);font-size:10.5px;font-style:italic;">No lube sales</span>
+        <span class="amt" style="color:var(--ink-3);font-size:12px;font-style:italic;">No lube sales</span>
         {% endif %}
       </div>
 
@@ -121,7 +121,7 @@
         {% if paytm_available %}
         <span class="amt">{% if paytm > 0 %}− ₹ {{ paytm | inr_full }}{% else %}₹ 0{% endif %}</span>
         {% else %}
-        <span class="amt" style="color:var(--ink-3);font-size:10.5px;font-style:italic;">Scrape pending</span>
+        <span class="amt" style="color:var(--ink-3);font-size:12px;font-style:italic;">Scrape pending</span>
         {% endif %}
       </div>
 
@@ -130,7 +130,7 @@
         {% if fleet_available %}
         <span class="amt">{% if fleet > 0 %}− ₹ {{ fleet | inr_full }}{% else %}₹ 0{% endif %}</span>
         {% else %}
-        <span class="amt" style="color:var(--ink-3);font-size:10.5px;font-style:italic;">Scrape pending</span>
+        <span class="amt" style="color:var(--ink-3);font-size:12px;font-style:italic;">Scrape pending</span>
         {% endif %}
       </div>
 
@@ -139,7 +139,7 @@
         {% if expenses_available %}
         <span class="amt">{% if expenses > 0 %}− ₹ {{ expenses | inr_full }}{% else %}₹ 0{% endif %}</span>
         {% else %}
-        <span class="amt" style="color:var(--ink-3);font-size:10.5px;font-style:italic;">Manager entry pending</span>
+        <span class="amt" style="color:var(--ink-3);font-size:12px;font-style:italic;">Manager entry pending</span>
         {% endif %}
       </div>
 
@@ -183,7 +183,7 @@
     {% endif %}
 
     <div style="margin:14px 18px 0;text-align:center;">
-      <a href="{{ url_for('owner.entries', date_str=op_date.isoformat()) }}"
+      <a href="{{ url_for('owner.entries', date_str=op_date.isoformat()) }}" class="tap-link"
          style="font-family:var(--font-sans);font-size:14px;font-weight:600;color:var(--ink-700);">
         Review / remove manual entries for this day →
       </a>

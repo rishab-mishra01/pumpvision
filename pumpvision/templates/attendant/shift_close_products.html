@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="flex items-center gap-2 mb-1">
-  <a href="{{ url_for('attendant.home') }}" class="text-indigo-600 text-sm">← {{ hi.back }}</a>
+  <a href="{{ url_for('attendant.home') }}" class="tap-link text-indigo-600 text-sm">← {{ hi.back }}</a>
   <h1 class="text-xl font-bold text-gray-800">{{ hi.day_close }}</h1>
 </div>
 <p class="text-sm text-gray-500 mb-5">{{ op_date.strftime('%d %b %Y') }}</p>

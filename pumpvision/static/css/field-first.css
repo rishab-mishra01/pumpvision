@@ -85,12 +85,12 @@ body[data-ff="1"] {
 /* --- 2. Type scale ------------------------------------------------------- */
 /* Each rule lifts one inline literal. Both spacing variants are matched
    because the templates use both `font-size:13px` and `font-size: 13px`. */
-body[data-ff="1"] [style*="font-size:9px"],
-body[data-ff="1"] [style*="font-size: 9px"],
-body[data-ff="1"] [style*="font-size:10px"],
-body[data-ff="1"] [style*="font-size: 10px"],
-body[data-ff="1"] [style*="font-size:11px"],
-body[data-ff="1"] [style*="font-size: 11px"]   { font-size: 14px !important; }
+body[data-ff="1"] [style*="font-size:12px"],
+body[data-ff="1"] [style*="font-size: 12px"],
+body[data-ff="1"] [style*="font-size:12px"],
+body[data-ff="1"] [style*="font-size: 12px"],
+body[data-ff="1"] [style*="font-size:12px"],
+body[data-ff="1"] [style*="font-size: 12px"]   { font-size: 14px !important; }
 
 body[data-ff="1"] [style*="font-size:12px"],
 body[data-ff="1"] [style*="font-size: 12px"]   { font-size: 15px !important; }

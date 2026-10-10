@@ -41,7 +41,7 @@
 }
 .nav-tab svg { width: 22px; height: 22px; }
 .nav-tab .nav-label {
-  font-family: var(--font-mono); font-size: 11px;
+  font-family: var(--font-mono); font-size: 12px;
   letter-spacing: 0.10em; text-transform: uppercase;
   font-weight: 500; color: inherit;
 }
@@ -105,7 +105,7 @@
   border-radius: 999px;
   padding: 5px 10px 5px 8px;
   font-family: var(--font-sans);
-  font-size: 11px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   color: #5a3a00;
 }
 .dash-topbar .alerts .dot {
@@ -298,7 +298,7 @@
   margin-bottom: 8px;
 }
 .dash-stock .head .eb {
-  font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink);
   display: inline-flex; align-items: center; gap: 7px;
@@ -309,7 +309,7 @@
   box-shadow: 0 0 0 3px rgba(179,74,20,0.16);
 }
 .dash-stock .head .meta {
-  font-family: var(--font-sans); font-size: 11px; color: var(--ink-3);
+  font-family: var(--font-sans); font-size: 12px; color: var(--ink-3);
 }
 .dash-stock .alert {
   display: flex; align-items: center; gap: 10px;
@@ -321,7 +321,7 @@
   white-space: nowrap;
 }
 .dash-stock .alert .pcode {
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
   letter-spacing: 0.1em;
   background: #fff5d9; color: #8a5a00;
   padding: 4px 7px; border-radius: 999px;
@@ -334,7 +334,7 @@
 .dash-stock .alert .body b { font-weight: 600; }
 .dash-stock .alert.urgent .body b { color: var(--alert); }
 .dash-stock .alert .cta {
-  font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
   color: var(--saffron-700);
   flex: none;
   letter-spacing: 0.02em;
@@ -406,7 +406,7 @@
 }
 .sum-datenav .date .dow {
   display: block;
-  font-size: 11px; font-weight: 500;
+  font-size: 12px; font-weight: 500;
   letter-spacing: 0.18em; text-transform: uppercase;
   color: #5a3a00;
 }
@@ -442,7 +442,7 @@
 .sum-cash .label {
   margin-top: 12px;
   font-family: var(--font-sans);
-  font-size: 11px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   letter-spacing: 0.22em;
   color: #5a3a00;
   text-transform: uppercase;
@@ -471,13 +471,13 @@
 }
 .sum-recon .rhead .stamp {
   font-family: var(--font-sans);
-  font-size: 10px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--ink-3);
 }
 .sum-recon .seyebrow {
   font-family: var(--font-sans);
-  font-size: 10px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--ink-3);
   margin: 14px 0 6px;
@@ -514,7 +514,7 @@
 .sum-prow[data-p="CNG"] .pcode .stripe { background: #2a6fa3; }
 .sum-prow .calc {
   font-family: var(--font-mono);
-  font-size: 11px; font-weight: 500;
+  font-size: 12px; font-weight: 500;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -643,7 +643,7 @@
 }
 .tanks-titlerow .sub {
   font-family: var(--font-sans);
-  font-size: 11px; font-weight: 500;
+  font-size: 12px; font-weight: 500;
   color: rgba(42,26,0,0.62); letter-spacing: 0.02em; text-align: right;
 }
 
@@ -659,8 +659,8 @@
 }
 .gauge-refresh .ico { width: 14px; height: 14px; flex: none; color: var(--ink-500); }
 .gauge-refresh .row { display: flex; flex-direction: column; gap: 1px; flex: 1; }
-.gauge-refresh .row .a { font-size: 11px; font-weight: 600; color: var(--ink-700); }
-.gauge-refresh .row .b { font-size: 10px; color: var(--ink-500); }
+.gauge-refresh .row .a { font-size: 12px; font-weight: 600; color: var(--ink-700); }
+.gauge-refresh .row .b { font-size: 12px; color: var(--ink-500); }
 .gauge-refresh .stamp {
   font-family: var(--font-mono); font-size: 12px; font-weight: 600;
   color: var(--ink-700); font-variant-numeric: tabular-nums;
@@ -704,7 +704,7 @@
 .gcard.crit .gcode { color: var(--error-600); }
 .gcard.warn .gcode { color: var(--warn-600); }
 .gcard .gmeta {
-  font-family: var(--font-sans); font-size: 10px; font-weight: 500;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 500;
   color: var(--ink-500); letter-spacing: 0.06em; text-transform: uppercase;
 }
 .gcard .gmeta b { font-weight: 600; color: var(--ink-700); }
@@ -739,7 +739,7 @@
 .gcard.crit .pct { color: var(--error-600); }
 .gcard.warn .pct { color: var(--warn-600); }
 .gcard .vol {
-  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
   color: var(--ink-500); font-variant-numeric: tabular-nums;
 }
 
@@ -758,7 +758,7 @@
 .gcard.crit .gdays-line .num { color: var(--error-600); }
 .gcard.warn .gdays-line .num { color: var(--warn-600); }
 .gcard .gdays-line .unit { font-size: 12px; font-weight: 600; }
-.gcard .gdays-line .lab { font-size: 10px; }
+.gcard .gdays-line .lab { font-size: 12px; }
 
 /* ── CREDIT SCREEN (screen 12) ──────────────────────────── */
 
@@ -800,7 +800,7 @@
   color: var(--ink-900); letter-spacing: -0.02em;
 }
 .cred-titlerow .sub {
-  font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 500;
   color: rgba(42,26,0,0.62); text-align: right;
 }
 
@@ -814,7 +814,7 @@
   appearance: none; -webkit-appearance: none;
   background: transparent; border: 0;
   padding: 13px 0 12px;
-  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
   letter-spacing: 0.10em; text-transform: uppercase;
   color: var(--c-ink-3); cursor: pointer;
   position: relative;
@@ -822,7 +822,7 @@
 .cred-tabs button .ct {
   background: var(--paper-200);
   color: var(--c-ink-3);
-  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
   padding: 2px 6px; border-radius: 999px; margin-left: 4px;
 }
 .cred-tabs button.active { color: var(--c-ink); }
@@ -836,7 +836,7 @@
 
 .cred-day {
   padding: 14px 18px 6px;
-  font-family: var(--font-sans); font-size: 10px; font-weight: 700;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700;
   letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--c-ink-3);
 }
@@ -854,7 +854,7 @@
   color: var(--c-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cred-feed-row .desc {
-  font-family: var(--font-sans); font-size: 11px; color: var(--c-ink-3);
+  font-family: var(--font-sans); font-size: 12px; color: var(--c-ink-3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cred-feed-row .right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
@@ -863,12 +863,12 @@
   color: var(--c-ink); font-variant-numeric: tabular-nums;
 }
 .cred-feed-row .amt.credit { color: var(--c-good); }
-.cred-feed-row .when { font-family: var(--font-mono); font-size: 10px; color: var(--c-ink-3); }
+.cred-feed-row .when { font-family: var(--font-mono); font-size: 12px; color: var(--c-ink-3); }
 
 .act-glyph {
   width: 36px; height: 36px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
   letter-spacing: 0.08em; flex: none;
 }
 .act-glyph.fuel.hs  { background: rgba(74,122,58,0.18); color: #4a7a3a; }
@@ -899,7 +899,7 @@
   display: flex; align-items: baseline; gap: 10px;
 }
 .ledger-total .lab {
-  font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; color: rgba(42,26,0,0.65);
 }
 .ledger-total .amt {
@@ -929,7 +929,7 @@
   font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--c-ink);
 }
 .cust-card-min .lastpay {
-  font-family: var(--font-sans); font-size: 11px; color: var(--c-ink-3);
+  font-family: var(--font-sans); font-size: 12px; color: var(--c-ink-3);
 }
 .cust-card-min .lastpay.good b { color: var(--c-good); }
 .cust-card-min .right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
@@ -937,9 +937,9 @@
   font-family: var(--font-mono); font-size: 16px; font-weight: 700;
   color: var(--c-ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
 }
-.cust-card-min .amt .rs { font-size: 11px; font-weight: 400; opacity: 0.55; margin-right: 1px; }
+.cust-card-min .amt .rs { font-size: 12px; font-weight: 400; opacity: 0.55; margin-right: 1px; }
 .cust-card-min .amt-lab {
-  font-family: var(--font-sans); font-size: 9px; font-weight: 600;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
   letter-spacing: 0.10em; text-transform: uppercase; color: var(--c-ink-3);
 }
 .cust-add-fab {
@@ -1000,7 +1000,7 @@
 .cd-back svg { width: 14px; height: 14px; }
 .cd-bar .crumb {
   font-family: var(--font-sans);
-  font-size: 11px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--c-ink-3);
 }
@@ -1026,7 +1026,7 @@
 }
 .cd-head-v2 .clab {
   margin-top: 4px;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
   color: var(--c-ink-3); letter-spacing: 0.10em; text-transform: uppercase;
 }
 .cd-balance-v2 {
@@ -1035,7 +1035,7 @@
 }
 .cd-balance-v2 .lab {
   font-family: var(--font-sans);
-  font-size: 11px; font-weight: 700;
+  font-size: 12px; font-weight: 700;
   letter-spacing: 0.20em; text-transform: uppercase;
   color: var(--c-ink-3);
 }
@@ -1071,11 +1071,11 @@
 .cd-lastreceipt.none .glyph { background: var(--paper-200); color: var(--c-ink-3); border-color: var(--c-hair); }
 .cd-lastreceipt .body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .cd-lastreceipt .lab {
-  font-family: var(--font-sans); font-size: 9px; font-weight: 700;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700;
   letter-spacing: 0.18em; text-transform: uppercase; color: var(--c-ink-3);
 }
 .cd-lastreceipt .when {
-  font-family: var(--font-mono); font-size: 11px;
+  font-family: var(--font-mono); font-size: 12px;
   color: var(--c-ink-2); letter-spacing: 0.04em; text-transform: uppercase;
 }
 .cd-lastreceipt .when b { color: var(--c-ink); font-weight: 600; }
@@ -1145,7 +1145,7 @@
 }
 .form-section { display: flex; flex-direction: column; gap: 4px; }
 .form-section .fsec-head {
-  font-family: var(--font-sans); font-size: 10px; font-weight: 700;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700;
   letter-spacing: 0.20em; text-transform: uppercase;
   color: var(--c-ink-3);
   margin-bottom: 8px; padding-bottom: 6px;
@@ -1160,7 +1160,7 @@
 }
 .cform-field:last-child { border-bottom: 0; }
 .cform-field .fl {
-  font-family: var(--font-sans); font-size: 10px; font-weight: 600;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
   letter-spacing: 0.14em; text-transform: uppercase; color: var(--c-ink-3);
 }
 .cform-field .fl .req { color: var(--c-amber); margin-left: 2px; }
@@ -1179,7 +1179,7 @@
 .cform-field textarea:focus-visible { outline: 3px solid #1f6fd4; outline-offset: 2px; border-radius: 3px; }
 .cform-field select option { background: #ffffff; color: var(--c-ink); }
 .cform-field .fhelper {
-  font-family: var(--font-sans); font-size: 10.5px;
+  font-family: var(--font-sans); font-size: 12px;
   color: var(--c-ink-3); line-height: 1.4;
 }
 .terms-seg {
@@ -1195,9 +1195,9 @@
   color: var(--c-ink-2); font-family: var(--font-sans);
 }
 .terms-seg button .tsn { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.terms-seg button .tsu { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; }
+.terms-seg button .tsu { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; }
 .terms-seg button.active { background: var(--c-ink); border-color: transparent; color: #ffffff; }
-.terms-seg button.active .tsu { color: rgba(26,26,26,0.55); }
+.terms-seg button.active .tsu { color: rgba(255,255,255,0.72); }  /* was dark-on-dark, unreadable */
 .add-veh-btn {
   margin-top: 10px; width: 100%;
   padding: 11px 14px;
@@ -1238,7 +1238,7 @@
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--c-red);
 }
 .danger-zone .dz-sub {
-  font-family: var(--font-sans); font-size: 11.5px; font-weight: 500;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 500;
   color: var(--c-ink-2); line-height: 1.4;
 }
 .danger-zone .suspend-btn {
@@ -1321,7 +1321,7 @@
   box-shadow: 0 1px 0 rgba(154,98,0,0.04), 0 8px 24px -16px rgba(80,50,0,0.25); }
 .reg-card.warn { border-left-color: var(--warn-600); }
 .reg-card.bad { border-left-color: var(--error-600); }
-.reg-eb { font-family:var(--font-sans); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-500); }
+.reg-eb { font-family:var(--font-sans); font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-500); }
 .reg-big { font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--ink-900); margin-top:6px; }
 .reg-card.bad .reg-big { color: var(--error-600); }
 .reg-unit { font-size:13px; font-weight:400; color:var(--ink-500); }

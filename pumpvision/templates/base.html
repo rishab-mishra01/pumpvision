@@ -26,6 +26,8 @@
   <!-- Field-First skin: overrides the design-system tokens, so it must come after -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/field-first.css') }}">
   {% endif %}
+  <!-- Touch-target floor: after every skin so it always applies -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/touch.css') }}">
 
   <!-- PWA -->
   <link rel="manifest" href="/static/manifest.json">
@@ -87,7 +89,7 @@
           <span style="position:absolute;top:6px;right:4px;
                        width:16px;height:16px;border-radius:50%;
                        background:var(--error-600);color:var(--paper-50);
-                       font-family:var(--font-sans);font-size:9px;font-weight:700;
+                       font-family:var(--font-sans);font-size:12px;font-weight:700;
                        display:flex;align-items:center;justify-content:center;">
             {{ unread_notification_count if unread_notification_count < 10 else '9+' }}
           </span>

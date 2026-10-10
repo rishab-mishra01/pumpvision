@@ -126,7 +126,7 @@
         {% for inv in invoices %}
         {% set cust = customers.get(inv.customer_id) %}
         <div class="cred-feed-row {{ 'first' if loop.first }}">
-          <span class="act-glyph pay" style="background:rgba(244,241,232,0.06);color:rgba(244,241,232,0.55);font-size:9px;font-family:var(--font-mono);">INV</span>
+          <span class="act-glyph pay" style="background:rgba(244,241,232,0.06);color:rgba(244,241,232,0.55);font-size:12px;font-family:var(--font-mono);">INV</span>
           <div class="body">
             <span class="cname">{{ inv.invoice_number }}</span>
             <span class="desc">{{ cust.company_name if cust else '—' }} · {{ inv.generated_at.strftime('%d %b') if inv.generated_at else '—' }}</span>

@@ -1,0 +1,23 @@
+/* Touch-target floor for phones. Selectors start with `body` so they beat the page-level <style>
+   blocks that come later in the document (same class, lower specificity), without !important.
+   Touch-target floor (loaded last). WCAG 2.5.8 asks for >= 24px; we aim for 44px on
+   anything you tap to fill in or submit, and pad the small standalone links to a comfortable size.
+   Inline text links inside sentences are left alone. */
+
+/* Form fields and buttons: the underline-style fields were 18-26px tall. */
+body input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not(.sr-only),
+body select, body textarea { min-height: 44px; }
+body button, body input[type="submit"], body input[type="button"] { min-height: 44px; }
+body input[type="checkbox"]:not(.sr-only), body input[type="radio"]:not(.sr-only) { width: 24px; height: 24px; }
+
+/* Segmented controls / chips / tabs: keep their look, just make them taller. */
+body .mode-btn, body .chip-filter, body .mg-lang, body .fb-save, body .cred-tabs button, body .dv-ack,
+body .add-veh-btn, body .suspend-btn { min-height: 44px; }
+
+/* Small standalone links. */
+body .app-mark { display: inline-flex; align-items: center; min-height: 44px; }
+body .vdel { min-width: 44px; min-height: 44px; }
+body .tap-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 6px; }
+
+/* <small> renders at 0.83em; never let it drop under the 12px text floor. */
+body small { font-size: max(12px, 0.8333em); }

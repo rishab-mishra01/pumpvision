@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="flex items-center gap-2 mb-1">
-  <a href="{{ url_for('attendant.shift_close') }}" class="text-indigo-600 text-sm">← {{ hi.back }}</a>
+  <a href="{{ url_for('attendant.shift_close') }}" class="tap-link text-indigo-600 text-sm">← {{ hi.back }}</a>
   <h1 class="text-xl font-bold text-gray-800">{{ product }} {{ hi.totalizer_suffix }}</h1>
 </div>
 <p class="text-sm text-gray-500 mb-5">{{ hi.day_close }} — {{ op_date.strftime('%d %b %Y') }}</p>

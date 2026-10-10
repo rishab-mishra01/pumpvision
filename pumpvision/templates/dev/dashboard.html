@@ -12,20 +12,20 @@
   .dv-pills { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
   .dv-pill { background:#fff; border:1px solid var(--paper-300); border-radius:var(--r-card); padding:10px 12px; }
   .dv-pill b { display:block; font-family:var(--font-mono); font-size:24px; }
-  .dv-pill span { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-500); }
+  .dv-pill span { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-500); }
   .dv-pill.critical b { color: var(--error-600); } .dv-pill.warn b { color: var(--warn-600); }
   .dv-run { width:100%; min-height:48px; border:1px solid var(--paper-300); border-radius:var(--r-card); background:var(--paper-100); font-weight:600; font-size:14px; color:var(--ink-700); cursor:pointer; margin-bottom:6px; }
-  .dv-h { font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-500); margin:22px 0 8px; }
+  .dv-h { font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-500); margin:22px 0 8px; }
   .dv-card { background:#fff; border:1px solid var(--paper-300); border-left:4px solid var(--paper-300); border-radius:var(--r-card); padding:12px 14px; margin-bottom:10px; }
   .dv-card.critical { border-left-color: var(--error-600); } .dv-card.warn { border-left-color: var(--warn-600); } .dv-card.info { border-left-color: var(--ink-500); }
   .dv-card.acked { opacity:.55; }
   .dv-title { font-size:14.5px; font-weight:600; line-height:1.35; }
   .dv-meta { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 0; }
-  .dv-chip { font-size:11px; padding:2px 8px; border-radius:999px; background:var(--paper-200); color:var(--ink-700); }
+  .dv-chip { font-size:12px; padding:2px 8px; border-radius:999px; background:var(--paper-200); color:var(--ink-700); }
   .dv-chip.owner { background: var(--saffron-100); color: var(--saffron-700); }
   .dv-body { font-size:13px; color:var(--ink-700); margin:8px 0 0; line-height:1.5; white-space:pre-wrap; }
   .dv-fix { font-size:13px; margin:8px 0 0; padding:8px 10px; background:var(--paper-100); border-radius:8px; line-height:1.5; }
-  .dv-fix b { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-500); display:block; margin-bottom:2px; }
+  .dv-fix b { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-500); display:block; margin-bottom:2px; }
   .dv-ack { margin-top:8px; min-height:40px; padding:0 14px; border:1px solid var(--paper-300); border-radius:var(--r-card); background:#fff; font-size:13px; font-weight:600; color:var(--ink-700); cursor:pointer; }
   .dv-empty { padding:16px; font-size:13px; color:var(--ink-500); background:#fff; border:1px solid var(--paper-300); border-radius:var(--r-card); }
   .dv-st { display:flex; align-items:flex-start; gap:10px; padding:9px 12px; font-size:13.5px; }
@@ -37,7 +37,7 @@
 </style>
 
 <div class="dv">
-  <div class="dv-top"><h1>Developer</h1><a href="{{ url_for('auth.logout_confirm') }}">Sign out</a></div>
+  <div class="dv-top"><h1>Developer</h1><a href="{{ url_for('auth.logout_confirm') }}" class="tap-link">Sign out</a></div>
   <p class="dv-sub">
     {% if last %}Last review {{ last.at }} IST · {{ last.open }} open · {{ last.new }} new · {{ last.resolved }} resolved
       {% if last.failed_checks %}· <b style="color:var(--error-600);">crashed: {{ last.failed_checks | join(', ') }}</b>{% endif %}

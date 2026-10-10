@@ -145,7 +145,7 @@
       {% elif item.type == 'lube' %}
       <div class="cred-feed">
         <div class="cred-feed-row first">
-          <span class="act-glyph pay" style="background:var(--paper-200);color:var(--c-ink-2);font-size:9px;font-family:var(--font-mono);">LUB</span>
+          <span class="act-glyph pay" style="background:var(--paper-200);color:var(--c-ink-2);font-size:12px;font-family:var(--font-mono);">LUB</span>
           <div class="body">
             <span class="cname">Lube sale · {{ "%g"|format(item.quantity) }} ×</span>
             <span class="desc">{{ item.name }}</span>
@@ -159,7 +159,7 @@
       {% elif item.type == 'entry' %}
       <div class="cred-feed">
         <div class="cred-feed-row first">
-          <span class="act-glyph pay" style="background:var(--paper-200);color:var(--c-ink-2);font-size:9px;font-family:var(--font-mono);">{{ {'OPENING': 'OB', 'CHARGE': 'CHG', 'ADJUSTMENT': 'ADJ'}[item.entry_type] }}</span>
+          <span class="act-glyph pay" style="background:var(--paper-200);color:var(--c-ink-2);font-size:12px;font-family:var(--font-mono);">{{ {'OPENING': 'OB', 'CHARGE': 'CHG', 'ADJUSTMENT': 'ADJ'}[item.entry_type] }}</span>
           <div class="body">
             <span class="cname">{% if item.entry_type == 'OPENING' %}Opening balance{% elif item.entry_type == 'CHARGE' %}{{ item.category or 'Charge' }} · paid on their behalf{% else %}Adjustment{% endif %}</span>
             <span class="desc">{{ item.notes or item.source or '—' }}</span>
@@ -214,7 +214,7 @@
       <div class="cred-feed">
         {% for inv in invoices %}
         <div class="cred-feed-row {{ 'first' if loop.first }}">
-          <span class="act-glyph pay" style="background:rgba(244,241,232,0.06);color:rgba(244,241,232,0.55);font-size:9px;font-family:var(--font-mono);">INV</span>
+          <span class="act-glyph pay" style="background:rgba(244,241,232,0.06);color:rgba(244,241,232,0.55);font-size:12px;font-family:var(--font-mono);">INV</span>
           <div class="body">
             <span class="cname">{{ inv.invoice_number }}</span>
             <span class="desc">{{ inv.generated_at | dlong if inv.generated_at else '—' }} · {{ inv.period_from | dshort if inv.period_from else '—' }}–{{ inv.period_to | dshort if inv.period_to else '—' }}</span>
