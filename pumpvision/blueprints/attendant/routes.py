@@ -76,20 +76,33 @@ def _shift_closed(op_date: date) -> bool:
 
 
 def _shift_op_date() -> date:
-    """The shift the attendant closes: the last COMPLETED operational day.
+    """The shift the attendant closes: always the last COMPLETED operational day.
 
     Uses the 06:00 rule, not the calendar, so a shift can no longer be closed
     while it is still running (at 01:00 the running shift is yesterday's; the
-    last completed one is the day before). If the day before that was missed
-    -- not closed, while the one before it was -- that missed day comes first,
-    so a single missed day can still be closed instead of being skipped forever.
+    last completed one is the day before).
+
+    A missed day is NOT offered for closing any more. The reading an attendant types is
+    the meter as it is NOW, which can only be the close of the latest 06:00 boundary.
+    Filing it under an older, missed day (the old "missed day first" rule) attributed
+    several days of sales to that one date (Oct 2026: the Oct 6 shift was closed on the
+    morning of Oct 8 with Oct 8's meter values). Missed days keep no manual reading; their
+    sales come from the IRAS machine totalizers (see services/totalizers.py).
     """
     from pumpvision.services.operational import get_operational_date
-    last = get_operational_date() - timedelta(days=1)
-    missed = last - timedelta(days=1)
-    if not _shift_closed(missed) and _shift_closed(missed - timedelta(days=1)):
-        return missed
-    return last
+    return get_operational_date() - timedelta(days=1)
+
+
+def _missed_shift_days(limit: int = 5) -> list:
+    """Operational days skipped since the last closed shift (oldest first), for a notice.
+
+    Empty when nothing is known to be closed in the last week (e.g. before first use)."""
+    last = _shift_op_date()
+    closed = [last - timedelta(days=i) for i in range(0, 8) if _shift_closed(last - timedelta(days=i))]
+    if not closed:
+        return []
+    gap = max(0, (last - max(closed)).days - 1)       # 0 when the latest shift is closed or next in line
+    return [last - timedelta(days=gap - i) for i in range(gap)][-limit:]
 
 
 def _greeting() -> str:
@@ -117,8 +130,9 @@ def attendant_home_data(display_name=None):
     from pumpvision.services.operational import get_operational_date
 
     current_op_date  = get_operational_date()
-    previous_op_date = _shift_op_date()   # a missed day shows here first
+    previous_op_date = _shift_op_date()
     prev_shift_closed = _shift_closed(previous_op_date)
+    missed_days = _missed_shift_days()
 
     if display_name is None:
         display_name = current_user.first_name or current_user.username
@@ -128,6 +142,7 @@ def attendant_home_data(display_name=None):
         display_name=display_name,
         prev_shift_closed=prev_shift_closed,
         prev_date_str=previous_op_date.strftime("%d %b"),
+        missed_days_str=", ".join(d.strftime("%d %b") for d in missed_days),
         curr_date_str=current_op_date.strftime("%d %b"),
     )
 

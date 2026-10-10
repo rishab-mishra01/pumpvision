@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 _DB_FILE = tempfile.NamedTemporaryFile(prefix="pumpvision-test-", suffix=".db", delete=False)
 _DB_FILE.close()
@@ -20,7 +20,8 @@ def _scraped(day, n, v):
 
 def _manual(day, n, label, v):
     db.session.add(ManualTotalizerReading(operational_date=day, nozzle_no=n, nozzle_label=label,
-                                          product="HSD", totalizer_value=v, recorded_at=datetime(2026, 10, 10, 6)))
+                                          product="HSD", totalizer_value=v,
+                                          recorded_at=datetime.combine(day, datetime.min.time()) + timedelta(days=1, hours=6, minutes=10)))
 
 
 class ManualTotalizersWinOverStaleScrape(unittest.TestCase):

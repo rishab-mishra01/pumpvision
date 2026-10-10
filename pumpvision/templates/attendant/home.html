@@ -88,6 +88,13 @@
     </h2>
   </div>
 
+  {% if missed_days_str %}
+  <div style="margin:0 20px 14px;padding:12px 14px;border-radius:var(--r-card);background:var(--warn-100, #fff4d6);
+              border:1px solid var(--warn-600, #b7791f);font-family:var(--font-sans);font-size:13px;line-height:1.5;color:var(--ink-900);">
+    {{ hi.missed_shift_notice.format(days=missed_days_str) }}
+  </div>
+  {% endif %}
+
   <!-- Shift status nudge -->
   <div style="padding:0 20px 20px;">
     {% if prev_shift_closed %}
