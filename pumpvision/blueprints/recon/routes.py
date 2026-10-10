@@ -70,11 +70,7 @@ def _calculate(op_date: date) -> dict:
     from pumpvision.services.totalizers import totalizers_for_day
     opening_tots, closing_tots, _manual = totalizers_for_day(op_date)
 
-    pump_tests = {}
-    for nozzle_def in NOZZLE_ROWS:
-        n = nozzle_def["nozzle_no"]
-        setting = db.session.get(AppSetting, f"pump_test_nozzle_{n}")
-        pump_tests[n] = float(setting.value) if setting else 0.0
+    pump_tests = {}   # pump tests are manual FuelTest entries now; no fixed per-nozzle deduction
 
     nozzle_rows = []
     total_sales_value = 0.0

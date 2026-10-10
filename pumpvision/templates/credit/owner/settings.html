@@ -19,23 +19,12 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-xl shadow p-4 space-y-3">
-    <h2 class="font-semibold text-gray-700">Pump Test Deduction</h2>
+  <div class="bg-white rounded-xl shadow p-4 space-y-2">
+    <h2 class="font-semibold text-gray-700">Pump tests</h2>
     <p class="text-sm text-gray-500">
-      Litres deducted per nozzle each day for the morning pump test. Default 5L. Set to 0 to disable.
+      No automatic deduction. A pump test reduces sales only on days when it is entered
+      (attendant: shift summary &rarr; testing; owner: entries).
     </p>
-    {% for nozzle_no, label in pump_test_nozzles.items() %}
-    <div class="flex items-center justify-between gap-4">
-      <label class="text-sm text-gray-700 flex-1" for="set-pt-{{ nozzle_no }}">{{ label }}</label>
-      <div class="flex items-center gap-2">
-        <input type="number" id="set-pt-{{ nozzle_no }}" name="pump_test_nozzle_{{ nozzle_no }}"
-               value="{{ pump_test_settings[nozzle_no] }}"
-               step="0.1" min="0" inputmode="decimal"
-               class="w-20 border border-gray-300 rounded-lg px-3 py-2 text-right font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        <span class="text-sm text-gray-500">L</span>
-      </div>
-    </div>
-    {% endfor %}
   </div>
 
   <button type="submit"

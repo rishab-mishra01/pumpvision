@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, flashes, topbar, nav, lab with context %}
+{% block title %}{{ t('title_pump_test') }} — Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+<div class="mg-page">
+  {{ topbar(t('title_pump_test')) }}
+  {{ flashes() }}
+  <div class="mg-body">
+    <p class="mg-note" style="margin:0;">{{ t('pt_help') }}</p>
+
+    <form method="GET" action="{{ url_for('manager.pump_test') }}">
+      {{ lab(t('date'), 'pt-date') }}
+      <input type="date" id="pt-date" name="date" value="{{ op_date.isoformat() }}" class="mg-input" onchange="this.form.submit()">
+    </form>
+
+    <div class="mg-card">
+      <div class="mg-h" style="padding:12px 16px 0;margin:0;">{{ t('pt_recorded_for') }}</div>
+      {% for x in tests %}
+      <div class="mg-row" style="justify-content:space-between;padding:11px 16px;gap:10px;">
+        <small>{{ nozzles.get(x.nozzle_no, x.product) }}{% if x.returned_to_tank is false %} · {{ t('not_returned_tag') }}{% endif %}{% if x.note %} · {{ x.note }}{% endif %}</small>
+        <b style="font-weight:500;">{{ '%g' | format(x.litres) }} L</b>
+        <form method="POST" action="{{ url_for('manager.pump_test_delete', test_id=x.id) }}" style="margin:0;">
+          <button type="submit" class="mg-note" style="border:1px solid var(--paper-300);background:#fff;border-radius:8px;padding:6px 10px;color:var(--error-600);">{{ t('remove') }}</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="mg-row" style="padding:11px 16px;"><small>{{ t('pt_none') }}</small></div>
+      {% endfor %}
+    </div>
+
+    <form method="POST" class="mg-body" style="padding:0;">
+      <input type="hidden" name="op_date" value="{{ op_date.isoformat() }}">
+      <div>
+        {{ lab(t('nozzle'), 'pt-nozzle') }}
+        <select id="pt-nozzle" name="nozzle_no" required class="mg-input">
+          <option value="">{{ t('choose_nozzle') }}</option>
+          {% for no, label in nozzles.items() %}<option value="{{ no }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        {{ lab(t('litres_l'), 'pt-litres') }}
+        <input type="number" id="pt-litres" name="litres" inputmode="decimal" step="0.01" min="0.01" max="100" required
+               class="mg-input" style="font-size:20px;font-weight:600;" placeholder="0.00">
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;min-height:44px;">
+        <input type="checkbox" name="returned" value="1" checked style="width:22px;height:22px;"> {{ t('returned_to_tank') }}
+      </label>
+      <div>
+        {{ lab(t('description'), 'pt-note', optional=True) }}
+        <input type="text" id="pt-note" name="note" maxlength="200" class="mg-input" placeholder="{{ t('desc_ph') }}">
+      </div>
+      <button type="submit" class="mg-submit">{{ t('add_pump_test') }}</button>
+    </form>
+  </div>
+</div>
+{{ nav('home') }}
+{% endblock %}

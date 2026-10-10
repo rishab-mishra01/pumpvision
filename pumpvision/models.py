@@ -429,6 +429,11 @@ class FuelTest(db.Model):
     note = db.Column(db.String(200))
     logged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Which nozzle the test came out of (None on entries made before nozzle was recorded).
+    nozzle_no = db.Column(db.Integer, nullable=True)
+    # True = poured back into the tank, so the tank gauge never lost it; False = it left the
+    # tank (discarded / sent away). Either way it is not a sale.
+    returned_to_tank = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
 
 
 class MockDrill(db.Model):

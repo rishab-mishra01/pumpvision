@@ -32,9 +32,7 @@ def _product_sales(op_date):
         t_open = opening.get(nozzle_no)
         t_close = closing.get(nozzle_no)
         if t_open is not None and t_close is not None:
-            setting = db.session.get(AppSetting, f"pump_test_nozzle_{nozzle_no}")
-            pump_test = float(setting.value) if setting else 0.0
-            litres[product] += max(0.0, t_close - t_open - pump_test)
+            litres[product] += max(0.0, t_close - t_open)
 
     # Fuel drawn off for testing went through the nozzle but was not sold.
     tested = tested_litres(op_date)
@@ -42,7 +40,9 @@ def _product_sales(op_date):
     for p in ('HS', 'MS', 'X2', 'XG'):
         l = round(max(0.0, litres[p] - tested.get(p, 0.0)), 2)
         rsp = get_rsp(p, op_date) or 0.0
-        out[p] = {'litres': l, 'revenue': round(l * rsp, 2), 'rsp': rsp}
+        out[p] = {'litres': l, 'revenue': round(l * rsp, 2), 'rsp': rsp,
+                  # machine figure vs the pump tests staff recorded; only `litres` is sales
+                  'dispensed': round(litres[p], 2), 'tested': round(tested.get(p, 0.0), 2)}
     return out
 
 
@@ -159,9 +159,7 @@ def _stock_watch(op_date):
                 continue
             day_l = 0.0
             for n in nozzles:
-                s = db.session.get(AppSetting, f"pump_test_nozzle_{n}")
-                pt = float(s.value) if s else 0.0
-                day_l += max(0.0, cl[n] - op[n] - pt)
+                day_l += max(0.0, cl[n] - op[n])
             if day_l > 0:
                 total += day_l
                 days += 1

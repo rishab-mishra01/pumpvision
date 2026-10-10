@@ -326,6 +326,53 @@ def expense():
     )
 
 
+@manager_bp.route("/pump-test/", methods=["GET", "POST"])
+@login_required
+@manager_required
+def pump_test():
+    """Record / review pump tests for a shift. Only recorded tests are taken out of sales."""
+    from pumpvision.constants import PUMP_TEST_NOZZLES
+    from pumpvision.services.pump_tests import record_test, tests_for_day
+
+    today_op = get_operational_date()
+    raw = (request.form.get("op_date") or request.args.get("date") or "").strip()
+    try:
+        op_date = date.fromisoformat(raw) if raw else today_op
+    except ValueError:
+        op_date = today_op
+
+    if request.method == "POST":
+        t, err = record_test(
+            op_date, request.form.get("nozzle_no"), request.form.get("litres", ""),
+            request.form.get("returned") == "1", request.form.get("note", ""), current_user.id,
+        )
+        if err == "bad_nozzle":
+            flash(tr("err_pt_nozzle"), "error")
+        elif err == "bad_litres":
+            flash(tr("err_pt_litres"), "error")
+        else:
+            flash(tr("pt_recorded", nozzle=PUMP_TEST_NOZZLES[t.nozzle_no], litres=f"{t.litres:g}"), "ok")
+        return redirect(url_for("manager.pump_test", date=op_date.isoformat()))
+
+    return render_template("manager/pump_test.html", op_date=op_date, nozzles=PUMP_TEST_NOZZLES,
+                           tests=tests_for_day(op_date))
+
+
+@manager_bp.route("/pump-test/<int:test_id>/delete", methods=["POST"])
+@login_required
+@manager_required
+def pump_test_delete(test_id):
+    from pumpvision.models import FuelTest, db
+
+    t = db.session.get(FuelTest, test_id)
+    op_date = t.op_date if t else get_operational_date()
+    if t:
+        db.session.delete(t)
+        db.session.commit()
+        flash(tr("pt_removed"), "ok")
+    return redirect(url_for("manager.pump_test", date=op_date.isoformat()))
+
+
 @manager_bp.route("/drill/", methods=["GET", "POST"])
 @login_required
 @manager_required

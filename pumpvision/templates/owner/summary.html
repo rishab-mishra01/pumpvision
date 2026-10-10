@@ -60,7 +60,7 @@
       <div class="sum-prow" data-p="{{ p }}">
         <span class="pcode"><span class="stripe"></span>{{ p }}</span>
         {% if data.litres > 0 %}
-        <span class="calc">{{ "%.1f"|format(data.litres) }} L<span class="x">×</span><span class="px">₹{{ "%.2f"|format(data.rsp) }}</span></span>
+        <span class="calc">{{ "%.1f"|format(data.litres) }} L<span class="x">×</span><span class="px">₹{{ "%.2f"|format(data.rsp) }}</span>{% if data.tested %}<br><small style="color:var(--ink-4);">machine {{ "%.1f"|format(data.dispensed) }} L − test {{ "%.1f"|format(data.tested) }} L</small>{% endif %}</span>
         <span class="amt">₹ {{ data.revenue | inr_full }}</span>
         {% else %}
         <span class="calc" style="color:var(--ink-4);">No reading</span>

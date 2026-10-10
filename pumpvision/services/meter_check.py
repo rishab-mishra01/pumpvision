@@ -25,7 +25,6 @@ from datetime import date, datetime, time, timedelta
 OPEN_HOURS_PER_DAY = 19          # outlet open ~06:00 -> 01:00
 CLOSED_FROM, CLOSED_TO = 1, 6    # 01:00-06:00 nothing is sold
 PUMP_TEST_AT = time(8, 20)
-PUMP_TEST_L = 5.0
 TOLERANCE_L = 10.0               # reading error / rounding
 TOLERANCE_PCT = 0.6              # day-average estimate: sales are bursty
 TOLERANCE_PCT_ATG = 0.2          # tank-gauge estimate: measured, but split by share
@@ -102,6 +101,8 @@ def check_day(op_date: date):
     closing = {r.nozzle_no: r.totalizer_end for r in
                NozzleTotalizer.query.filter_by(operational_date=op_date + timedelta(days=1)).all()}
 
+    from pumpvision.services.pump_tests import tested_by_nozzle
+    tested_n = tested_by_nozzle(op_date)
     day_litres = {n: closing[n] - opening[n] for n in closing if n in opening}
     product_litres = {}
     for _, _, n, prod in NOZZLES:
@@ -140,7 +141,7 @@ def check_day(op_date: date):
             rate = litres / OPEN_HOURS_PER_DAY if litres and litres > 0 else 0.0
             expected, pct, method = sign * rate * _open_hours(a, b), TOLERANCE_PCT, "day average"
         if taken >= boundary and taken.time() >= PUMP_TEST_AT and taken.date() == boundary.date():
-            expected += PUMP_TEST_L
+            expected += tested_n.get(n, 0.0)     # only a recorded pump test moves the meter
         gap = att - iras
         allowed = TOLERANCE_L + pct * abs(expected)
         off = gap - expected

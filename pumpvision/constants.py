@@ -19,6 +19,9 @@ PRODUCT_LABELS = {
 ALL_PRODUCTS = ["HSD", "MS", "XP", "XG", "CNG"]
 ALL_LABELS   = list(NOZZLE_LABEL_MAP.keys())
 
+# Sales product (HS/MS/X2/XG, as used by sales figures) for each physical nozzle.
+NOZZLE_SALES_PRODUCT = {7: "HS", 16: "HS", 18: "MS", 15: "MS", 17: "X2", 11: "XG"}
+
 PUMP_TEST_NOZZLES = {
     7:  "HSD 1 (Nozzle 7)",
     11: "XG (Nozzle 11)",

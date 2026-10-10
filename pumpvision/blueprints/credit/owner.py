@@ -846,14 +846,6 @@ def settings():
         except ValueError:
             errors.append("Credit alert threshold must be a number between 0 and 100.")
 
-        pump_test_vals = {}
-        for n in PUMP_TEST_NOZZLES:
-            raw = request.form.get(f"pump_test_nozzle_{n}", "").strip()
-            try:
-                pump_test_vals[n] = max(0.0, float(raw))
-            except (ValueError, TypeError):
-                errors.append(f"Pump test value for {PUMP_TEST_NOZZLES[n]} must be a number.")
-
         if errors:
             for e in errors:
                 flash(e, "error")
@@ -865,13 +857,6 @@ def settings():
         else:
             db.session.add(AppSetting(key="alert_threshold", value=str(threshold_val)))
 
-        for n, val in pump_test_vals.items():
-            s = db.session.get(AppSetting, f"pump_test_nozzle_{n}")
-            if s:
-                s.value = str(val)
-            else:
-                db.session.add(AppSetting(key=f"pump_test_nozzle_{n}", value=str(val)))
-
         db.session.commit()
         flash("Settings saved.", "success")
         return redirect(url_for("credit.settings"))
@@ -879,14 +864,7 @@ def settings():
     threshold_setting = db.session.get(AppSetting, "alert_threshold")
     threshold = float(threshold_setting.value) if threshold_setting else 80.0
 
-    pump_test_settings = {
-        n: float((db.session.get(AppSetting, f"pump_test_nozzle_{n}") or AppSetting(value="0")).value)
-        for n in PUMP_TEST_NOZZLES
-    }
-
     return render_template(
         "credit/owner/settings.html",
         threshold=threshold,
-        pump_test_settings=pump_test_settings,
-        pump_test_nozzles=PUMP_TEST_NOZZLES,
     )

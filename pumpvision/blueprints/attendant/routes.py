@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from pumpvision.constants import ALL_LABELS, ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS
+from pumpvision.constants import ALL_LABELS, ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS, PUMP_TEST_NOZZLES
 from pumpvision.decorators import attendant_required
 from pumpvision.i18n import HI
 
@@ -812,13 +812,12 @@ def shift_summary():
                 return r["delta"] or 0.0
         return 0.0
 
-    xg_d = _delta("XG")
-    xg_net = 0.0 if xg_d <= 7 else max(0.0, xg_d - 5)
+    # No fixed pump-test deduction: a test only reduces sales when someone enters it below.
     product_totals = {
-        "HS": max(0.0, _delta("HS1") + _delta("HS2") - 10),
-        "MS": max(0.0, _delta("MS1") + _delta("MS2") - 10),
-        "X2": max(0.0, _delta("X2") - 5),
-        "XG": xg_net,
+        "HS": max(0.0, _delta("HS1") + _delta("HS2")),
+        "MS": max(0.0, _delta("MS1") + _delta("MS2")),
+        "X2": max(0.0, _delta("X2")),
+        "XG": max(0.0, _delta("XG")),
     }
 
     # Fuel drawn off for testing passed through the nozzle but was not sold.
@@ -837,6 +836,7 @@ def shift_summary():
         nozzle_rows=nozzle_rows,
         product_totals=product_totals,
         tests=tests,
+        test_nozzles=PUMP_TEST_NOZZLES,
         cng_rows=cng_rows,
         cng_kg=cng_kg,
         cng_revenue=cng_revenue,
@@ -852,24 +852,19 @@ def shift_summary():
 @login_required
 @attendant_required
 def shift_testing_add():
-    """Log fuel drawn off for testing: out of the tank, not a sale."""
-    import math
-    from pumpvision.models import FuelTest, db
+    """Record a pump test for this shift: not a sale. Only recorded tests are taken out of
+    sales; a shift with no entry deducts nothing."""
+    from pumpvision.services.pump_tests import record_test
 
-    product = request.form.get("product", "").strip().upper()
-    note = request.form.get("note", "").strip()[:200]
-    try:
-        litres = float(request.form.get("litres", ""))
-    except ValueError:
-        litres = 0.0
-    if product not in _SHIFT_PRODUCT:
-        flash(HI["err_test_product"], "error")
-    elif not math.isfinite(litres) or not 0 < litres <= 100:
+    _, err = record_test(
+        _shift_op_date(), request.form.get("nozzle_no"), request.form.get("litres", ""),
+        request.form.get("returned") == "1", request.form.get("note", ""), current_user.id,
+    )
+    if err == "bad_nozzle":
+        flash(HI["err_test_nozzle"], "error")
+    elif err == "bad_litres":
         flash(HI["err_test_litres"], "error")
     else:
-        db.session.add(FuelTest(op_date=_shift_op_date(), product=product, litres=round(litres, 2),
-                                note=note or None, logged_by=current_user.id))
-        db.session.commit()
         flash(HI["flash_test_saved"], "success")
     return redirect(url_for("attendant.shift_summary"))
 

@@ -221,7 +221,7 @@
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--paper-300);
                 font-family:var(--font-sans);font-size:14px;color:var(--ink-900);">
       <span style="font-family:var(--font-mono);font-weight:700;">{{ t.product }}</span>
-      <span style="flex:1;color:var(--ink-500);font-size:12px;">{{ t.note or '' }}</span>
+      <span style="flex:1;color:var(--ink-500);font-size:12px;">{{ test_nozzles.get(t.nozzle_no, '') }}{% if t.returned_to_tank is false %} · {{ hi.test_not_returned_tag }}{% endif %}{% if t.note %} · {{ t.note }}{% endif %}</span>
       <b style="font-family:var(--font-mono);">{{ "%g"|format(t.litres) }} L</b>
       {% if t.logged_by == current_user.id %}
       <form method="POST" action="{{ url_for('attendant.shift_testing_delete', test_id=t.id) }}" style="margin:0;">
@@ -233,14 +233,17 @@
     {% endfor %}
     <form method="POST" action="{{ url_for('attendant.shift_testing_add') }}"
           style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
-      <select name="product" required aria-label="{{ hi.test_product }}"
+      <select name="nozzle_no" required aria-label="{{ hi.test_nozzle }}"
               style="min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
-        <option value="">{{ hi.test_product }}</option>
-        {% for code in ['HS','MS','X2','XG'] %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+        <option value="">{{ hi.test_nozzle }}</option>
+        {% for no, label in test_nozzles.items() %}<option value="{{ no }}">{{ label }}</option>{% endfor %}
       </select>
       <input type="number" name="litres" step="0.01" min="0.01" max="100" inputmode="decimal" required
              placeholder="{{ hi.test_litres }}" aria-label="{{ hi.test_litres }}"
              style="min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
+      <label style="grid-column:1 / -1;display:flex;align-items:center;gap:10px;min-height:44px;font-family:var(--font-sans);font-size:14px;color:var(--ink-900);">
+        <input type="checkbox" name="returned" value="1" checked style="width:22px;height:22px;"> {{ hi.test_returned }}
+      </label>
       <input type="text" name="note" maxlength="200" placeholder="{{ hi.test_note }}" aria-label="{{ hi.test_note }}"
              style="grid-column:1 / -1;min-height:52px;padding:0 12px;font-size:16px;border:1px solid var(--paper-300);border-radius:var(--r-card);background:#fff;">
       <button type="submit" class="btn btn-ghost" style="grid-column:1 / -1;min-height:52px;">{{ hi.test_add }}</button>

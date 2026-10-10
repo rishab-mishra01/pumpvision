@@ -51,9 +51,7 @@ def tanks():
                 continue
             day_l = 0.0
             for n in nozzles:
-                s = db.session.get(AppSetting, f"pump_test_nozzle_{n}")
-                pt = float(s.value) if s else 0.0
-                day_l += max(0.0, cl[n] - op[n] - pt)
+                day_l += max(0.0, cl[n] - op[n])
             if day_l > 0:
                 total += day_l
                 days += 1
