@@ -108,7 +108,8 @@
     <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
       <p class="font-semibold text-gray-700 text-sm">Totalizer Sales</p>
     </div>
-    <table class="w-full text-sm">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">  {# 7 columns: scroll sideways on phones #}
+    <table class="w-full text-sm" style="min-width:560px;">
       <thead>
         <tr class="text-xs text-gray-400 border-b border-gray-100">
           <th class="px-4 py-2 text-left">Product</th>
@@ -152,6 +153,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- Cash derivation -->

@@ -818,6 +818,7 @@ def shift_summary():
             "closing": closing,
             "delta": delta,
             "is_locked": existing.is_locked if existing else False,
+            "iras_idle": det["nozzle_no"] in idle,
             # no reading typed, and IRAS shows no movement: closes itself on submit
             "auto_idle": existing is None and det["nozzle_no"] in idle,
         })
@@ -844,7 +845,9 @@ def shift_summary():
 
     all_entered = all(r["closing"] is not None or r["auto_idle"] for r in nozzle_rows)
     any_drafts  = any(r["closing"] is not None for r in nozzle_rows)
-    warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5]
+    # a reading equal to the opening is only worth a warning when IRAS doesn't confirm it
+    warnings    = [r["name"] for r in nozzle_rows if r["delta"] is not None and r["delta"] <= 5
+                   and not (r["delta"] == 0 and r["iras_idle"])]
     display_name = current_user.first_name or current_user.username
 
     return render_template(

@@ -110,7 +110,7 @@ HI = {
     "totals_by_product": "हर उत्पाद का कुल",
     "net_after_pump_test": "दर्ज किए गए पंप टेस्ट घटाकर",
     "warn_closing_equals_opening": "{name} — आखिरी और शुरुआती रीडिंग बराबर हैं। पक्का करें कि कोई तेल नहीं बिका।",
-    "warn_below_pump_test": "{name} — सिर्फ़ {litres} L दर्ज (पंप टेस्ट से कम)। रीडिंग जाँचें।",
+    "warn_below_pump_test": "{name} — सिर्फ़ {litres} L बिका। रीडिंग सही है, जाँच लें।",
     "submit_shift": "शिफ्ट जमा करें",
     "save_draft": "बाद के लिए सेव करें",
 
