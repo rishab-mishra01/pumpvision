@@ -100,6 +100,19 @@
       {% else %}<div class="en-empty">No testing logged.</div>{% endfor %}
     </div>
 
+    {% if data.archived %}
+    <p class="en-h">Archived (left out of totals)</p>
+    <div class="en-card">
+      {% for a, line in data.archived %}
+      <div class="en-row">
+        <span class="main">{{ line }}
+          <small>{{ data.users.get(a.actor_id, '?') }} · {{ a.created_at.strftime('%d %b %H:%M') }}{% if a.reason %} · {{ a.reason }}{% endif %}</small></span>
+        <a class="en-del" style="border-color:var(--ink-500);color:var(--ink-700);" href="{{ url_for('owner.entry_restore', audit_id=a.id, date=op_date.isoformat()) }}">Restore</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div style="height:24px;"></div>
 
   </div>

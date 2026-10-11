@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, flashes, lab, nav, langswitch with context %}
+{% block title %}{{ t('title_sale_edit') }} — Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+<div class="mg-page">
+  <div class="mg-top">
+    <a href="{{ url_for('manager.credit_detail', transaction_id=txn.transaction_id) }}" class="mg-iconlink" aria-label="{{ t('back') }}" style="margin-left:-8px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </a>
+    <h1 style="flex:1;">{{ t('title_sale_edit') }}</h1>
+    {{ langswitch() }}
+  </div>
+  {{ flashes() }}
+
+  <form method="post" class="mg-body" id="sale">
+    <div>
+      {{ lab(t('customer'), 'customer') }}
+      <select id="customer" name="customer_id" class="mg-input" required>
+        {% for c in customers %}<option value="{{ c.customer_id }}" {{ 'selected' if values.customer_id == c.customer_id | string }}>{{ c.company_name }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div>
+      {{ lab(t('vehicle'), 'vehicle') }}
+      <input id="vehicle" name="vehicle_number" list="vehicles" maxlength="20" required class="mg-input" value="{{ values.vehicle_number }}" autocomplete="off">
+      <datalist id="vehicles">{% for v in vehicles %}<option value="{{ v }}">{% endfor %}<option value="UNREGISTERED"></datalist>
+    </div>
+
+    <div>
+      {{ lab(t('fuel')) }}
+      <div class="mg-chips" style="grid-template-columns:repeat(3,1fr);">
+        {% for code in ['HS','MS','X2','XG','CNG'] %}
+        <label class="mg-chip"><input type="radio" name="product" value="{{ code }}" data-rate="{{ rates[code] if rates[code] is not none else '' }}"
+               {{ 'checked' if values.product == code }} required><span>{{ t('fuel_' ~ code) }}</span></label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      {{ lab(t('entered_as')) }}
+      <div class="mg-chips" style="grid-template-columns:1fr 1fr;">
+        <label class="mg-chip"><input type="radio" name="input_mode" value="amount" {{ 'checked' if values.input_mode == 'amount' }}><span>{{ t('amount_rs') }}</span></label>
+        <label class="mg-chip"><input type="radio" name="input_mode" value="litres" {{ 'checked' if values.input_mode != 'amount' }}><span id="unitlabel">{{ t('litres') }}</span></label>
+      </div>
+    </div>
+
+    <div>
+      {{ lab(t('amount_or_qty'), 'qty') }}
+      <input id="qty" name="quantity" type="number" inputmode="decimal" step="0.001" min="0.001" required class="mg-input"
+             style="font-size:22px;font-weight:600;" value="{{ values.quantity }}">
+      <p class="mg-note" id="preview" style="margin:6px 0 0;">{{ t('preview_choose') }}</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px;">
+      <div>{{ lab(t('k_date_sold'), 'date') }}<input id="date" type="date" name="date" max="{{ today }}" required class="mg-input" value="{{ values.date }}"></div>
+      <div>{{ lab(t('sale_time'), 'time') }}<input id="time" type="time" name="time" required class="mg-input" value="{{ values.time }}"></div>
+    </div>
+
+    <div>
+      {{ lab(t('reason'), 'reason') }}
+      <input id="reason" name="reason" minlength="5" maxlength="300" required class="mg-input" value="{{ values.reason }}" placeholder="{{ t('reason_ph') }}">
+    </div>
+
+    <p class="mg-note" style="margin:0;">{{ t('edit_note') }}</p>
+    <button type="submit" class="mg-submit">{{ t('save_changes') }}</button>
+  </form>
+</div>
+{{ nav('credit') }}
+<script>
+  (function () {
+    var T = {{ {'kg': t('kilograms'), 'litres': t('litres'), 'choose': t('preview_choose'), 'norate': t('preview_no_rate', product='{product}'), 'rate': t('rate_word')} | tojson }};
+    var form = document.getElementById('sale'), qty = document.getElementById('qty'), prev = document.getElementById('preview'),
+        unit = document.getElementById('unitlabel');
+    function sel(name) { return form.querySelector('input[name="' + name + '"]:checked'); }
+    function fmt(n) { return n.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+    function update() {
+      var p = sel('product'), m = sel('input_mode'), cng = p && p.value === 'CNG';
+      unit.textContent = cng ? T.kg : T.litres;
+      if (!p) { prev.textContent = T.choose; return; }
+      var rate = parseFloat(p.dataset.rate);
+      if (!rate) { prev.textContent = T.norate.replace('{product}', p.value); return; }
+      var u = cng ? 'kg' : 'L', q = parseFloat(qty.value) || 0, byAmount = !!m && m.value === 'amount';
+      var amount = byAmount ? q : q * rate, qtyOut = byAmount ? q / rate : q;
+      prev.textContent = T.rate + ' ₹' + fmt(rate) + '/' + u + (q > 0 ? ' · ' + fmt(qtyOut) + ' ' + u + ' · ₹' + fmt(amount) : '');
+    }
+    form.addEventListener('change', update); qty.addEventListener('input', update); update();
+  }());
+</script>
+{% endblock %}

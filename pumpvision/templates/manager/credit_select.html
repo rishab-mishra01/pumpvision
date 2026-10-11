@@ -28,6 +28,39 @@
       {% endfor %}
       <p id="none" class="mg-note" style="padding:16px;display:none;">{{ t('no_match') }}</p>
     </div>
+
+    <div>
+      <p class="mg-h">{{ t('latest_sales') }}</p>
+      <div class="mg-card" id="latest">
+        {% for s in latest %}
+        {% set unit = 'kg' if s.product == 'CNG' else 'L' %}
+        <div class="mg-sale">
+          <a href="{{ url_for('manager.credit_detail', transaction_id=s.transaction_id) }}" aria-label="{{ t('btn_detail') }}">
+            <b>{{ names.get(s.customer_id, '?') }}</b>
+            <small>{{ '%g' | format(s.litres) }} {{ unit }} {{ s.product }} · <span class="amt">₹{{ s.amount | inr }}</span> · {{ s.transaction_date.strftime('%d %b') }} {{ s.transaction_time.strftime('%H:%M') }}</small>
+          </a>
+          <a href="{{ url_for('manager.credit_edit', transaction_id=s.transaction_id) }}" class="mg-mini">{{ t('btn_edit') }}</a>
+          <a href="{{ url_for('manager.credit_archive', transaction_id=s.transaction_id) }}" class="mg-mini danger">{{ t('btn_archive') }}</a>
+        </div>
+        {% else %}
+        <p class="mg-note" style="padding:16px;margin:0;">{{ t('no_sales') }}</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if archived %}
+    <div>
+      <p class="mg-h">{{ t('recently_archived') }}</p>
+      <div class="mg-card">
+        {% for a, line in archived %}
+        <div class="mg-sale">
+          <span style="flex:1;min-width:0;"><small style="color:var(--ink-700);">{{ line }}</small>{% if a.reason %}<small style="display:block;">{{ a.reason }}</small>{% endif %}</span>
+          <a href="{{ url_for('manager.credit_restore', audit_id=a.id) }}" class="mg-mini">{{ t('btn_restore') }}</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {{ nav('credit') }}

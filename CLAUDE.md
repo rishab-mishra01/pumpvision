@@ -978,6 +978,14 @@ every 3 months (`services/regulatory.py`). Both show on the owner dashboard's **
 Owner can review/remove any manual entry (expense, lube, credit sale, payment, test) at More → Manual
 entries (`services/entries.py` undoes balance effects). The web app skips bootstrap, so run the migration by hand on the evo.
 
+**Archive, not delete (migration `c9d0e1f2a3b4`, 2026-10-11):** removing an entry deletes the live row and keeps a
+JSON snapshot in `entry_audit`, so no report needs an "archived" filter; `restore()` re-inserts it with the same id and
+re-applies the balance effect. Edits are audited the same way (before/after). The manager's Credit tab lists the latest
+10 credit sales with View / Edit / Archive and a "Recently archived" list with Restore; a manager must give a reason
+(≥ 5 chars), cannot touch legacy (cutover) sales, and every manager correction raises an owner `credit_alert`.
+Invoiced dates are refused for edit, archive and restore. Expense dates are strict: an invalid, future, or
+> 60-day-old date is refused (it used to fall back to today silently).
+
 ### `fleet_card_transactions`
 card_identifier · amount · op_date · transaction_time · logged_by · notes · created_at
 **Note:** Originally built for manager manual entry. Fleet data now comes from SDMS PAD

@@ -218,9 +218,9 @@ def entry_remove(kind, entry_id):
     back = redirect(url_for("owner.entries", date_str=back_date or None))
 
     if request.method == "POST":
-        ok, message = svc.remove(kind, entry_id)
+        ok, message = svc.archive(kind, entry_id, current_user, request.form.get("reason", "").strip())
         if ok:
-            current_app.logger.info("entry removed: %s #%s by %s", kind, entry_id, current_user.username)
+            current_app.logger.info("entry archived: %s #%s by %s", kind, entry_id, current_user.username)
         flash(message, "ok" if ok else "error")
         return back
 
@@ -230,6 +230,34 @@ def entry_remove(kind, entry_id):
         return back
     return render_template("owner/entry_remove.html", kind=kind, entry_id=entry_id,
                            headline=headline, consequence=consequence, back_date=back_date)
+
+
+@owner_bp.route("/entries/archived/<int:audit_id>/restore", methods=["GET", "POST"])
+@login_required
+@owner_required
+def entry_restore(audit_id):
+    from flask import abort, current_app
+    from flask_login import current_user
+    from pumpvision.models import EntryAudit, db
+    from pumpvision.services import entries as svc
+
+    if not (current_user.is_authenticated and current_user.role == "owner"):
+        abort(403)
+
+    back_date = request.values.get("date", "")
+    back = redirect(url_for("owner.entries", date_str=back_date or None))
+    a = db.session.get(EntryAudit, audit_id)
+    if a is None or a.action != "archive" or a.restored_at is not None:
+        flash("That archived entry was not found or is already restored.", "error")
+        return back
+
+    if request.method == "POST":
+        ok, message = svc.restore(audit_id, current_user)
+        if ok:
+            current_app.logger.info("entry restored: archive #%s by %s", audit_id, current_user.username)
+        flash(message, "ok" if ok else "error")
+        return back
+    return render_template("owner/entry_restore.html", audit=a, headline=svc.summary(a), back_date=back_date)
 
 
 @owner_bp.route("/entries/credit/add", methods=["GET", "POST"])

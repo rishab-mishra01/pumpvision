@@ -28,9 +28,11 @@
     <div class="en-card" style="padding:16px;font-family:var(--font-sans);">
       <p style="margin:0;font-size:16px;font-weight:600;color:var(--ink-900);">{{ headline }}</p>
       <p style="margin:10px 0 0;font-size:14px;color:var(--ink-700);">{{ consequence }}</p>
-      <p style="margin:10px 0 0;font-size:12.5px;color:var(--ink-500);">This cannot be undone.</p>
+      <p style="margin:10px 0 0;font-size:12.5px;color:var(--ink-500);">It is kept in the archive and can be restored from this day's entries.</p>
       <form method="post" style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
         <input type="hidden" name="date" value="{{ back_date }}">
+        <label for="reason" style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-500);">Reason <span style="text-transform:none;font-weight:400;letter-spacing:0;">(optional)</span></label>
+        <input id="reason" name="reason" maxlength="300" class="field-input" style="min-height:48px;" placeholder="e.g. entered twice">
         <button type="submit" class="btn btn-primary" style="min-height:52px;background:var(--error-600);">Yes, remove it</button>
         <a href="{{ url_for('owner.entries', date_str=back_date or None) }}" class="btn" style="min-height:52px;display:flex;align-items:center;justify-content:center;">Keep it</a>
       </form>

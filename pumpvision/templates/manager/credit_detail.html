@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, flashes, nav, langswitch with context %}
+{% block title %}{{ t('title_sale_detail') }} — Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+{% set unit = 'kg' if txn.product == 'CNG' else 'L' %}
+<div class="mg-page">
+  <div class="mg-top">
+    <a href="{{ url_for('manager.credit_select') }}" class="mg-iconlink" aria-label="{{ t('back') }}" style="margin-left:-8px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </a>
+    <h1 style="flex:1;">{{ t('title_sale_detail') }}</h1>
+    {{ langswitch() }}
+  </div>
+  {{ flashes() }}
+  <div class="mg-body">
+    <div class="mg-card">
+      <div style="background:var(--ink-900);color:var(--paper-50);padding:16px;text-align:center;">
+        <div class="mg-h" style="color:var(--paper-400);margin:0;">{{ t('total') }}</div>
+        <div style="font-family:var(--font-mono);font-size:2rem;font-weight:600;">₹{{ '%.2f' | format(txn.amount) }}</div>
+      </div>
+      {% for k, v in [(t('k_customer'), customer.company_name if customer else '?'),
+                      (t('k_vehicle'), txn.vehicle_number if txn.vehicle_number != 'UNREGISTERED' else t('no_number')),
+                      (t('k_fuel'), label('fuel', txn.product)),
+                      (t('k_quantity'), ('%g' | format(txn.litres)) ~ ' ' ~ unit),
+                      (t('k_rate'), '₹' ~ ('%.2f' | format(txn.rate_per_litre)) ~ '/' ~ unit),
+                      (t('k_date_sold'), txn.transaction_date.strftime('%d %b %Y') ~ ' · ' ~ txn.transaction_time.strftime('%H:%M')),
+                      (t('k_entered_by'), txn.attendant_name)] %}
+      <div class="mg-row" style="justify-content:space-between;padding:11px 16px;"><small>{{ k }}</small><b style="font-weight:500;text-align:right;">{{ v }}</b></div>
+      {% endfor %}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <a href="{{ url_for('manager.credit_edit', transaction_id=txn.transaction_id) }}" class="mg-ghost-btn">{{ t('btn_edit') }}</a>
+      <a href="{{ url_for('manager.credit_archive', transaction_id=txn.transaction_id) }}" class="mg-ghost-btn" style="border-color:var(--error-600);color:var(--error-600);">{{ t('btn_archive') }}</a>
+    </div>
+
+    {% if history %}
+    <div>
+      <p class="mg-h">{{ t('history') }}</p>
+      <div class="mg-card">
+        {% for h in history %}
+        <div class="mg-row" style="flex-direction:column;align-items:flex-start;gap:2px;padding:10px 16px;">
+          <b>{{ t('act_' ~ h.action) }} · {{ users.get(h.actor_id, '?') }}</b>
+          <small>{{ (h.created_at + ist).strftime('%d %b %Y %H:%M') }}{% if h.reason %} · {{ h.reason }}{% endif %}</small>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{{ nav('credit') }}
+{% endblock %}

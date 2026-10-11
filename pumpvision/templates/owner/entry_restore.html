@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Restore entry — Pumpvision{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+<style>
+  body { margin: 0; background: var(--paper-50); }
+  .en-card { margin: 10px 16px 0; background: var(--paper-100); border: 1px solid var(--paper-300); border-radius: var(--r-card); overflow: hidden; }
+</style>
+{% endblock %}
+
+{% block page %}
+<div style="display:flex;flex-direction:column;height:100vh;height:100dvh;">
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;">
+
+    <div class="tanks-head-bar">
+      <div class="tanks-titlerow"><span class="ttl">Restore entry?</span></div>
+    </div>
+    <div class="en-card" style="padding:16px;font-family:var(--font-sans);">
+      <p style="margin:0;font-size:16px;font-weight:600;color:var(--ink-900);">{{ headline }}</p>
+      <p style="margin:10px 0 0;font-size:14px;color:var(--ink-700);">It counts in that day's totals again, and any customer balance it changed is changed back.</p>
+      {% if audit.reason %}<p style="margin:10px 0 0;font-size:12.5px;color:var(--ink-500);">Archived because: {{ audit.reason }}</p>{% endif %}
+      <form method="post" style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+        <input type="hidden" name="date" value="{{ back_date }}">
+        <button type="submit" class="btn btn-primary" style="min-height:52px;">Yes, restore it</button>
+        <a href="{{ url_for('owner.entries', date_str=back_date or None) }}" class="btn" style="min-height:52px;display:flex;align-items:center;justify-content:center;">Keep it archived</a>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

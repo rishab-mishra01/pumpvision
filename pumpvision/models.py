@@ -447,6 +447,33 @@ class MockDrill(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class EntryAudit(db.Model):
+    """Audit trail for manual-entry corrections (services/entries.py).
+
+    action 'edit'    -- before/after snapshots of a changed entry.
+    action 'archive' -- the entry was taken out of every total; `before` is the full
+                        row, which is deleted from its own table so no report has to
+                        learn to skip it. Restoring re-inserts it with the same id and
+                        stamps restored_at/restored_by here.
+    action 'restore' -- the matching record of the restore itself.
+    """
+    __tablename__ = 'entry_audit'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)        # expense / lube / credit / payment / test
+    entry_id = db.Column(db.Integer, nullable=False)
+    action = db.Column(db.String(10), nullable=False)      # edit / archive / restore
+    op_date = db.Column(db.Date, nullable=True, index=True)  # operational day the entry counts on
+    reason = db.Column(db.String(300))
+    before_json = db.Column(db.Text)
+    after_json = db.Column(db.Text)
+    actor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    actor_role = db.Column(db.String(20))
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    restored_at = db.Column(db.DateTime, nullable=True)
+    restored_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+
 # ─────────────────────────────────────────────
 # REVIEW AGENT / DEVELOPER DASHBOARD
 # ─────────────────────────────────────────────

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "manager/_ui.html" import styles, flashes, lab, nav, langswitch with context %}
+{% block title %}{{ t('title_sale_archive') }} — Pumpvision{% endblock %}
+
+{% block page %}
+{{ styles() }}
+{% set unit = 'kg' if txn.product == 'CNG' else 'L' %}
+<div class="mg-page">
+  <div class="mg-top">
+    <a href="{{ url_for('manager.credit_detail', transaction_id=txn.transaction_id) }}" class="mg-iconlink" aria-label="{{ t('back') }}" style="margin-left:-8px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </a>
+    <h1 style="flex:1;">{{ t('title_sale_archive') }}</h1>
+    {{ langswitch() }}
+  </div>
+  {{ flashes() }}
+  <form method="post" class="mg-body">
+    <div class="mg-card" style="padding:14px 16px;border-left:3px solid var(--error-600);">
+      <b style="font-family:var(--font-sans);font-size:15px;color:var(--ink-900);">{{ customer.company_name if customer else '?' }} · ₹{{ txn.amount | inr }}</b>
+      <div class="mg-note">{{ '%g' | format(txn.litres) }} {{ unit }} {{ txn.product }} · {{ txn.vehicle_number }} · {{ txn.transaction_date.strftime('%d %b %Y') }} {{ txn.transaction_time.strftime('%H:%M') }}</div>
+    </div>
+    <p class="mg-note" style="margin:0;font-size:14px;color:var(--ink-700);">{{ t('archive_note') }}</p>
+    <div>
+      {{ lab(t('reason'), 'reason') }}
+      <input id="reason" name="reason" minlength="5" maxlength="300" required class="mg-input" value="{{ reason }}" placeholder="{{ t('reason_ph') }}">
+    </div>
+    <button type="submit" class="mg-danger-btn">{{ t('archive_yes') }}</button>
+    <a href="{{ url_for('manager.credit_detail', transaction_id=txn.transaction_id) }}" class="mg-ghost-btn">{{ t('keep_it') }}</a>
+  </form>
+</div>
+{{ nav('credit') }}
+{% endblock %}

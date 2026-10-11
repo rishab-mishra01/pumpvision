@@ -1,5 +1,6 @@
+import json
 import math
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -15,6 +16,7 @@ from pumpvision.services.regulatory import (
 )
 
 DEFAULT_EXPENSE_CATEGORIES = list(EXPENSE_SUBCATEGORIES)
+EXPENSE_BACKDATE_DAYS = 60   # an expense may be logged up to this many days late, never ahead
 
 manager_bp = Blueprint("manager", __name__)
 
@@ -288,17 +290,24 @@ def expense():
             amount = float(raw_amount)
         except ValueError:
             amount = None
+        # The date is stored exactly as entered or the expense is refused: a bad date
+        # used to fall back to today silently, putting the expense on the wrong day.
+        try:
+            op_date = date.fromisoformat(op_date_str)
+        except ValueError:
+            op_date = None
         if amount is None or not math.isfinite(amount) or amount <= 0:
             error = tr("err_amount")
         elif category not in categories:
             error = tr("err_category")
         elif EXPENSE_SUBCATEGORIES.get(category) and sub_category not in EXPENSE_SUBCATEGORIES[category]:
             error = tr("err_subcategory")
-        else:
-            try:
-                op_date = date.fromisoformat(op_date_str) if op_date_str else today_op
-            except ValueError:
-                op_date = today_op
+        elif op_date is None:
+            error = tr("err_expense_date")
+        elif op_date > today_op:
+            error = tr("err_expense_date_future")
+        elif op_date < today_op - timedelta(days=EXPENSE_BACKDATE_DAYS):
+            error = tr("err_expense_date_old", days=EXPENSE_BACKDATE_DAYS)
 
         if error:
             flash(error, "error")
@@ -315,7 +324,7 @@ def expense():
             shown = i18n.label("cat", category)
             if sub_category:
                 shown += f" / {i18n.label('sub', sub_category)}"
-            flash(tr("expense_logged", amount=f"{amount:,.2f}", category=shown), "ok")
+            flash(tr("expense_logged", amount=f"{amount:,.2f}", category=shown, date=_fmt_date(op_date)), "ok")
             return redirect(url_for("manager.home"))
 
     return render_template(
@@ -323,6 +332,8 @@ def expense():
         categories=categories,
         subcategories=EXPENSE_SUBCATEGORIES,
         values=form_values,
+        min_date=(today_op - timedelta(days=EXPENSE_BACKDATE_DAYS)).isoformat(),
+        max_date=today_op.isoformat(),
     )
 
 
@@ -503,9 +514,138 @@ def payment():
 @manager_required
 def credit_select():
     from pumpvision.models import Customer
+    from pumpvision.services.entries import latest_credit_sales, recent_archived, summary
 
     customers = Customer.query.filter_by(is_active=True).order_by(Customer.company_name).all()
-    return render_template("manager/credit_select.html", customers=customers)
+    names = {c.customer_id: c.company_name for c in Customer.query.all()}
+    return render_template("manager/credit_select.html", customers=customers, names=names,
+                           latest=latest_credit_sales(10),
+                           archived=[(a, summary(a)) for a in recent_archived("credit", 5)
+                                     if not json.loads(a.before_json or "{}").get("is_legacy_entry")])
+
+
+# ─── Credit sales: detail, edit, archive, restore ────────────────────────────
+
+def _sale_or_redirect(transaction_id):
+    from pumpvision.models import CreditTransaction, db
+
+    txn = db.session.get(CreditTransaction, transaction_id)
+    if txn is None:
+        flash(tr("not_found"), "error")
+    elif txn.is_legacy_entry:
+        flash(tr("legacy"), "error")
+        txn = None
+    return txn
+
+
+@manager_bp.route("/credit/sale/<int:transaction_id>")
+@login_required
+@manager_required
+def credit_detail(transaction_id):
+    from pumpvision.models import Customer, User, db
+    from pumpvision.services.entries import history
+
+    txn = _sale_or_redirect(transaction_id)
+    if txn is None:
+        return redirect(url_for("manager.credit_select"))
+    users = {u.id: (u.first_name or u.username) for u in User.query.all()}
+    return render_template("manager/credit_detail.html", txn=txn,
+                           customer=db.session.get(Customer, txn.customer_id),
+                           history=history("credit", txn.transaction_id), users=users,
+                           ist=timedelta(hours=5, minutes=30))   # created_at is UTC
+
+
+@manager_bp.route("/credit/sale/<int:transaction_id>/edit", methods=["GET", "POST"])
+@login_required
+@manager_required
+def credit_edit(transaction_id):
+    from pumpvision.models import Customer
+    from pumpvision.services.credit_sale import rate_map
+    from pumpvision.services.entries import edit_credit, sale_op_date
+
+    txn = _sale_or_redirect(transaction_id)
+    if txn is None:
+        return redirect(url_for("manager.credit_select"))
+
+    values = {
+        "customer_id": str(txn.customer_id), "vehicle_number": txn.vehicle_number, "product": txn.product,
+        "input_mode": "litres", "quantity": f"{txn.litres:.3f}".rstrip("0").rstrip("."),
+        "date": txn.transaction_date.isoformat(), "time": txn.transaction_time.strftime("%H:%M"), "reason": "",
+    }
+    if request.method == "POST":
+        values.update({k: request.form.get(k, "").strip() for k in values})
+        saved, errors = edit_credit(
+            transaction_id, current_user,
+            customer_id=values["customer_id"], vehicle_number=values["vehicle_number"],
+            product=values["product"], input_mode="amount" if values["input_mode"] == "amount" else "litres",
+            quantity_raw=values["quantity"], date_raw=values["date"], time_raw=values["time"],
+            reason=values["reason"],
+        )
+        if saved:
+            flash(tr("sale_updated", amount=f"{saved.amount:,.2f}"), "ok")
+            return redirect(url_for("manager.credit_detail", transaction_id=saved.transaction_id))
+        for e in errors:
+            flash(tr(e), "error")
+
+    customers = Customer.query.filter(
+        (Customer.is_active.is_(True)) | (Customer.customer_id == txn.customer_id)
+    ).order_by(Customer.company_name).all()
+    vehicles = sorted({v.vehicle_number for c in customers for v in c.vehicles if v.is_active}
+                      | {txn.vehicle_number})
+    try:
+        day = sale_op_date(date.fromisoformat(values["date"]), time.fromisoformat(values["time"]))
+    except ValueError:
+        day = sale_op_date(txn.transaction_date, txn.transaction_time)
+    rates = rate_map(day)
+    # the sale keeps its own rate while product and operational day are unchanged (as edit_credit does)
+    if day == sale_op_date(txn.transaction_date, txn.transaction_time):
+        rates[txn.product] = txn.rate_per_litre
+    return render_template("manager/credit_edit.html", txn=txn, customers=customers, vehicles=vehicles,
+                           values=values, rates=rates, today=date.today().isoformat())
+
+
+@manager_bp.route("/credit/sale/<int:transaction_id>/archive", methods=["GET", "POST"])
+@login_required
+@manager_required
+def credit_archive(transaction_id):
+    from pumpvision.models import Customer, db
+    from pumpvision.services.entries import MIN_REASON, archive
+
+    txn = _sale_or_redirect(transaction_id)
+    if txn is None:
+        return redirect(url_for("manager.credit_select"))
+
+    reason = ""
+    if request.method == "POST":
+        reason = request.form.get("reason", "").strip()
+        if len(reason) < MIN_REASON:
+            flash(tr("no_reason"), "error")
+        else:
+            ok, message = archive("credit", transaction_id, current_user, reason)
+            flash(tr("sale_archived") if ok else message, "ok" if ok else "error")
+            if ok:
+                return redirect(url_for("manager.credit_select"))
+            return redirect(url_for("manager.credit_detail", transaction_id=transaction_id))
+    return render_template("manager/credit_archive.html", txn=txn, reason=reason,
+                           customer=db.session.get(Customer, txn.customer_id))
+
+
+@manager_bp.route("/credit/archived/<int:audit_id>/restore", methods=["GET", "POST"])
+@login_required
+@manager_required
+def credit_restore(audit_id):
+    from pumpvision.models import EntryAudit, db
+    from pumpvision.services.entries import restore, summary
+
+    a = db.session.get(EntryAudit, audit_id)
+    if a is None or a.kind != "credit" or a.action != "archive" or a.restored_at is not None:
+        flash(tr("not_found"), "error")
+        return redirect(url_for("manager.credit_select"))
+    if request.method == "POST":
+        ok, message = restore(audit_id, current_user)
+        flash(tr("sale_restored") if ok else message, "ok" if ok else "error")
+        return redirect(url_for("manager.credit_select"))
+    return render_template("manager/credit_restore.html", audit=a, headline=summary(a))
 
 
 @manager_bp.route("/credit/<int:customer_id>", methods=["GET", "POST"])

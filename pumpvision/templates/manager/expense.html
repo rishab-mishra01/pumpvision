@@ -40,7 +40,7 @@
     </div>
     <div>
       {{ lab(t('date'), 'exp-date') }}
-      <input type="date" id="exp-date" name="op_date" value="{{ values.op_date }}" class="mg-input">
+      <input type="date" id="exp-date" name="op_date" value="{{ values.op_date }}" min="{{ min_date }}" max="{{ max_date }}" required class="mg-input">
     </div>
     <button type="submit" class="mg-submit">{{ t('log_expense') }}</button>
   </form>
