@@ -13,6 +13,7 @@ from pumpvision.models import (
     AppSetting, CreditTransaction, Expense, FuelTest,
     CngShiftReading, LubeTransaction, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db,
 )
+from pumpvision.services import cng_pricing
 from pumpvision.services.prices import get_rsp
 from pumpvision.services.regulatory import mock_drill_status, tested_litres
 
@@ -64,22 +65,37 @@ def _fleet_total(op_date):
         return 0.0, False
 
 
+def _ledger_cng(kg, ledger_amount, source):
+    """Price a day's eLedger CNG: selling price = eLedger cost per kg + fixed margin.
+
+    A day with kg but no usable cost gets revenue 0 and price_missing=True so the
+    screens say "price pending" instead of quietly using the old fixed rate."""
+    cost, price, revenue = cng_pricing.price_from_ledger(kg, ledger_amount)
+    return SimpleNamespace(
+        kg_sold=kg,
+        rsp_per_kg=price,
+        cost_per_kg=cost,
+        margin_per_kg=float(cng_pricing.CNG_MARGIN_PER_KG),
+        revenue=revenue if revenue is not None else 0.0,
+        price_missing=price is None,
+        price_basis=cng_pricing.BASIS_ELEDGER,
+        source=source,
+    )
+
+
 def _cng_sdms(op_date):
     """
-    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue, source) or None.
-    Prefer the portal SDMS reading. If it is unavailable, use the attendant's
-    shift-close reading for calculations until SDMS catches up; review.py reports
-    the pending reconciliation when both sources become available.
+    Returns SimpleNamespace(kg_sold, rsp_per_kg, revenue, source, cost_per_kg,
+    margin_per_kg, price_basis, price_missing) or None.
+    Prefer the portal SDMS/eLedger row: revenue = kg x (eLedger cost per kg + 2.47).
+    If it is unavailable, use the attendant's shift-close reading (priced at the
+    owner-set pump rate, price_basis="owner_setting_pending_eledger") until SDMS
+    catches up; review.py reports the pending reconciliation when both sources exist.
     """
     row = SdmsSummary.query.filter_by(op_date=op_date).first()
     if row is not None:
         if (row.cng_kg_total or 0.0) > 0:
-            return SimpleNamespace(
-                kg_sold=row.cng_kg_total,
-                rsp_per_kg=row.cng_rsp_per_kg or 93.40,
-                revenue=row.cng_revenue or 0.0,
-                source="sdms",
-            )
+            return _ledger_cng(row.cng_kg_total, row.cng_revenue, "sdms")
         # Continue to JSON/manual fallback when the portal row is empty.
 
     # JSON fallback (local dev or pre-migration data)
@@ -88,21 +104,24 @@ def _cng_sdms(op_date):
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
             kg  = float(data.get('cng_kg_total', 0))
-            rsp = float(data.get('cng_rsp_per_kg', 93.40))
-            rev = float(data.get('cng_revenue', 0))
+            amount = float(data.get('cng_revenue', 0))
             if kg > 0:
-                return SimpleNamespace(kg_sold=kg, rsp_per_kg=rsp, revenue=rev, source="sdms_json")
+                return _ledger_cng(kg, amount, "sdms_json")
         except (json.JSONDecodeError, ValueError, KeyError):
             pass
 
     # Shift-close fallback: authoritative for calculations until the portal
-    # backend supplies the corresponding SDMS summary.
+    # backend supplies the corresponding SDMS summary. No eLedger cost exists yet,
+    # so this is priced at the attendant's snapshot rate and labelled as such.
     readings = CngShiftReading.query.filter_by(op_date=op_date).all()
     if readings:
         kg = sum(r.kg_sold for r in readings)
         revenue = sum(r.revenue for r in readings)
-        rsp = (revenue / kg) if kg > 0 else 93.40
+        rsp = (revenue / kg) if kg > 0 else None
         return SimpleNamespace(kg_sold=kg, rsp_per_kg=rsp, revenue=revenue,
+                               cost_per_kg=None, margin_per_kg=None,
+                               price_missing=False,
+                               price_basis="owner_setting_pending_eledger",
                                source="attendant_shift_close")
     return None
 
@@ -298,7 +317,7 @@ def dashboard_view_data(first_name="there"):
 
     prices = {p: get_rsp(p, op_date) or 0.0 for p in ('HS', 'MS', 'X2', 'XG')}
     s = db.session.get(AppSetting, 'cng_rsp_per_kg')
-    prices['CNG'] = float(s.value) if s else 93.40
+    prices['CNG'] = cng.rsp_per_kg if cng and cng.rsp_per_kg else (float(s.value) if s else 93.40)
 
     has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
 

@@ -71,8 +71,13 @@
 
       <div class="sum-prow" data-p="CNG">
         <span class="pcode"><span class="stripe"></span>CNG</span>
-        {% if cng %}
-        <span class="calc">{{ "%.2f"|format(cng.kg_sold) }} kg<span class="x">×</span><span class="px">₹{{ "%.2f"|format(cng.rsp_per_kg) }}</span></span>
+        {% if cng and cng.price_missing %}
+        <span class="calc">{{ "%.2f"|format(cng.kg_sold) }} kg<span class="x">×</span><span class="px" style="font-style:italic;font-size:12px;">eLedger cost missing</span></span>
+        <span class="amt" style="color:var(--ink-3);">—</span>
+        {% elif cng %}
+        <span class="calc">{{ "%.2f"|format(cng.kg_sold) }} kg<span class="x">×</span><span class="px">₹{{ "%.2f"|format(cng.rsp_per_kg) }}</span>
+          {% if cng.cost_per_kg %}<span style="display:block;font-size:11px;color:var(--ink-3);">eLedger ₹{{ "%.2f"|format(cng.cost_per_kg) }} + ₹{{ "%.2f"|format(cng.margin_per_kg) }}</span>
+          {% else %}<span style="display:block;font-size:11px;color:var(--ink-3);">pump rate · eLedger pending</span>{% endif %}</span>
         <span class="amt">₹ {{ cng.revenue | inr_full }}</span>
         {% else %}
         <span class="calc" style="color:var(--ink-3);font-style:italic;font-size:12px;">SDMS data unavailable</span>

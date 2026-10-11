@@ -293,6 +293,13 @@ def check_cng(now):
                          f"Attendant total is {kg:,.0f} kg.",
                          "Keep using the shift-close value for calculations; reconcile it when the SDMS portal row arrives."))
             continue
+        if s and (s.cng_kg_total or 0) > 0:
+            from pumpvision.services.cng_pricing import cost_per_kg
+            if cost_per_kg(s.cng_kg_total, s.cng_revenue) is None:
+                out.append(F(f"cng_cost_invalid:{d}", "warn", "reconciliation",
+                             f"CNG {d:%d %b}: eLedger cost per kg is missing or implausible",
+                             f"{s.cng_kg_total:,.0f} kg with eLedger amount ₹{s.cng_revenue or 0:,.2f}.",
+                             "CNG revenue shows as pending for this day. Re-scrape SDMS for the date and check the CGD debit."))
         if s and (s.cng_kg_total or 0) > 0 and att:
             kg = sum(a.kg_sold for a in att)
             if abs(kg - s.cng_kg_total) > max(30, 0.1 * s.cng_kg_total):
