@@ -14,8 +14,8 @@ meters_bp = Blueprint("meters", __name__)
 @owner_required
 def index():
     """Open the last completed shift."""
-    from pumpvision.services.operational import get_operational_date
-    last = get_operational_date() - timedelta(days=1)
+    from pumpvision.services.operational import shift_cycle_date
+    last = shift_cycle_date()
     return redirect(url_for("meters.day", date_str=last.isoformat()))
 
 
@@ -25,7 +25,7 @@ def index():
 def day(date_str):
     from pumpvision.models import CngShiftReading
     from pumpvision.services.meter_check import check_day
-    from pumpvision.services.operational import get_operational_date
+    from pumpvision.services.operational import shift_cycle_date
 
     try:
         op_date = datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -45,7 +45,7 @@ def day(date_str):
     ).update({"is_read": True})
     db.session.commit()
 
-    last = get_operational_date() - timedelta(days=1)
+    last = shift_cycle_date()
     return render_template(
         "meters/day.html",
         op_date=op_date,

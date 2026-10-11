@@ -831,7 +831,14 @@ Recovered rows carry exact `tank_id`/`product`/`capacity_litres`/`is_reliable`
 
 ## Critical Business Logic
 
-### Operational Day: 06:00 to 05:59
+### Shift cycle: closing-to-closing (from cycle 2026-10-11)
+Shift close is allowed **00:00–00:30 IST** only; a close at 00:15 on date E finalizes cycle E−1 and
+opens cycle E. Everything lives in `services/operational.py` (`PUMPVISION_CYCLE_CUTOVER`, default
+2026-10-11, = the first cycle closed this way). Cycles before it keep the 06:00 rule below, so history
+is untouched. Credit sales and Paytm are filed into a cycle by timestamp (`cycle_bounds`), IRAS/SDMS
+data stay on their own 06:00 / calendar-day windows.
+
+### Operational Day (legacy rule, before the cutover): 06:00 to 05:59
 RSPs effective 06:00:00 → 05:59:59 next day. Shift Totalizer is midnight-to-midnight.
 Boundary mode resolves the mismatch.
 

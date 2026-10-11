@@ -18,7 +18,7 @@ from pumpvision.extensions import db  # noqa: E402
 from pumpvision.models import ManualTotalizerReading, NozzleTotalizer, User  # noqa: E402
 
 NOZZLES = {"HSD 1": 7, "HSD 2": 16, "MS 1": 18, "MS 2": 15, "XP": 17, "XG": 11}
-OPERATIONAL = "pumpvision.services.operational.get_operational_date"
+OPERATIONAL = "pumpvision.services.operational.shift_cycle_date"
 
 
 def _boundary(day):
@@ -63,22 +63,22 @@ class MissedShiftNeverMislabelled(unittest.TestCase):
         """Oct 8 morning: Oct 7 is the last completed shift; Oct 6 was missed. The old rule offered
         Oct 6 and filed Oct 8's meter values under it."""
         _close_shift(date(2026, 10, 5))
-        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 8)):
+        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 7)):
             self.assertEqual(_shift_op_date(), date(2026, 10, 7))
             self.assertEqual(_missed_shift_days(), [date(2026, 10, 6)])
 
     def test_missed_days_clear_once_the_latest_shift_is_closed(self):
         _close_shift(date(2026, 10, 5)); _close_shift(date(2026, 10, 7))
-        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 8)):
+        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 7)):
             self.assertEqual(_missed_shift_days(), [])
 
     def test_several_missed_days_listed_oldest_first(self):
         _close_shift(date(2026, 10, 3))
-        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 8)):
+        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 7)):
             self.assertEqual(_missed_shift_days(), [date(2026, 10, 4), date(2026, 10, 5), date(2026, 10, 6)])
 
     def test_nothing_known_closed_means_no_notice(self):
-        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 8)):
+        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 7)):
             self.assertEqual(_missed_shift_days(), [])
 
     def test_attendant_home_shows_the_notice(self):
@@ -88,7 +88,7 @@ class MissedShiftNeverMislabelled(unittest.TestCase):
         c = self.app.test_client()
         with c.session_transaction() as s:
             s["_user_id"] = str(User.query.one().id); s["_fresh"] = True
-        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 8)):
+        with mock.patch(OPERATIONAL, return_value=date(2026, 10, 7)):
             html = c.get("/attendant/").get_data(as_text=True)
         self.assertIn("06 Oct", html)
         self.assertIn("छूटी या जमा न हुई शिफ्ट", html)

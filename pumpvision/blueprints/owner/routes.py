@@ -178,11 +178,12 @@ def scan_status():
 # ─── Manual entries: review and remove ────────────────────────────────────────
 
 def _entries_date(date_str):
-    from datetime import date, timedelta
+    from datetime import date
+    from pumpvision.services.operational import shift_cycle_date
     try:
-        return date.fromisoformat(date_str) if date_str else date.today() - timedelta(days=1)
+        return date.fromisoformat(date_str) if date_str else shift_cycle_date()
     except ValueError:
-        return date.today() - timedelta(days=1)
+        return shift_cycle_date()
 
 
 @owner_bp.route("/entries")
@@ -302,8 +303,8 @@ def entry_add_credit():
                 rates=rate_map(when.date()), when=when,
             )
             if txn:
-                # a sale before 06:00 belongs to the previous operational day
-                day = when.date() if when.time() >= time(6, 0) else when.date() - timedelta(days=1)
+                from pumpvision.services.operational import cycle_of
+                day = cycle_of(when)                  # the cycle boundary, not a fixed 06:00
                 flash(f"Credit sale of ₹{txn.amount:,.2f} added to {customer.company_name} on "
                       f"{when:%d %b} {when:%H:%M}. Cash and the customer's balance are updated.", "ok")
                 return redirect(url_for("owner.entries", date_str=day.isoformat()))

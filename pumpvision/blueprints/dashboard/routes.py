@@ -1,12 +1,12 @@
 import json
 from collections import defaultdict
-from datetime import date, time, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func
 
 from pumpvision.decorators import owner_required
 from pumpvision.models import (
@@ -14,6 +14,7 @@ from pumpvision.models import (
     CngShiftReading, LubeTransaction, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db,
 )
 from pumpvision.services import cng_pricing
+from pumpvision.services.operational import shift_cycle_date
 from pumpvision.services.prices import get_rsp
 from pumpvision.services.regulatory import mock_drill_status, tested_litres
 
@@ -127,16 +128,25 @@ def _cng_sdms(op_date):
 
 
 def _credit_total(op_date):
-    nd = op_date + timedelta(days=1)
+    from pumpvision.services.entries import credit_cycle_filter
     return db.session.query(func.sum(CreditTransaction.amount)).filter(
         CreditTransaction.is_legacy_entry.isnot(True),
-        or_(
-            and_(CreditTransaction.transaction_date == op_date,
-                 CreditTransaction.transaction_time >= time(6, 0)),
-            and_(CreditTransaction.transaction_date == nd,
-                 CreditTransaction.transaction_time < time(6, 0)),
-        )
+        credit_cycle_filter(op_date),
     ).scalar() or 0.0
+
+
+def _paytm_cycle(op_date):
+    """(total, count) of Paytm transactions in the cycle op_date, by transaction time.
+
+    Selected by timestamp, not by the stored operational_date: the importer files a 00:31-05:59
+    transaction under the previous 06:00 day, which is the wrong cycle once the boundary moves.
+    For cycles before the cutover the two agree exactly."""
+    from pumpvision.services.operational import cycle_bounds
+    lo, hi = cycle_bounds(op_date)
+    q = db.session.query(func.sum(PaytmTransaction.amount), func.count(PaytmTransaction.id)).filter(
+        PaytmTransaction.transaction_datetime >= lo, PaytmTransaction.transaction_datetime < hi)
+    total, n = q.one()
+    return total or 0.0, n or 0
 
 
 def _cash_for_date(op_date):
@@ -148,8 +158,7 @@ def _cash_for_date(op_date):
     fuel_rev = sum(p['revenue'] for p in products.values()) + (cng.revenue if cng else 0.0)
     lube = db.session.query(func.sum(LubeTransaction.amount)).filter_by(
         op_date=op_date, payment_mode='cash').scalar() or 0.0
-    paytm = db.session.query(func.sum(PaytmTransaction.amount)).filter_by(
-        operational_date=op_date).scalar() or 0.0
+    paytm, _ = _paytm_cycle(op_date)
     expenses = db.session.query(func.sum(Expense.amount)).filter_by(
         op_date=op_date).scalar() or 0.0
     fleet, _ = _fleet_total(op_date)
@@ -207,7 +216,7 @@ def _stock_watch(op_date):
 @login_required
 @owner_required
 def summary(date_str=None):
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = shift_cycle_date()
     if date_str:
         try:
             op_date = date.fromisoformat(date_str)
@@ -230,10 +239,8 @@ def summary(date_str=None):
     fuel_rev = sum(p['revenue'] for p in products.values()) + (cng.revenue if cng else 0.0)
     total_rev = round(fuel_rev + lube_cash, 2)
 
-    paytm = db.session.query(func.sum(PaytmTransaction.amount)).filter_by(
-        operational_date=op_date).scalar() or 0.0
-    paytm_available = db.session.query(func.count(PaytmTransaction.id)).filter_by(
-        operational_date=op_date).scalar() > 0
+    paytm, paytm_count = _paytm_cycle(op_date)
+    paytm_available = paytm_count > 0
 
     credit = _credit_total(op_date)
     fleet_raw, fleet_available = _fleet_total(op_date)
@@ -287,7 +294,7 @@ def index():
 
 def dashboard_view_data(first_name="there"):
     """Build the owner dashboard's read-only data for normal and preview views."""
-    op_date = date.today() - timedelta(days=1)
+    op_date = shift_cycle_date()
 
     products = _product_sales(op_date)
     cng = _cng_sdms(op_date)
@@ -300,8 +307,7 @@ def dashboard_view_data(first_name="there"):
     fuel_rev = sum(p['revenue'] for p in products.values()) + (cng.revenue if cng else 0.0)
     total_rev = round(fuel_rev + lube_cash, 2)
 
-    paytm = db.session.query(func.sum(PaytmTransaction.amount)).filter_by(
-        operational_date=op_date).scalar() or 0.0
+    paytm, _ = _paytm_cycle(op_date)
     credit = _credit_total(op_date)
     fleet_raw, fleet_available = _fleet_total(op_date)
     fleet = fleet_raw

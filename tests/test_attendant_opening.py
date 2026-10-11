@@ -18,7 +18,7 @@ from pumpvision.extensions import db  # noqa: E402
 from pumpvision.models import ManualTotalizerReading, NozzleTotalizer, User  # noqa: E402
 
 D = date(2026, 10, 9)
-OPERATIONAL = "pumpvision.services.operational.get_operational_date"
+OPERATIONAL = "pumpvision.services.operational.shift_cycle_date"
 
 
 def _close(day, minutes=10):
@@ -93,7 +93,7 @@ class AttendantOpeningMatchesDashboard(unittest.TestCase):
         c = self.app.test_client()
         with c.session_transaction() as s:
             s["_user_id"] = str(User.query.one().id); s["_fresh"] = True
-        with mock.patch(OPERATIONAL, return_value=D + timedelta(days=1)):
+        with mock.patch(OPERATIONAL, return_value=D):
             html = c.get("/attendant/shift/summary").get_data(as_text=True)
         self.assertIn("1,962.51", html)          # same number as the dashboard
         self.assertNotIn("1,979.51", html)       # the old IRAS-opening figure

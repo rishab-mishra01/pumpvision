@@ -19,9 +19,15 @@ from pathlib import Path
 
 from sqlalchemy import func
 
+from pumpvision.services.operational import cycle_cutover
+
 NOZZLE_PRODUCT = {7: 'HS', 16: 'HS', 18: 'MS', 15: 'MS', 17: 'X2', 11: 'XG'}
 BUSY_NOZZLES = (7, 15, 18)
 VPS = os.environ.get("REVIEW_VPS", "ubuntu@100.96.147.27")
+
+# Acceptable (attendant reading - IRAS 06:00 boundary), litres. Tunable; see check_attendant_vs_boundary.
+PRE_CUTOVER_GAP = (-25, 150)      # read ~06:40: a little after the boundary
+POST_CUTOVER_GAP = (-300, 25)     # read 00:00-00:30: before the boundary, by ~30-60 min of sales
 
 
 def F(key, severity, category, title, detail="", suggestion="", audience="dev"):
@@ -266,8 +272,14 @@ def check_attendant_vs_boundary(now):
         if nb is None:
             continue
         gap = m.totalizer_value - nb.totalizer_end
-        # the attendant reads ~06:40, so a small positive gap (sales since 06:00) is normal
-        if gap < -25 or gap > 150:
+        # Before the cycle cutover the attendant read ~06:40, so a small positive gap (sales since
+        # 06:00) is normal. After it the close is at 00:00-00:30, before IRAS's 06:00 boundary, so
+        # the gap is negative by the fuel sold between the close and 01:00 (nothing sells after).
+        if m.operational_date >= cycle_cutover():
+            lo, hi = POST_CUTOVER_GAP
+        else:
+            lo, hi = PRE_CUTOVER_GAP
+        if gap < lo or gap > hi:
             out.append(F(f"att_gap:{m.nozzle_no}:{m.operational_date}", "warn", "reconciliation",
                          f"Nozzle {m.nozzle_no} {m.operational_date:%d %b}: attendant reading differs from the boundary by {gap:+,.1f} L",
                          f"Attendant {m.totalizer_value:,.2f} vs stored boundary {nb.totalizer_end:,.2f}.",

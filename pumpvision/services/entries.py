@@ -39,18 +39,12 @@ def list_entries(op_date: date) -> dict:
         CreditTransaction, Customer, Expense, FuelTest, LubeTransaction, PaymentReceived, User, db,
     )
 
-    nd = op_date + timedelta(days=1)
     names = {c.customer_id: c.company_name for c in Customer.query.all()}
     users = {u.id: (u.first_name or u.username) for u in User.query.all()}
 
     credit = CreditTransaction.query.filter(
         CreditTransaction.is_legacy_entry.isnot(True),
-        or_(
-            and_(CreditTransaction.transaction_date == op_date,
-                 CreditTransaction.transaction_time >= time(6, 0)),
-            and_(CreditTransaction.transaction_date == nd,
-                 CreditTransaction.transaction_time < time(6, 0)),
-        ),
+        credit_cycle_filter(op_date),
     ).order_by(CreditTransaction.transaction_date, CreditTransaction.transaction_time).all()
 
     return {
@@ -73,9 +67,25 @@ def _get(kind: str, entry_id: int):
     return db.session.get(model, entry_id) if model else None
 
 
+def credit_cycle_filter(op_date: date):
+    """SQL condition: credit sales that fall in cycle op_date (see services/operational.py)."""
+    from pumpvision.models import CreditTransaction
+    from pumpvision.services.operational import cycle_bounds
+
+    lo, hi = cycle_bounds(op_date)
+    return or_(
+        and_(CreditTransaction.transaction_date == lo.date(),
+             CreditTransaction.transaction_time >= lo.time()),
+        and_(CreditTransaction.transaction_date == hi.date(),
+             CreditTransaction.transaction_time < hi.time()),
+    )
+
+
 def sale_op_date(d: date, t: time) -> date:
-    """A sale before 06:00 belongs to the previous operational day."""
-    return d if t >= time(6, 0) else d - timedelta(days=1)
+    """The cycle a sale at date d, time t belongs to: before the cycle boundary it is the
+    previous one (06:00 for cycles before the cutover, 00:31 after -- services/operational.py)."""
+    from pumpvision.services.operational import cycle_of
+    return cycle_of(datetime.combine(d, t))
 
 
 def entry_op_date(kind: str, e) -> date | None:

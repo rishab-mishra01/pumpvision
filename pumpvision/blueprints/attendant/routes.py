@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from pumpvision.constants import ALL_LABELS, ALL_PRODUCTS, NOZZLE_LABEL_MAP, PRODUCT_LABELS, PUMP_TEST_NOZZLES
 from pumpvision.decorators import attendant_required
 from pumpvision.i18n import HI
+from pumpvision.services import operational as _op
 
 attendant_bp = Blueprint("attendant", __name__)
 
@@ -68,11 +69,11 @@ def _shift_closed(op_date: date) -> bool:
 
 
 def _shift_op_date() -> date:
-    """The shift the attendant closes: always the last COMPLETED operational day.
+    """The cycle the attendant closes: yesterday's date in IST (services/operational.py).
 
-    Uses the 06:00 rule, not the calendar, so a shift can no longer be closed
-    while it is still running (at 01:00 the running shift is yesterday's; the
-    last completed one is the day before).
+    The close is taken 00:00-00:30 IST on date E and finalizes cycle E-1, so a cycle can no
+    longer be closed while it is still running. Outside the window this is simply the last
+    cycle that was (or should have been) closed.
 
     A missed day is NOT offered for closing any more. The reading an attendant types is
     the meter as it is NOW, which can only be the close of the latest 06:00 boundary.
@@ -81,8 +82,17 @@ def _shift_op_date() -> date:
     morning of Oct 8 with Oct 8's meter values). Missed days keep no manual reading; their
     sales come from the IRAS machine totalizers (see services/totalizers.py).
     """
-    from pumpvision.services.operational import get_operational_date
-    return get_operational_date() - timedelta(days=1)
+    return _op.shift_cycle_date()
+
+
+def _close_window_open(op_date: date) -> bool:
+    """False (with a flash) when a close for cycle `op_date` is attempted outside 00:00-00:30 IST.
+
+    Cycles before the cutover keep the old, ungated behaviour."""
+    if op_date < _op.cycle_cutover() or _op.is_close_window():
+        return True
+    flash(HI["flash_close_window"], "error")
+    return False
 
 
 def _missed_shift_days(limit: int = 5) -> list:
@@ -220,6 +230,12 @@ def shift_close_submit():
     from pumpvision.services.idle_nozzles import autoclose_idle
     op_date = _shift_op_date()
 
+    if not _close_window_open(op_date):
+        return redirect(url_for("attendant.shift_close"))
+    if _shift_closed(op_date):
+        flash(HI["flash_already_closed"].format(date=op_date.strftime('%d %b %Y')), "error")
+        return redirect(url_for("attendant.home"))
+
     auto = autoclose_idle(op_date, ALL_LABELS)       # no sale per IRAS: no reading needed
     done_labels = {
         r.nozzle_label
@@ -230,8 +246,14 @@ def shift_close_submit():
         flash(HI["flash_record_all_products"], "error")
         return redirect(url_for("attendant.shift_close"))
 
-    ManualTotalizerReading.query.filter_by(operational_date=op_date).update({"is_locked": True})
-    now = datetime.now()
+    # Only unlocked rows: a concurrent second submit locks nothing and is refused.
+    locked = ManualTotalizerReading.query.filter_by(
+        operational_date=op_date, is_locked=False).update({"is_locked": True})
+    if not locked:
+        db.session.rollback()
+        flash(HI["flash_already_closed"].format(date=op_date.strftime('%d %b %Y')), "error")
+        return redirect(url_for("attendant.home"))
+    now = _op.now_ist()
     db.session.add(AppNotification(
         message=f"Day close submitted for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}."
                 + (f" No sale per IRAS, closed automatically: {', '.join(auto)}." if auto else ""),
@@ -263,6 +285,8 @@ def shift_close_entry(product):
         return redirect(url_for("attendant.shift_close"))
 
     if request.method == "POST":
+        if not _close_window_open(op_date):
+            return redirect(url_for("attendant.shift_close"))
         errors, values = [], {}
         for label in labels:
             raw = request.form.get(f"totalizer_{label.replace(' ', '_')}", "").strip()
@@ -279,7 +303,7 @@ def shift_close_entry(product):
             for e in errors:
                 flash(e, "error")
         else:
-            now = datetime.now()
+            now = _op.now_ist()
             for label, val in values.items():
                 info = NOZZLE_LABEL_MAP[label]
                 existing = ManualTotalizerReading.query.filter_by(
@@ -592,6 +616,11 @@ def shift_cng_numpad(nozzle_no):
     here = url_for("attendant.shift_cng_numpad", nozzle_no=nozzle_no)
 
     if request.method == "POST":
+        if not _close_window_open(op_date):
+            return redirect(here)
+        if _shift_closed(op_date):
+            flash(HI["flash_readings_locked"], "error")
+            return redirect(url_for("attendant.shift_select_product"))
         raw = request.form.get("closing_reading", "").strip()
         try:
             closing = float(raw)
@@ -749,6 +778,8 @@ def shift_numpad(nozzle):
         back_url = url_for("attendant.shift_select_product")
 
     if request.method == "POST":
+        if not _close_window_open(op_date):
+            return redirect(url_for("attendant.shift_numpad", nozzle=nozzle))
         raw = request.form.get("closing_reading", "").strip()
         try:
             value = float(raw)
@@ -761,7 +792,7 @@ def shift_numpad(nozzle):
                 closing=f"{value:,.2f}", opening=f"{opening:,.2f}"), "error")
             return redirect(url_for("attendant.shift_numpad", nozzle=nozzle))
 
-        now = datetime.now()
+        now = _op.now_ist()
         if existing:
             existing.totalizer_value = value
             existing.recorded_at = now
@@ -911,6 +942,11 @@ def shift_submit():
     from pumpvision.services.idle_nozzles import autoclose_idle
 
     op_date = _shift_op_date()
+    if not _close_window_open(op_date):
+        return redirect(url_for("attendant.shift_summary"))
+    if _shift_closed(op_date):
+        flash(HI["flash_already_closed"].format(date=op_date.strftime('%d %b %Y')), "error")
+        return redirect(url_for("attendant.home"))
     # Nozzles IRAS shows unmoved are closed with the IRAS value; every other nozzle needs a draft.
     auto = autoclose_idle(op_date, [_SHIFT_NOZZLE[n]["db_label"] for n in _NOZZLE_ORDER])
     for nozzle_name in _NOZZLE_ORDER:
@@ -922,8 +958,13 @@ def shift_submit():
             flash(HI["flash_all_six_nozzles"], "error")
             return redirect(url_for("attendant.shift_summary"))
 
-    now = datetime.now()
-    ManualTotalizerReading.query.filter_by(operational_date=op_date).update({"is_locked": True})
+    now = _op.now_ist()
+    locked = ManualTotalizerReading.query.filter_by(
+        operational_date=op_date, is_locked=False).update({"is_locked": True})
+    if not locked:                                  # a concurrent submit got there first
+        db.session.rollback()
+        flash(HI["flash_already_closed"].format(date=op_date.strftime('%d %b %Y')), "error")
+        return redirect(url_for("attendant.home"))
     db.session.add(AppNotification(
         message=f"Shift closed for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')}."
                 + (f" No sale per IRAS, closed automatically: {', '.join(auto)}." if auto else ""),

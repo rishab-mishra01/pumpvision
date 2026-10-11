@@ -29,7 +29,8 @@ NOZZLE_ROWS = [
 
 
 def _default_date() -> date:
-    return date.today() - timedelta(days=1)
+    from pumpvision.services.operational import shift_cycle_date
+    return shift_cycle_date()
 
 
 def _checklist_status(op_date: date) -> dict:
@@ -44,7 +45,10 @@ def _checklist_status(op_date: date) -> dict:
         for r in NozzleTotalizer.query.filter_by(operational_date=next_date).all()
     }
     totalizer_ready = bool(opening_nozzles and closing_nozzles)
-    closing_available = datetime.now() >= datetime.combine(next_date, time(6, 0))
+    # The closing figure is the staff's close (from the cutover, in the window after midnight), or
+    # IRAS's 06:00 reading. IRAS's reading is the later of the two, so wait for it either way.
+    from pumpvision.services.operational import now_ist
+    closing_available = now_ist() >= datetime.combine(next_date, time(6, 0))
 
     paytm_ready = (
         db.session.query(PaytmTransaction.id)
@@ -102,32 +106,26 @@ def _calculate(op_date: date) -> dict:
             "sales_value":      sales_value,
         })
 
-    paytm_total = db.session.query(
-        func.sum(PaytmTransaction.amount)
-    ).filter_by(operational_date=op_date).scalar() or 0.0
+    # Selected by transaction time within the cycle, not by the stored operational_date (which the
+    # importer sets on the old 06:00 rule); identical for cycles before the cutover.
+    from pumpvision.services.entries import credit_cycle_filter
+    from pumpvision.services.operational import cycle_bounds
+    lo, hi = cycle_bounds(op_date)
 
-    paytm_upi = db.session.query(
-        func.sum(PaytmTransaction.amount)
-    ).filter_by(operational_date=op_date, payment_category="UPI").scalar() or 0.0
+    def _paytm(category=None):
+        q = db.session.query(func.sum(PaytmTransaction.amount)).filter(
+            PaytmTransaction.transaction_datetime >= lo, PaytmTransaction.transaction_datetime < hi)
+        if category:
+            q = q.filter(PaytmTransaction.payment_category == category)
+        return q.scalar() or 0.0
 
-    paytm_card = db.session.query(
-        func.sum(PaytmTransaction.amount)
-    ).filter_by(operational_date=op_date, payment_category="CARD").scalar() or 0.0
+    paytm_total, paytm_upi, paytm_card = _paytm(), _paytm("UPI"), _paytm("CARD")
 
     credit_total = db.session.query(
         func.sum(CreditTransaction.amount)
     ).filter(
         CreditTransaction.is_legacy_entry.isnot(True),
-        or_(
-            and_(
-                CreditTransaction.transaction_date == op_date,
-                CreditTransaction.transaction_time >= time(6, 0),
-            ),
-            and_(
-                CreditTransaction.transaction_date == next_date,
-                CreditTransaction.transaction_time < time(6, 0),
-            ),
-        )
+        credit_cycle_filter(op_date),
     ).scalar() or 0.0
 
     derived_cash = round(total_sales_value - paytm_total - credit_total, 2)

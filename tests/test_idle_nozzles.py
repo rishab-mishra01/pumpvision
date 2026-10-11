@@ -18,7 +18,7 @@ from pumpvision.models import AppNotification, ManualTotalizerReading, NozzleTot
 from pumpvision.services.idle_nozzles import iras_idle_nozzles  # noqa: E402
 
 D = date(2026, 10, 9)                       # shift being closed (morning of Oct 10)
-OPERATIONAL = "pumpvision.services.operational.get_operational_date"
+OPERATIONAL = "pumpvision.services.operational.shift_cycle_date"
 LABELS = {"HSD 1": (7, "HSD"), "HSD 2": (16, "HSD"), "MS 1": (18, "MS"), "MS 2": (15, "MS"),
           "XP": (17, "XP"), "XG": (11, "XG")}
 MOVED = {"HSD 1", "HSD 2", "MS 1", "MS 2"}  # XP and XG sold nothing
@@ -48,7 +48,7 @@ class IdleNozzlesCloseThemselves(unittest.TestCase):
         db.session.add(User(username="att", password_hash=generate_password_hash("x"), role="attendant",
                             first_name="Att", is_active=True))
         db.session.commit()
-        self.patch = mock.patch(OPERATIONAL, return_value=D + timedelta(days=1)); self.patch.start()
+        self.patch = mock.patch(OPERATIONAL, return_value=D); self.patch.start()
 
     def tearDown(self):
         self.patch.stop()
