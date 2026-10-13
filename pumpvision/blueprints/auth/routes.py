@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import func
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -40,7 +41,9 @@ def login():
             flash(f"Too many failed attempts. Try again in {max(1, wait // 60)} min.", "error")
             return render_template("auth/login.html"), 429
 
-        user = User.query.filter_by(username=username).first()
+        # Usernames are identifiers, not secrets. Treat their case consistently so
+        # an account stored as "Admin" can be entered as "admin" on any device.
+        user = User.query.filter(func.lower(User.username) == username.lower()).first()
 
         if user and user.is_active and user.check_password(password):
             clear_login_failures(username)

@@ -168,6 +168,19 @@ class SuperAdminTestCase(unittest.TestCase):
         self.assertEqual(first_device.get("/dashboard").status_code, 302)
         self.assertEqual(second_device.get("/dashboard").status_code, 200)
 
+    def test_username_login_is_case_insensitive(self):
+        with self.app.app_context():
+            owner = User.query.filter_by(username="owner").one()
+            owner.username = "Admin"
+            db.session.commit()
+
+        response = self.client.post("/login", data={
+            "username": "admin",
+            "password": "testing-password",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/dashboard")
+
     def test_existing_dashboard_routes_still_render_for_their_roles(self):
         routes = {
             "owner": "/dashboard",
