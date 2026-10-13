@@ -260,6 +260,14 @@ def shift_close_submit():
         notification_type="shift_close",
         reference_date=op_date,
     ))
+    from pumpvision.services.manager_notifications import notify_manager
+    notify_manager(
+        f"shift-close:{op_date.isoformat()}",
+        f"Shift closed by {current_user.first_name or current_user.username} "
+        f"for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')} IST.",
+        notification_type="shift_close",
+        reference_date=op_date,
+    )
     db.session.commit()
 
     flash(HI["flash_day_close_submitted"].format(date=op_date.strftime('%d %b %Y')), "success")
@@ -984,6 +992,14 @@ def shift_submit():
         notification_type="shift_close",
         reference_date=op_date,
     ))
+    from pumpvision.services.manager_notifications import notify_manager
+    notify_manager(
+        f"shift-close:{op_date.isoformat()}",
+        f"Shift closed by {current_user.first_name or current_user.username} "
+        f"for {op_date.strftime('%d %b %Y')} at {now.strftime('%H:%M')} IST.",
+        notification_type="shift_close",
+        reference_date=op_date,
+    )
     from pumpvision.services.ops import record_event
     record_event(
         "shift_close",

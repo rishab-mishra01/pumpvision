@@ -289,6 +289,19 @@ class AppNotification(db.Model):
     is_read = db.Column(db.Boolean, default=False, nullable=False)
 
 
+class ManagerNotification(db.Model):
+    """Durable, independently dismissible operational notification for managers."""
+    __tablename__ = "manager_notifications"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    event_key = db.Column(db.String(180), nullable=False, unique=True)
+    message = db.Column(db.String(500), nullable=False)
+    notification_type = db.Column(db.String(30), nullable=False, default="info")
+    reference_date = db.Column(db.Date, nullable=True, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+
+
 class PaytmTransaction(db.Model):
     """Individual Paytm POS transactions imported from Transaction Report CSV."""
     __tablename__ = "paytm_transactions"

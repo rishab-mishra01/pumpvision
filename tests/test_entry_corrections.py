@@ -23,7 +23,7 @@ from pumpvision import create_app  # noqa: E402
 from pumpvision.extensions import db  # noqa: E402
 from pumpvision.models import (  # noqa: E402
     AppNotification, AppSetting, CreditTransaction, Customer, EntryAudit, Expense, Invoice,
-    IrasPrice, User,
+    IrasPrice, ManagerNotification, User,
 )
 from pumpvision.services import entries as svc  # noqa: E402
 from pumpvision.services.operational import get_operational_date  # noqa: E402
@@ -299,6 +299,34 @@ class EntryCorrections(unittest.TestCase):
         day = get_operational_date() - timedelta(days=3)
         self.assertEqual(self._post_expense(day.isoformat()).status_code, 302)
         self.assertEqual(Expense.query.one().op_date, day)
+        notice = ManagerNotification.query.one()
+        self.assertEqual(notice.notification_type, "expense")
+        self.assertEqual(notice.reference_date, day)
+        self.assertIn("₹250.00", notice.message)
+        self.assertIn("recorded by Mgr", notice.message)
+
+        manager = self._client("mgr")
+        home = manager.get("/manager/").get_data(as_text=True)
+        self.assertIn("Notifications · 1", home)
+        self.assertIn("₹250.00", home)
+        self.assertIn("IST", home)
+        self.assertIn('aria-label="1 unread notifications"', home)
+        self.assertEqual(
+            manager.post(f"/manager/notifications/{notice.id}/read").status_code, 302
+        )
+        self.assertTrue(db.session.get(ManagerNotification, notice.id).is_read)
+
+    def test_only_manager_can_dismiss_manager_notifications(self):
+        notice = ManagerNotification(
+            event_key="expense:999", message="Expense recorded", notification_type="expense"
+        )
+        db.session.add(notice); db.session.commit()
+        for role in ("own", "att"):
+            self.assertEqual(
+                self._client(role).post(f"/manager/notifications/{notice.id}/read").status_code,
+                403,
+            )
+        self.assertFalse(db.session.get(ManagerNotification, notice.id).is_read)
 
     def test_expense_bad_dates_are_refused_not_moved_to_today(self):
         today_op = get_operational_date()

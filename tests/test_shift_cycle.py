@@ -23,7 +23,7 @@ from pumpvision.blueprints.dashboard.routes import _credit_total, _paytm_cycle, 
 from pumpvision.extensions import db  # noqa: E402
 from pumpvision.models import (  # noqa: E402
     AppNotification, CngShiftReading, CreditTransaction, IrasMidnightTotalizer,
-    ManualTotalizerReading, NozzleTotalizer,
+    ManagerNotification, ManualTotalizerReading, NozzleTotalizer,
     PaytmTransaction, User,
 )
 from pumpvision.services import operational as op  # noqa: E402
@@ -167,7 +167,12 @@ class ClosingRoutes(_DbCase):
                 self.assertEqual(ManualTotalizerReading.query.filter_by(operational_date=CUT).count(), 6)
                 self.assertEqual(ManualTotalizerReading.query.filter_by(operational_date=self.E).count(), 0)
                 self.assertEqual(AppNotification.query.filter_by(notification_type="shift_close").count(), 1)
+                notice = ManagerNotification.query.one()
+                self.assertEqual(notice.notification_type, "shift_close")
+                self.assertIn("Shift closed by Att", notice.message)
+                self.assertIn("00:", notice.message)
                 db.session.query(ManualTotalizerReading).delete(); db.session.query(AppNotification).delete()
+                db.session.query(ManagerNotification).delete()
                 db.session.commit()
 
     def test_recorded_time_is_the_ist_clock(self):
@@ -200,6 +205,7 @@ class ClosingRoutes(_DbCase):
         # same cycle again, even with different numbers and still inside the window
         self._close(c, at(self.E, 0, 20), base=5000.0)
         self.assertEqual(AppNotification.query.filter_by(notification_type="shift_close").count(), 1)
+        self.assertEqual(ManagerNotification.query.filter_by(notification_type="shift_close").count(), 1)
         self.assertEqual(ManualTotalizerReading.query.count(), 6)
         after = {r.nozzle_label: (r.totalizer_value, r.recorded_at) for r in ManualTotalizerReading.query}
         self.assertEqual(before, after)
@@ -217,6 +223,7 @@ class ClosingRoutes(_DbCase):
         self._close(c, at(self.E + timedelta(days=1), 0, 16), base=1100.0)
         self.assertTrue(_shift_closed(CUT)); self.assertTrue(_shift_closed(self.E))
         self.assertEqual(AppNotification.query.filter_by(notification_type="shift_close").count(), 2)
+        self.assertEqual(ManagerNotification.query.filter_by(notification_type="shift_close").count(), 2)
 
     def test_cycle_before_the_cutover_is_not_window_gated(self):
         """Historical behaviour: the Oct 10 shift was closed in the morning, any time."""

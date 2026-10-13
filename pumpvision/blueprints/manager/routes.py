@@ -1,6 +1,6 @@
 import json
 import math
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from flask import Blueprint, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -8,7 +8,7 @@ from flask_login import current_user, login_required
 from pumpvision import i18n_manager as i18n
 from pumpvision.decorators import manager_required
 from pumpvision.i18n_manager import tr
-from pumpvision.services.operational import get_operational_date
+from pumpvision.services.operational import IST, get_operational_date
 
 from pumpvision.constants import EXPENSE_SUBCATEGORIES
 from pumpvision.services.regulatory import (
@@ -24,7 +24,15 @@ manager_bp = Blueprint("manager", __name__)
 @manager_bp.context_processor
 def _i18n():
     """t('key', ...) in the manager templates; Hindi by default, English by the switch."""
-    return {"t": tr, "lang": i18n.lang(), "label": i18n.label}
+    from pumpvision.models import ManagerNotification
+
+    unread = ManagerNotification.query.filter_by(is_read=False).count()
+    return {
+        "t": tr,
+        "lang": i18n.lang(),
+        "label": i18n.label,
+        "manager_unread_notifications": unread,
+    }
 
 
 @manager_bp.route("/lang", methods=["POST"])
@@ -73,7 +81,8 @@ def home():
 def manager_home_data():
     """Build the manager checklist without performing any operational action."""
     from pumpvision.models import (
-        ManualTotalizerReading, Expense, PaytmTransaction, PaymentReceived, Customer
+        ManualTotalizerReading, Expense, ManagerNotification, PaytmTransaction,
+        PaymentReceived, Customer
     )
 
     today_op = get_operational_date()
@@ -110,6 +119,16 @@ def manager_home_data():
         })
 
     drill = mock_drill_status()
+    notifications = (
+        ManagerNotification.query.filter_by(is_read=False)
+        .order_by(ManagerNotification.created_at.desc())
+        .limit(12)
+        .all()
+    )
+    for notification in notifications:
+        created = notification.created_at
+        aware = created.replace(tzinfo=timezone.utc) if created.tzinfo is None else created
+        notification.display_time = aware.astimezone(IST).strftime("%d %b %Y · %H:%M IST")
 
     return dict(
         greeting=_greeting(),
@@ -124,7 +143,32 @@ def manager_home_data():
         drill_attention=drill_needs_attention(drill),
         drill_due_str=_fmt_date(drill["due"]) if drill["due"] else "",
         drill_last_str=_fmt_date(drill["last"]) if drill["last"] else "",
+        manager_notifications=notifications,
     )
+
+
+@manager_bp.route("/notifications/<int:notification_id>/read", methods=["POST"])
+@login_required
+@manager_required
+def notification_read(notification_id):
+    from pumpvision.models import ManagerNotification, db
+
+    row = db.session.get(ManagerNotification, notification_id)
+    if row is not None:
+        row.is_read = True
+        db.session.commit()
+    return redirect(url_for("manager.home"))
+
+
+@manager_bp.route("/notifications/read-all", methods=["POST"])
+@login_required
+@manager_required
+def notifications_read_all():
+    from pumpvision.models import ManagerNotification, db
+
+    ManagerNotification.query.filter_by(is_read=False).update({"is_read": True})
+    db.session.commit()
+    return redirect(url_for("manager.home"))
 
 
 @manager_bp.route("/lube/", methods=["GET", "POST"])
@@ -333,6 +377,16 @@ def expense():
                 actor=current_user,
                 entity_type="expense",
                 entity_id=expense_row.id,
+            )
+            from pumpvision.services.manager_notifications import notify_manager
+            notify_manager(
+                f"expense:{expense_row.id}",
+                f"Expense recorded by {current_user.first_name or current_user.username}: "
+                f"₹{amount:,.2f} · {category}"
+                + (f" / {sub_category}" if sub_category else "")
+                + f" · {op_date.strftime('%d %b %Y')}.",
+                notification_type="expense",
+                reference_date=op_date,
             )
             db.session.commit()
             shown = i18n.label("cat", category)
