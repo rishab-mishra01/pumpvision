@@ -137,7 +137,7 @@ class SuperAdminTestCase(unittest.TestCase):
     def test_login_redirects_super_admin_and_preserves_other_roles(self):
         expected = {
             "super_admin": "/super-admin/",
-            "owner": "/dashboard",
+            "owner": "/ops/",
             "manager": "/manager/",
             "attendant": "/attendant/",
             "developer": "/dev/",
@@ -179,7 +179,7 @@ class SuperAdminTestCase(unittest.TestCase):
             "password": "testing-password",
         })
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["Location"], "/dashboard")
+        self.assertEqual(response.headers["Location"], "/ops/")
 
     def test_existing_dashboard_routes_still_render_for_their_roles(self):
         routes = {

@@ -32,6 +32,36 @@
       <div id="ops-alerts" class="ops-alert-list"><p class="ops-empty">Loading alerts…</p></div>
     </section>
 
+    <details class="ops-workspace" id="ops-activity-workspace" open>
+      <summary>
+        <span class="ops-workspace__title"><span class="ops-live-label"><i aria-hidden="true"></i>Live</span><span><b>Activity</b><small>Manager, attendant and system actions with IST timestamps</small></span></span>
+        <span class="ops-workspace__toggle" aria-hidden="true">Collapse</span>
+      </summary>
+      <div class="ops-workspace__body">
+        <div class="ops-filter-tabs" id="ops-activity-filters" role="tablist" aria-label="Activity categories">
+          <button id="ops-tab-all" role="tab" aria-controls="ops-activity" aria-selected="true" tabindex="0" data-activity-filter="all"><span>All activity</span><b id="ops-count-all">0</b></button>
+          <button id="ops-tab-expense" role="tab" aria-controls="ops-activity" aria-selected="false" tabindex="-1" data-activity-filter="expense"><span>Expenses</span><b id="ops-count-expense">0</b></button>
+          <button id="ops-tab-credit" role="tab" aria-controls="ops-activity" aria-selected="false" tabindex="-1" data-activity-filter="credit"><span>Credit &amp; collections</span><b id="ops-count-credit">0</b></button>
+          <button id="ops-tab-shift" role="tab" aria-controls="ops-activity" aria-selected="false" tabindex="-1" data-activity-filter="shift"><span>Shift close</span><b id="ops-count-shift">0</b></button>
+        </div>
+        <div class="ops-activity-layout">
+          <section aria-label="Filtered activity"><button class="ops-new-updates" id="ops-show-new" type="button" hidden>Show new updates</button><div id="ops-activity" class="ops-timeline" role="tabpanel" aria-labelledby="ops-tab-all"><p class="ops-empty">Loading activity…</p></div></section>
+          <aside class="ops-shift-explorer" id="ops-shift-explorer" hidden aria-labelledby="ops-shift-explorer-title">
+            <div class="ops-explorer-head"><div><p class="ops-eyebrow">Shift close detail</p><h3 id="ops-shift-explorer-title">Readings by stream</h3></div><span id="ops-explorer-state" class="ops-status ops-status--pending">Loading</span></div>
+            <div class="ops-stream-tabs" id="ops-stream-tabs" role="tablist" aria-label="Shift close streams">
+              <button id="ops-tab-liquid" role="tab" aria-selected="true" tabindex="0" aria-controls="ops-liquid-panel" data-stream="liquid">Liquid nozzles</button>
+              <button id="ops-tab-cng" role="tab" aria-selected="false" tabindex="-1" aria-controls="ops-cng-panel" data-stream="cng">CNG</button>
+            </div>
+            <section id="ops-liquid-panel" role="tabpanel" aria-labelledby="ops-tab-liquid">
+              <div class="ops-nozzle-tabs" id="ops-nozzle-tabs" role="tablist" aria-label="Liquid nozzles"></div>
+              <div id="ops-nozzle-detail" class="ops-reading-detail" role="tabpanel"><p class="ops-empty">Loading nozzle readings…</p></div>
+            </section>
+            <section id="ops-cng-panel" role="tabpanel" aria-labelledby="ops-tab-cng" hidden><div id="ops-cng-explorer" class="ops-reading-detail"><p class="ops-empty">Loading CNG readings…</p></div></section>
+          </aside>
+        </div>
+      </div>
+    </details>
+
     <div class="ops-command-grid"><div class="ops-command-main">
       <section class="ops-card ops-card--shift" aria-labelledby="ops-shift-title">
         <div class="ops-card__head"><div><p class="ops-eyebrow">Current completion</p><h2 id="ops-shift-title">Shift close and reconciliation</h2></div><a href="#ops-reconciliation" class="ops-text-link">View readings</a></div>
@@ -49,12 +79,7 @@
       <section class="ops-card" aria-labelledby="ops-prices-title"><div class="ops-card__head"><div><p class="ops-eyebrow">Selling prices in effect</p><h2 id="ops-prices-title">Current fuel prices</h2></div></div><div id="ops-prices" class="ops-price-grid"><p class="ops-empty">Loading prices…</p></div></section>
     </div>
 
-    <aside class="ops-command-side" aria-label="Live activity and data freshness">
-      <section class="ops-card ops-card--activity" aria-labelledby="ops-activity-title">
-        <div class="ops-card__head"><div><p class="ops-eyebrow">Latest actions</p><h2 id="ops-activity-title">Live activity</h2></div><span class="ops-live-label"><i aria-hidden="true"></i>Live</span></div>
-        <p class="ops-card__hint">Who did what, when, and from which source.</p><button class="ops-new-updates" id="ops-show-new" type="button" hidden>Show new updates</button>
-        <div id="ops-activity" class="ops-timeline"><p class="ops-empty">Loading activity…</p></div>
-      </section>
+    <aside class="ops-command-side" aria-label="Data freshness">
       <section class="ops-card ops-card--sources" aria-labelledby="ops-health-title"><div class="ops-card__head"><div><p class="ops-eyebrow">Data freshness</p><h2 id="ops-health-title">Connected sources</h2></div><a href="#ops-sources-detail" class="ops-text-link">Details</a></div><div id="ops-health-summary" class="ops-health-summary"><p class="ops-empty">Loading sources…</p></div></section>
     </aside></div>
 

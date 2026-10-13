@@ -18,6 +18,10 @@
   var pendingActivityKeys = new Set();
   var initializedActivity = false;
   var auditLoaded = false;
+  var activityFilter = 'all';
+  var shiftStream = 'liquid';
+  var selectedNozzle = null;
+  var latestSnapshot = null;
 
   function loadPrefs() {
     try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem(prefsKey) || '{}')); }
@@ -111,6 +115,7 @@
   }
 
   function renderSnapshot(data) {
+    latestSnapshot = data;
     var c = data.cycle, shift = data.shift, f = data.financial;
     if (!selectedDate) {
       selectedDate = c.op_date;
@@ -145,6 +150,7 @@
       renderPrices(data.prices);
       renderNozzles(data.nozzles);
       renderCng(data.cng);
+      renderShiftExplorer();
       renderSources(data.sources);
     });
     mergeActivities(data.activity, false);
@@ -219,6 +225,52 @@
     }).join('');
   }
 
+  function activityGroup(row) {
+    if (row.kind === 'expense') return 'expense';
+    if (row.kind === 'credit_sale' || row.kind === 'payment') return 'credit';
+    if (row.kind === 'shift_close' || row.kind === 'nozzle' || row.kind === 'cng') return 'shift';
+    return 'other';
+  }
+
+  function renderShiftExplorer() {
+    if (!latestSnapshot) return;
+    var data = latestSnapshot;
+    var explorerState = document.getElementById('ops-explorer-state');
+    explorerState.className = 'ops-status ops-status--' + data.shift.state;
+    explorerState.textContent = label(data.shift.state);
+
+    if (!selectedNozzle || !data.nozzles.some(function (row) { return String(row.nozzle_no) === String(selectedNozzle); })) {
+      selectedNozzle = data.nozzles.length ? String(data.nozzles[0].nozzle_no) : null;
+    }
+    document.getElementById('ops-nozzle-tabs').innerHTML = data.nozzles.map(function (row) {
+      var active = String(row.nozzle_no) === String(selectedNozzle);
+      return '<button id="ops-tab-nozzle-' + e(row.nozzle_no) + '" role="tab" aria-controls="ops-nozzle-detail" aria-selected="' + active + '" tabindex="' + (active ? '0' : '-1') + '" data-nozzle="' + e(row.nozzle_no) + '">' + e(row.label) + '</button>';
+    }).join('');
+    renderSelectedNozzle();
+
+    var cng = data.cng;
+    var manualDetail = (cng.manual_nozzles || []).map(function (row) {
+      return '<div><span>CNG ' + e(row.nozzle_no) + '</span><b>' + e(number(row.kg_sold, 'kg')) + '</b><small>' + e(row.submitted_by) + ' · ' + e(dt(row.submitted_at, false)) + '</small></div>';
+    }).join('');
+    document.getElementById('ops-cng-explorer').innerHTML = '<div class="ops-reading-detail__head"><h4>CNG shift close</h4>' + status(cng.state) + '</div><div class="ops-reading-grid">' +
+      (manualDetail || '<div><span>Manual entry</span><b>Pending</b><small>No attendant entry</small></div>') +
+      '<div><span>Manual total</span><b>' + e(number(cng.manual_total, 'kg')) + '</b><small>' + e(cng.manual_at ? dt(cng.manual_at, false) : 'Not submitted') + '</small></div>' +
+      '<div><span>SDMS / eLedger</span><b>' + e(number(cng.sdms_total, 'kg')) + '</b><small>' + e(cng.sdms_at ? dt(cng.sdms_at, false) : 'Not fetched') + '</small></div>' +
+      '<div><span>Variance</span><b>' + e(number(cng.variance, 'kg')) + '</b><small>' + e(label(cng.state)) + '</small></div></div>';
+  }
+
+  function renderSelectedNozzle() {
+    if (!latestSnapshot) return;
+    var row = latestSnapshot.nozzles.find(function (item) { return String(item.nozzle_no) === String(selectedNozzle); });
+    if (!row) return;
+    document.getElementById('ops-nozzle-detail').setAttribute('aria-labelledby', 'ops-tab-nozzle-' + row.nozzle_no);
+    document.getElementById('ops-nozzle-detail').innerHTML = '<div class="ops-reading-detail__head"><h4>' + e(row.label) + ' · Nozzle ' + e(row.nozzle_no) + '</h4>' + status(row.status) + '</div><div class="ops-reading-grid">' +
+      '<div><span>Opening</span><b>' + e(number(row.opening, 'L')) + '</b><small>Cycle opening</small></div>' +
+      '<div><span>Manual close</span><b>' + e(number(row.manual, 'L')) + '</b><small>' + e(row.manual_at ? dt(row.manual_at, false) : 'Not entered') + '</small></div>' +
+      '<div><span>IRAS close</span><b>' + e(number(row.iras, 'L')) + '</b><small>' + e(row.iras_at ? dt(row.iras_at, false) : 'Not received') + '</small></div>' +
+      '<div><span>Variance</span><b>' + e(number(row.variance, 'L')) + '</b><small>Manual minus IRAS</small></div></div><p class="ops-reading-note">Every time shown is Indian Standard Time (IST).</p>';
+  }
+
   function mergeActivities(rows, announce) {
     var newKeys = [];
     (rows || []).forEach(function (row) {
@@ -245,10 +297,17 @@
   }
   function renderActivity() {
     var rows = Array.from(visibleActivityKeys).map(function (key) { return activity.get(key); }).filter(Boolean).sort(function (a,b) { return String(b.at || '').localeCompare(String(a.at || '')); });
-    document.getElementById('ops-activity').innerHTML = rows.length ? rows.slice(0,20).map(function (row) {
+    var counts = {all:rows.length, expense:0, credit:0, shift:0};
+    rows.forEach(function (row) { var group = activityGroup(row); if (counts[group] != null) counts[group] += 1; });
+    Object.keys(counts).forEach(function (key) { setText('ops-count-' + key, counts[key]); });
+    var filtered = activityFilter === 'all' ? rows : rows.filter(function (row) { return activityGroup(row) === activityFilter; });
+    var shiftVisible = activityFilter === 'shift';
+    document.getElementById('ops-shift-explorer').hidden = !shiftVisible;
+    document.querySelector('.ops-activity-layout').classList.toggle('is-shift', shiftVisible);
+    document.getElementById('ops-activity').innerHTML = filtered.length ? filtered.slice(0,20).map(function (row) {
       var icon = row.kind === 'expense' ? '₹' : row.kind === 'payment' ? 'IN' : row.kind === 'shift_close' ? 'SC' : row.kind === 'nozzle' ? 'NZ' : row.kind === 'price' ? '₹' : row.kind === 'cng' ? 'CG' : 'SYS';
       return '<article class="ops-event" data-kind="' + e(row.kind) + '"><span class="ops-event__icon" aria-hidden="true">' + e(icon) + '</span><div><h3>' + e(row.title) + '</h3>' + (row.detail ? '<p>' + e(row.detail) + '</p>' : '') + '<div class="ops-event__who"><span class="ops-actor">' + e(row.actor || row.source) + ' · ' + e(row.actor_role || 'system') + '</span><span class="ops-source-tag">' + e(row.source) + '</span></div><time datetime="' + e(row.at) + '">' + e(dt(row.at, true)) + '</time></div></article>';
-    }).join('') : '<p class="ops-empty">No activity has been recorded yet.</p>';
+    }).join('') : '<p class="ops-empty">No ' + e(activityFilter === 'all' ? '' : activityFilter + ' ') + 'activity has been recorded for this cycle.</p>';
   }
 
   async function fetchSnapshot(manual) {
@@ -301,6 +360,48 @@
       auditLoaded = true;
     } catch (_) { host.innerHTML = '<p class="ops-empty">Audit history could not be loaded. Try refreshing.</p>'; }
   }
+
+  function activateTab(container, tab, callback) {
+    Array.from(container.querySelectorAll('[role="tab"]')).forEach(function (item) {
+      var active = item === tab;
+      item.setAttribute('aria-selected', String(active));
+      item.tabIndex = active ? 0 : -1;
+    });
+    callback(tab);
+  }
+  function bindTabs(container, callback) {
+    container.addEventListener('click', function (event) {
+      var tab = event.target.closest('[role="tab"]');
+      if (tab && container.contains(tab)) activateTab(container, tab, callback);
+    });
+    container.addEventListener('keydown', function (event) {
+      if (['ArrowRight','ArrowLeft','Home','End'].indexOf(event.key) < 0) return;
+      var tabs = Array.from(container.querySelectorAll('[role="tab"]'));
+      var index = tabs.indexOf(document.activeElement);
+      if (index < 0 || !tabs.length) return;
+      if (event.key === 'Home') index = 0;
+      else if (event.key === 'End') index = tabs.length - 1;
+      else index = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault();
+      activateTab(container, tabs[index], callback);
+      tabs[index].focus();
+    });
+  }
+
+  bindTabs(document.getElementById('ops-activity-filters'), function (tab) {
+    activityFilter = tab.dataset.activityFilter;
+    document.getElementById('ops-activity').setAttribute('aria-labelledby', tab.id);
+    renderActivity();
+  });
+  bindTabs(document.getElementById('ops-stream-tabs'), function (tab) {
+    shiftStream = tab.dataset.stream;
+    document.getElementById('ops-liquid-panel').hidden = shiftStream !== 'liquid';
+    document.getElementById('ops-cng-panel').hidden = shiftStream !== 'cng';
+  });
+  bindTabs(document.getElementById('ops-nozzle-tabs'), function (tab) {
+    selectedNozzle = tab.dataset.nozzle;
+    renderSelectedNozzle();
+  });
 
   document.querySelectorAll('.ops-text-link').forEach(function (link) {
     link.addEventListener('click', function () {

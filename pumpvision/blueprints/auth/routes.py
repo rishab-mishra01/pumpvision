@@ -8,6 +8,8 @@ auth_bp = Blueprint("auth", __name__)
 def _role_home():
     if current_user.role == "super_admin":
         return redirect(url_for("super_admin.overview"))
+    if current_user.role == "owner":
+        return redirect(url_for("ops.index"))
     if current_user.role == "attendant":
         return redirect(url_for("attendant.home"))
     if current_user.role == "manager":
