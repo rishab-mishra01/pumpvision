@@ -122,6 +122,12 @@
     stateNode.textContent = label(shift.state);
     setText('ops-shift-summary', shift.liquid_locked + '/6 liquid nozzles locked · ' + shift.cng_entered + '/2 CNG entered · ' + shift.iras_received + '/6 IRAS received');
     setText('ops-last-check', dt(data.generated_at, false));
+    setText('ops-fact-manual', shift.liquid_locked + ' / 6');
+    setText('ops-fact-iras', shift.iras_received + ' / 6');
+    setText('ops-fact-cng', shift.cng_entered + ' / 2');
+    setText('ops-finance-state', label(f.state));
+    var completion = Math.round(((shift.liquid_locked + shift.iras_received + shift.cng_entered) / 14) * 100);
+    document.getElementById('ops-shift-progress').style.width = completion + '%';
 
     setText('kpi-cash', money(f.expected_sales_cash));
     setText('kpi-cash-note', f.expected_sales_cash == null ? 'Waiting for ' + (f.missing.join(', ') || 'source data') : (f.state === 'final' ? 'Final source set' : 'Provisional'));
@@ -135,6 +141,7 @@
     preserveFocus(function () {
       renderAlerts(data.alerts);
       renderHealth(data.sources);
+      renderShiftOverview(shift, data.cng, data.sources);
       renderPrices(data.prices);
       renderNozzles(data.nozzles);
       renderCng(data.cng);
@@ -145,14 +152,31 @@
 
   function renderAlerts(rows) {
     document.getElementById('ops-alert-count').textContent = rows.length;
+    document.getElementById('ops-alert-band').classList.toggle('is-clear', !rows.length);
     document.getElementById('ops-alerts').innerHTML = rows.length ? rows.map(function (row) {
-      return '<article class="ops-list-item ops-list-item--' + e(row.severity) + '"><span class="ops-list-item__icon" aria-hidden="true"></span><div><b>' + e(row.title) + '</b>' + (row.detail ? '<p>' + e(row.detail) + '</p>' : '') + '<small>' + e(row.source) + (row.acknowledged ? ' · Acknowledged' : '') + '</small></div><time datetime="' + e(row.last_seen) + '">' + e(dt(row.last_seen, false)) + '</time></article>';
+      return '<article class="ops-alert-item ops-alert-item--' + e(row.severity) + '"><b>' + e(row.title) + '</b>' + (row.detail ? '<p>' + e(row.detail) + '</p>' : '') + '<time datetime="' + e(row.last_seen) + '">' + e(row.source) + ' · ' + e(dt(row.last_seen, false)) + (row.acknowledged ? ' · Acknowledged' : '') + '</time></article>';
     }).join('') : '<p class="ops-empty">No open operational alerts.</p>';
   }
   function renderHealth(rows) {
     var important = rows.filter(function (row) { return ['iras_prices','iras_totalizers','paytm','sdms','atg'].indexOf(row.key) >= 0; });
     document.getElementById('ops-health-summary').innerHTML = important.map(function (row) {
-      return '<div class="ops-health-row"><span><i class="ops-source__dot" aria-hidden="true" style="background:' + (row.state === 'healthy' ? 'var(--ok-600)' : row.state === 'failed' ? 'var(--error-600)' : 'var(--warn-600)') + '"></i>' + e(row.label) + '</span><small>' + e(label(row.state)) + ' · ' + e(age(row.age_minutes)) + '</small></div>';
+      return '<div class="ops-health-row"><i class="ops-source__dot" aria-hidden="true" style="background:' + stateColor(row.state) + '"></i><b>' + e(row.label) + '</b><small>' + e(label(row.state)) + '<br>' + e(age(row.age_minutes)) + '</small></div>';
+    }).join('');
+  }
+  function stateColor(state) {
+    return state === 'healthy' || state === 'reconciled' ? '#2c9560' : state === 'failed' || state === 'review' ? '#c64135' : '#d89a25';
+  }
+  function renderShiftOverview(shift, cng, sources) {
+    var sourceMap = {};
+    sources.forEach(function (row) { sourceMap[row.key] = row; });
+    var rows = [
+      {title:'Manual nozzle close', value:shift.liquid_locked + ' of 6 locked', note:shift.submitted_at ? 'Submitted ' + dt(shift.submitted_at, false) : 'Awaiting attendant submission', state:shift.liquid_locked >= 6 ? 'complete' : 'pending'},
+      {title:'IRAS nozzle close', value:shift.iras_received + ' of 6 received', note:sourceMap.iras_totalizers ? age(sourceMap.iras_totalizers.age_minutes) : 'Not received', state:shift.iras_received >= 6 ? 'complete' : 'pending'},
+      {title:'CNG manual entry', value:shift.cng_entered + ' of 2 entered', note:cng.manual_at ? 'Updated ' + dt(cng.manual_at, false) : 'Awaiting attendant entry', state:shift.cng_entered >= 2 ? 'complete' : 'pending'},
+      {title:'SDMS / eLedger', value:label(cng.state), note:cng.sdms_at ? 'Fetched ' + dt(cng.sdms_at, false) : 'Settlement data pending', state:cng.state === 'reconciled' || cng.state === 'sdms_only' ? 'complete' : cng.state === 'review' ? 'attention' : 'pending'}
+    ];
+    document.getElementById('ops-shift-checklist').innerHTML = rows.map(function (row) {
+      return '<article class="ops-check" data-state="' + e(row.state) + '"><div class="ops-check__top"><b>' + e(row.title) + '</b><i class="ops-check__dot" aria-hidden="true"></i></div><strong>' + e(row.value) + '</strong><small>' + e(row.note) + '</small></article>';
     }).join('');
   }
   function renderPrices(rows) {
@@ -165,6 +189,10 @@
     return '<b class="num">' + e(number(value, unit)) + '</b><small>' + (at ? e(dt(at, false)) : 'Not available') + '</small>';
   }
   function renderNozzles(rows) {
+    document.getElementById('ops-nozzle-overview').innerHTML = rows.map(function (row) {
+      var reading = row.manual_at ? 'Manual ' + dt(row.manual_at, false) : row.iras_at ? 'IRAS ' + dt(row.iras_at, false) : 'No close reading';
+      return '<div class="ops-nozzle" data-state="' + e(row.status) + '"><b>' + e(row.label) + '</b><span>' + e(label(row.status)) + '</span><span>' + e(reading) + '</span></div>';
+    }).join('');
     document.getElementById('ops-nozzles').innerHTML = rows.map(function (row) {
       return '<tr><td data-label="Nozzle"><b>' + e(row.label) + '</b><small>' + e(row.product) + ' · Nozzle ' + e(row.nozzle_no) + '</small></td>' +
         '<td data-label="Opening">' + readingCell(row.opening, null, 'L') + '</td>' +
@@ -187,7 +215,7 @@
   }
   function renderSources(rows) {
     document.getElementById('ops-sources').innerHTML = rows.map(function (row) {
-      return '<article class="ops-source" data-state="' + e(row.state) + '"><span class="ops-source__dot" aria-hidden="true"></span><div><b>' + e(row.label) + '</b><span>' + e(row.note || 'Operational source') + '</span><small>Observed ' + e(row.observed_at ? dt(row.observed_at, true) : 'not yet') + ' · ' + e(age(row.age_minutes)) + '</small></div><strong>' + e(label(row.state)) + '</strong></article>';
+      return '<article class="ops-source" data-state="' + e(row.state) + '"><span class="ops-source__dot" aria-hidden="true" style="background:' + stateColor(row.state) + '"></span><div><b>' + e(row.label) + '</b><span>' + e(row.note || 'Operational source') + '</span><small>Observed ' + e(row.observed_at ? dt(row.observed_at, true) : 'not yet') + ' · ' + e(age(row.age_minutes)) + '</small></div><strong>' + e(label(row.state)) + '</strong></article>';
     }).join('');
   }
 
@@ -203,8 +231,8 @@
       renderActivity();
       return;
     }
-    newKeys.forEach(function (key) { pendingActivityKeys.add(key); });
-    updateNewCount();
+    newKeys.forEach(function (key) { visibleActivityKeys.add(key); });
+    renderActivity();
     if (announce && prefs.announce) {
       var critical = newKeys.map(function (key) { return activity.get(key); }).find(function (row) { return row.severity === 'critical'; });
       if (critical) document.getElementById('ops-critical-announcer').textContent = 'Critical operations alert: ' + critical.title;
@@ -212,15 +240,14 @@
   }
   function updateNewCount() {
     var count = pendingActivityKeys.size;
-    var badge = document.getElementById('ops-new-count');
-    badge.hidden = !count; badge.textContent = count;
     var show = document.getElementById('ops-show-new');
     show.hidden = !count; show.textContent = 'Show ' + count + ' new update' + (count === 1 ? '' : 's');
   }
   function renderActivity() {
     var rows = Array.from(visibleActivityKeys).map(function (key) { return activity.get(key); }).filter(Boolean).sort(function (a,b) { return String(b.at || '').localeCompare(String(a.at || '')); });
-    document.getElementById('ops-activity').innerHTML = rows.length ? rows.slice(0,60).map(function (row) {
-      return '<article class="ops-event"><span class="ops-event__marker" aria-hidden="true"></span><div><h3>' + e(row.title) + '</h3>' + (row.detail ? '<p>' + e(row.detail) + '</p>' : '') + '<p class="ops-event__meta">' + e((row.actor || row.source) + ' · ' + (row.actor_role || 'system') + ' · ' + row.source + (row.op_date ? ' · Operational date ' + row.op_date : '')) + '</p></div><time datetime="' + e(row.at) + '">' + e(dt(row.at, true)) + '</time></article>';
+    document.getElementById('ops-activity').innerHTML = rows.length ? rows.slice(0,20).map(function (row) {
+      var icon = row.kind === 'expense' ? '₹' : row.kind === 'payment' ? 'IN' : row.kind === 'shift_close' ? 'SC' : row.kind === 'nozzle' ? 'NZ' : row.kind === 'price' ? '₹' : row.kind === 'cng' ? 'CG' : 'SYS';
+      return '<article class="ops-event" data-kind="' + e(row.kind) + '"><span class="ops-event__icon" aria-hidden="true">' + e(icon) + '</span><div><h3>' + e(row.title) + '</h3>' + (row.detail ? '<p>' + e(row.detail) + '</p>' : '') + '<div class="ops-event__who"><span class="ops-actor">' + e(row.actor || row.source) + ' · ' + e(row.actor_role || 'system') + '</span><span class="ops-source-tag">' + e(row.source) + '</span></div><time datetime="' + e(row.at) + '">' + e(dt(row.at, true)) + '</time></div></article>';
     }).join('') : '<p class="ops-empty">No activity has been recorded yet.</p>';
   }
 
@@ -262,15 +289,6 @@
     timer = setTimeout(function () { fetchSnapshot(false); }, retryMs);
   }
 
-  function openTab(name, focus) {
-    document.querySelectorAll('[role="tab"]').forEach(function (tab) {
-      var active = tab.dataset.tab === name;
-      tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
-      if (active && focus) tab.focus();
-    });
-    document.querySelectorAll('[role="tabpanel"]').forEach(function (panel) { panel.hidden = panel.id !== 'panel-' + name; });
-    if (name === 'audit' && !auditLoaded) fetchAudit();
-  }
   async function fetchAudit() {
     var host = document.getElementById('ops-audit');
     try {
@@ -284,17 +302,16 @@
     } catch (_) { host.innerHTML = '<p class="ops-empty">Audit history could not be loaded. Try refreshing.</p>'; }
   }
 
-  document.querySelector('.ops-tabs').addEventListener('click', function (event) {
-    var tab = event.target.closest('[role="tab"]'); if (tab) openTab(tab.dataset.tab, false);
+  document.querySelectorAll('.ops-text-link').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var detail = document.querySelector(link.getAttribute('href'));
+      if (detail && detail.tagName === 'DETAILS') detail.open = true;
+    });
   });
-  document.querySelector('.ops-tabs').addEventListener('keydown', function (event) {
-    if (['ArrowRight','ArrowLeft','Home','End'].indexOf(event.key) < 0) return;
-    var tabs = Array.from(document.querySelectorAll('[role="tab"]'));
-    var index = tabs.indexOf(document.activeElement);
-    if (event.key === 'Home') index = 0; else if (event.key === 'End') index = tabs.length - 1; else index = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-    event.preventDefault(); openTab(tabs[index].dataset.tab, true);
+  var auditDetail = document.getElementById('ops-audit-detail');
+  if (auditDetail) auditDetail.addEventListener('toggle', function () {
+    if (auditDetail.open && !auditLoaded) fetchAudit();
   });
-  document.querySelectorAll('[data-open-tab]').forEach(function (link) { link.addEventListener('click', function (event) { event.preventDefault(); openTab(link.dataset.openTab, true); }); });
   document.getElementById('ops-show-new').addEventListener('click', function () {
     pendingActivityKeys.forEach(function (key) { visibleActivityKeys.add(key); });
     pendingActivityKeys.clear(); updateNewCount(); renderActivity();

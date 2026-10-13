@@ -85,9 +85,13 @@ class OpsDashboardTestCase(unittest.TestCase):
                 response = self.client.get("/ops/")
                 body = response.get_data(as_text=True)
                 self.assertEqual(response.status_code, 200)
-                self.assertIn("Live Operations", body)
-                self.assertIn("Skip to dashboard content", body)
-                self.assertIn('role="tablist"', body)
+                self.assertIn("Operations Control Room", body)
+                self.assertIn("Skip to live operations", body)
+                self.assertIn("What is happening right now", body)
+                self.assertIn("Live activity", body)
+                self.assertIn("Shift close and reconciliation", body)
+                self.assertIn("Connected sources", body)
+                self.assertIn("Back to PumpVision app", body)
                 self.assertIn("Accessibility", body)
                 self.assertEqual(response.headers["Cache-Control"], "no-store")
                 parser = _OpsHtmlParser()
@@ -160,8 +164,8 @@ class OpsDashboardTestCase(unittest.TestCase):
     def test_manager_gets_operational_views_but_not_audit_history(self):
         self.login("manager")
         body = self.client.get("/ops/").get_data(as_text=True)
-        self.assertIn("Reconciliation", body)
-        self.assertNotIn('id="tab-audit"', body)
+        self.assertIn("Nozzle and CNG reconciliation", body)
+        self.assertNotIn('id="ops-audit-detail"', body)
         self.assertEqual(self.client.get("/ops/api/v1/audit").status_code, 403)
 
 
