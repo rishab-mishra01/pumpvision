@@ -80,7 +80,9 @@ Missing data must never appear as zero.
 
 1. Rotate and remove the hardcoded IRAS credential from the scraper and repository history.
 2. Fix the remaining CNG fallback value of 87.0.
-3. Align VPS reconciliation and scraper policy with the midnight shift boundary.
+3. ~~Align VPS reconciliation and scraper policy with the midnight shift boundary.~~ Implemented:
+   Shift Totalizer midnight closes are stored separately from legacy 06:00 ISS boundaries; missing
+   manual closes fall back to a same-source IRAS midnight pair and show an explicit note.
 4. Fix nozzle 16 boundary-floor handling.
 5. Keep missing IRAS prices visibly provisional and show the actual fallback rate.
 6. Separate Paytm POS from customer debt repayments.

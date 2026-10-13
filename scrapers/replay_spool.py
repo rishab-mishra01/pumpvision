@@ -134,6 +134,18 @@ def _apply_nozzle_totalizers(payload: dict) -> str:
     return f"NozzleTotalizer rows for {payload['shift_date']}"
 
 
+def _apply_iras_midnight_totalizers(payload: dict) -> str:
+    mod = _load_scraper("iras_iss_exporter")
+    ok = mod.save_midnight_totalizers_to_db(
+        payload["op_date"],
+        {int(k): v for k, v in payload["readings"].items()},
+        payload.get("source_file"),
+    )
+    if not ok:
+        raise RuntimeError("save_midnight_totalizers_to_db returned False")
+    return f"IRAS midnight boundaries for {payload['op_date']}"
+
+
 def _apply_iras_prices(payload: dict) -> str:
     from pumpvision import create_app
     from pumpvision.models import IrasPrice, db
@@ -196,6 +208,7 @@ HANDLERS = {
     "sdms_summary":      _apply_sdms_summary,
     "atg_readings":      _apply_atg_readings,
     "nozzle_totalizers": _apply_nozzle_totalizers,
+    "iras_midnight_totalizers": _apply_iras_midnight_totalizers,
     "iras_prices":       _apply_iras_prices,
     "paytm_import":      _apply_paytm_import,
 }

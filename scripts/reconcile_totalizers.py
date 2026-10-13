@@ -4,8 +4,9 @@ READ-ONLY on totalizer data: it never corrects a value, it only reports. The one
 write is a technical finding on the developer dashboard (review_findings) when
 something disagrees; it never alerts the owner.
 
-Row convention: nozzle_totalizers.operational_date = D holds the meter at the
-06:00 boundary that OPENS day D (= the closing of D-1).
+From cycle 2026-10-11 onward, ``iras_midnight_totalizers.operational_date = D``
+holds the Shift Totalizer close at midnight ending D. Older dates retain the
+``nozzle_totalizers`` 06:00-boundary convention.
 
 Truth for the boundary of day D is the Shift Totalizer file's own numbers:
   ShiftTotalizer_D.xlsx  'O' row   (opening of D), else
@@ -16,8 +17,8 @@ boundary stays "pending" rather than being guessed.
 Checks, for each op date D in the window:
   A  DB boundary(D) vs file truth(D)                   > TOL_BOUNDARY L  -> MISMATCH
   B  DB boundary(D) < DB boundary(D-1)                 (a meter never runs back)
-  C  attendant closing(D) vs file truth(D+1)           gap < -TOL_BOUNDARY or > MAX_ATT_GAP
-     (the attendant reads ~06:40, so a small positive gap is normal sales since 06:00)
+  C  attendant closing(D) vs the matching boundary: midnight close after cutover,
+     legacy 06:00 truth(D+1) before cutover.
 
 Small differences (<= TOL_BOUNDARY, seen on ISS-derived boundaries) are ignored.
 
@@ -38,6 +39,8 @@ ST_DIR = Path(os.environ.get("ST_DIR", "/data/iras_data/ShiftTotalizer"))
 NOZZLES = (7, 11, 15, 16, 17, 18)
 TOL_BOUNDARY = 25.0     # L; ISS-derived boundaries differ from the file by up to ~18 L
 MAX_ATT_GAP = 150.0     # L; attendant reading minus 06:00 boundary
+MIDNIGHT_TOL = 1.0      # L; attendant and IRAS describe the same boundary
+CYCLE_CUTOVER = date.fromisoformat(os.environ.get("PUMPVISION_CYCLE_CUTOVER", "2026-10-11"))
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
@@ -91,7 +94,10 @@ def main():
 
     eng = create_engine(load_env_db_url())
     today = datetime.now(IST).date()
-    dates = [today - timedelta(days=i) for i in range(args.days, -1, -1)]
+    # A midnight cycle labelled today does not close until tomorrow. Reconcile
+    # only completed operational dates, ending with yesterday.
+    last_closed_day = today - timedelta(days=1)
+    dates = [last_closed_day - timedelta(days=i) for i in range(args.days, -1, -1)]
 
     st_cache = {}
 
@@ -115,35 +121,51 @@ def main():
         db = {(r[0], r[1]): r[2] for r in c.execute(text(
             "select operational_date, nozzle_no, totalizer_end from nozzle_totalizers "
             "where operational_date >= :lo"), {"lo": lo})}
-        att = {(r[0], r[1]): r[2] for r in c.execute(text(
-            "select operational_date, nozzle_no, totalizer_value from manual_totalizer_readings "
+        att = {(r[0], r[1]): (r[2], r[3]) for r in c.execute(text(
+            "select operational_date, nozzle_no, totalizer_value, recorded_at from manual_totalizer_readings "
             "where operational_date >= :lo and nozzle_no is not null"), {"lo": lo})}
+        midnight = {(r[0], r[1]): r[2] for r in c.execute(text(
+            "select operational_date, nozzle_no, totalizer_close from iras_midnight_totalizers "
+            "where operational_date >= :lo"), {"lo": lo})}
 
     problems, pending, ok = [], [], 0
     for d in dates:
         for n in NOZZLES:
-            have = db.get((d, n))
+            is_midnight = d >= CYCLE_CUTOVER
+            have = midnight.get((d, n)) if is_midnight else db.get((d, n))
             if have is None:
-                problems.append((d, n, "MISSING", "no totalizer row in DB"))
+                label = "midnight totalizer" if is_midnight else "06:00 totalizer"
+                problems.append((d, n, "MISSING", f"no {label} row in DB"))
                 continue
-            t = truth(d, n)
+            if is_midnight:
+                day_file = st(d)
+                t = day_file.get(n, {}).get("C") if day_file else None
+            else:
+                t = truth(d, n)
             if t is None:
                 pending.append((d, n))
-            elif abs(have - t) > TOL_BOUNDARY:
+            elif abs(have - t) > (0.01 if is_midnight else TOL_BOUNDARY):
                 problems.append((d, n, "MISMATCH", f"DB {have:,.2f} vs IRAS file {t:,.2f} (diff {have - t:+,.2f} L)"))
             else:
                 ok += 1
-            prev = db.get((d - timedelta(days=1), n))
+            prev = (midnight if is_midnight else db).get((d - timedelta(days=1), n))
             if prev is not None and have < prev - 0.01:
                 problems.append((d, n, "BACKWARDS", f"DB {have:,.2f} is below previous day {prev:,.2f}"))
-            a = att.get((d, n))
-            if a is not None:
-                nxt = truth(d + timedelta(days=1), n)
-                if nxt is not None:
-                    gap = a - nxt
-                    if gap < -TOL_BOUNDARY or gap > MAX_ATT_GAP:
+            attendant = att.get((d, n))
+            if attendant is not None:
+                a, recorded_at = attendant
+                if is_midnight:
+                    window_start = datetime.combine(d + timedelta(days=1), datetime.min.time())
+                    window_end = window_start + timedelta(minutes=31)
+                    if recorded_at is None or not (window_start <= recorded_at < window_end):
+                        continue
+                boundary = have if is_midnight else truth(d + timedelta(days=1), n)
+                if boundary is not None:
+                    gap = a - boundary
+                    lo, hi = (-MIDNIGHT_TOL, MIDNIGHT_TOL) if is_midnight else (-TOL_BOUNDARY, MAX_ATT_GAP)
+                    if gap < lo or gap > hi:
                         problems.append((d, n, "ATTENDANT",
-                                        f"attendant closing {a:,.2f} vs IRAS boundary {nxt:,.2f} (gap {gap:+,.2f} L)"))
+                                        f"attendant closing {a:,.2f} vs IRAS boundary {boundary:,.2f} (gap {gap:+,.2f} L)"))
 
     print(f"[reconcile] {today} window {dates[0]}..{dates[-1]}: {ok} boundaries agree, "
           f"{len(pending)} pending IRAS data, {len(problems)} problem(s)")
@@ -156,7 +178,7 @@ def main():
         # Technical findings go to the developer dashboard (review_findings), never to the owner.
         SEV = {"ATTENDANT": "warn"}
         FIX = {
-            "MISMATCH": "The stored boundary differs from IRAS's own Shift Totalizer file: correct the nozzle_totalizers row to the file value (after a pg_dump).",
+            "MISMATCH": "The stored boundary differs from IRAS's own Shift Totalizer file: correct the applicable boundary row after a database backup.",
             "BACKWARDS": "A meter cannot run backwards: one of the two stored boundaries is wrong; compare with the Shift Totalizer file.",
             "MISSING": "Re-run `daily_scrape.py --completed-shift --date <date>` on the VPS.",
             "ATTENDANT": "Attendant mis-keyed, or the stored boundary is wrong: check against the Shift Totalizer file.",

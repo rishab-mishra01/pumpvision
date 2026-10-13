@@ -39,6 +39,7 @@ KINDS = (
     "sdms_summary",       # scrapers/sdms_pad_exporter.save_summary_to_db
     "atg_readings",       # scrapers/iras_atg_exporter.save_readings_to_db
     "nozzle_totalizers",  # scrapers/iras_iss_exporter.save_totalizers_to_db
+    "iras_midnight_totalizers",  # Shift Totalizer midnight close
     "iras_prices",        # scrapers/daily_scrape._save_prices_to_db
     "paytm_import",       # scrapers/daily_scrape._import_paytm_to_db
 )

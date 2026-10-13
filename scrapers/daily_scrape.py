@@ -997,7 +997,9 @@ async def _job_sdms(dry_run: bool = False, target_date: str | None = None) -> bo
 # JOB 1 — SHIFT TOTALIZER
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _job_shift_totalizer(page, op_dates: list[str], st_dir: Path):
+async def _job_shift_totalizer(
+    page, op_dates: list[str], st_dir: Path, dry_run: bool = False
+):
     """
     Download Shift Totalizer for every op_date in the list.
 
@@ -1015,6 +1017,24 @@ async def _job_shift_totalizer(page, op_dates: list[str], st_dir: Path):
 
     st_dir.mkdir(parents=True, exist_ok=True)
     await _iss.download_all_shift_totalizers(page, st_dir, op_dates)
+
+    # The same export is the authoritative midnight close after the cycle
+    # cutover. Persist it separately; never overwrite the legacy 06:00 ISS table.
+    for op_date in op_dates:
+        fpath = st_dir / f"ShiftTotalizer_{op_date}.xlsx"
+        if not fpath.exists():
+            print(f"  [midnight] {fpath.name} unavailable — DB import skipped")
+            continue
+        readings = {
+            nozzle_no: values
+            for nozzle_no in sorted(_EXPECTED_NOZZLES)
+            if (values := _iss.parse_shift_totalizer_nozzle(fpath, nozzle_no)) is not None
+            and values.get("close") is not None
+        }
+        if dry_run:
+            print(f"  [dry-run] Would save {len(readings)} midnight boundary rows for {op_date}")
+        else:
+            _iss.save_midnight_totalizers_to_db(op_date, readings, fpath.name)
 
 
 def _save_prices_to_db(records: list[dict]) -> bool:
@@ -1633,7 +1653,7 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                 # Job 1: Price (PRM) — RSP for the op day(s) being reconciled
                 await _job_price(page, shift_dates, price_dir, dry_run=dry_run)
                 # Job 2: Shift Totalizer — must precede ISS (ISS reads ST from disk)
-                await _job_shift_totalizer(page, op_dates, st_dir)
+                await _job_shift_totalizer(page, op_dates, st_dir, dry_run=dry_run)
                 # Job 3: ISS boundary → NozzleTotalizer DB rows
                 await _job_iss_boundary(page, shift_dates, iss_dir, dry_run=dry_run)
 
@@ -1977,7 +1997,9 @@ async def run(dates: list[str], dry_run: bool = False, mode: str = 'all',
                                     (datetime.strptime(bd, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
                                     for bd in all_needed
                                 ]
-                                await _job_shift_totalizer(page, _needed_op_dates, st_dir)
+                                await _job_shift_totalizer(
+                                    page, _needed_op_dates, st_dir, dry_run=dry_run
+                                )
                                 await _job_iss_boundary(page, all_needed, iss_dir, dry_run=dry_run)
                             else:
                                 print(f"\n{'='*55}")

@@ -230,6 +230,31 @@ class NozzleTotalizer(db.Model):
     )
 
 
+class IrasMidnightTotalizer(db.Model):
+    """IRAS Shift Totalizer close for the midnight boundary of a business day.
+
+    This is deliberately separate from :class:`NozzleTotalizer`, whose rows retain
+    their historical 06:00 ISS-boundary meaning. ``operational_date`` is the day
+    being closed; ``effective_at`` is the nominal midnight at the end of that day.
+    """
+    __tablename__ = "iras_midnight_totalizers"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    operational_date = db.Column(db.Date, nullable=False, index=True)
+    nozzle_no = db.Column(db.Integer, nullable=False)
+    totalizer_open = db.Column(db.Float)
+    totalizer_close = db.Column(db.Float, nullable=False)
+    effective_at = db.Column(db.DateTime, nullable=False)
+    fetched_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    source_file = db.Column(db.String(255))
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "operational_date", "nozzle_no", name="uq_iras_midnight_totalizer"
+        ),
+    )
+
+
 # ─────────────────────────────────────────────
 # MANUAL METER READINGS
 # ─────────────────────────────────────────────

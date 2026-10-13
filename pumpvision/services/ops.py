@@ -13,10 +13,10 @@ from pumpvision.models import (
     CreditTransaction,
     EntryAudit,
     Expense,
+    IrasMidnightTotalizer,
     IrasPrice,
     LubeTransaction,
     ManualTotalizerReading,
-    NozzleTotalizer,
     OpsEvent,
     PaymentReceived,
     PaytmTransaction,
@@ -28,7 +28,7 @@ from pumpvision.models import (
 )
 from pumpvision.services.operational import IST, cycle_bounds, get_operational_date, now_ist
 from pumpvision.services.prices import get_rsp
-from pumpvision.services.totalizers import opening_reading
+from pumpvision.services.totalizers import totalizers_for_day, valid_manual_closes
 
 
 UTC = timezone.utc
@@ -144,9 +144,11 @@ def _financial_snapshot(op_date: date) -> dict:
 
     products = _product_sales(op_date)
     cng = _cng_sdms(op_date)
-    iras_closing = NozzleTotalizer.query.filter_by(operational_date=op_date + timedelta(days=1)).count()
-    manual_closing = ManualTotalizerReading.query.filter_by(operational_date=op_date, is_locked=True).count()
-    liquid_available = iras_closing >= 6 or manual_closing >= 6
+    opening, closing, _manual = totalizers_for_day(op_date)
+    liquid_available = all(
+        nozzle_no in opening and nozzle_no in closing
+        for nozzle_no, _label, _product in NOZZLES
+    )
     cng_available = cng is not None
 
     liquid_revenue = sum(row["revenue"] for row in products.values()) if liquid_available else None
@@ -196,13 +198,19 @@ def _financial_snapshot(op_date: date) -> dict:
 def _shift_snapshot(op_date: date) -> dict:
     liquid = ManualTotalizerReading.query.filter_by(operational_date=op_date).all()
     cng = CngShiftReading.query.filter_by(op_date=op_date).all()
-    locked = sum(bool(row.is_locked) for row in liquid if row.nozzle_no is not None)
-    entered = len({row.nozzle_no for row in liquid if row.nozzle_no is not None})
-    iras = NozzleTotalizer.query.filter_by(operational_date=op_date + timedelta(days=1)).count()
+    valid = valid_manual_closes(op_date)
+    locked = sum(
+        bool(row.is_locked) for row in liquid
+        if row.nozzle_no in valid
+    )
+    entered = len(valid)
+    iras = IrasMidnightTotalizer.query.filter_by(operational_date=op_date).count()
     if locked >= 6 and iras >= 6:
         state = "final"
     elif locked >= 6:
         state = "submitted"
+    elif iras >= 6:
+        state = "iras_fallback"
     elif entered or cng:
         state = "provisional"
     else:
@@ -222,25 +230,46 @@ def _shift_snapshot(op_date: date) -> dict:
 
 def _nozzle_snapshot(op_date: date) -> list[dict]:
     out = []
+    valid_manual = valid_manual_closes(op_date)
+    openings, closings, _manual_nozzles = totalizers_for_day(op_date)
     for nozzle_no, label, product in NOZZLES:
         manual = ManualTotalizerReading.query.filter_by(
             operational_date=op_date, nozzle_no=nozzle_no
         ).first()
-        iras = NozzleTotalizer.query.filter_by(
-            operational_date=op_date + timedelta(days=1), nozzle_no=nozzle_no
+        iras = IrasMidnightTotalizer.query.filter_by(
+            operational_date=op_date, nozzle_no=nozzle_no
         ).first()
-        opening = opening_reading(nozzle_no, op_date)
-        manual_value = manual.totalizer_value if manual else None
-        iras_value = iras.totalizer_end if iras else None
+        previous_iras = IrasMidnightTotalizer.query.filter_by(
+            operational_date=op_date - timedelta(days=1), nozzle_no=nozzle_no
+        ).first()
+        opening = openings.get(nozzle_no)
+        manual_value = valid_manual.get(nozzle_no)
+        iras_value = iras.totalizer_close if iras else None
         variance = round(manual_value - iras_value, 2) if manual_value is not None and iras_value is not None else None
         if manual and iras:
-            status = "reconciled" if abs(variance or 0) <= 1 else "review"
-        elif manual:
+            if manual_value is None:
+                status = "manual_outside_window"
+            else:
+                status = "reconciled" if abs(variance or 0) <= 1 else "review"
+        elif manual_value is not None:
             status = "manual_submitted" if manual.is_locked else "manual_draft"
         elif iras:
-            status = "iras_only"
+            status = "iras_fallback"
         else:
             status = "pending"
+        notes = []
+        if manual and manual_value is None:
+            notes.append("Manual entry was outside the close window and was not used.")
+        if manual_value is None and iras:
+            notes.append("Manual close was not done; IRAS midnight boundary used for calculation.")
+        no_sale = bool(
+            manual_value is None
+            and iras
+            and previous_iras
+            and abs(iras.totalizer_close - previous_iras.totalizer_close) < 0.005
+        )
+        if no_sale:
+            notes.append("No sale detected: IRAS reading is unchanged from the previous close boundary.")
         out.append({
             "nozzle_no": nozzle_no,
             "label": label,
@@ -250,7 +279,12 @@ def _nozzle_snapshot(op_date: date) -> list[dict]:
             "manual_at": _ist_iso(manual.recorded_at) if manual else None,
             "manual_locked": bool(manual and manual.is_locked),
             "iras": iras_value,
-            "iras_at": _utc_iso(iras.scraped_at) if iras else None,
+            "iras_at": _ist_iso(iras.effective_at) if iras else None,
+            "iras_fetched_at": _utc_iso(iras.fetched_at) if iras else None,
+            "calculation_close": closings.get(nozzle_no),
+            "calculation_source": "manual" if manual_value is not None else "iras" if iras else None,
+            "no_sale": no_sale,
+            "note": " ".join(notes) or None,
             "variance": variance,
             "status": status,
         })
@@ -316,8 +350,8 @@ def _prices_snapshot(op_date: date) -> list[dict]:
 
 def _source_snapshot(op_date: date, *, include_technical: bool) -> list[dict]:
     latest_price = db.session.query(func.max(IrasPrice.imported_at)).scalar()
-    latest_boundary = db.session.query(func.max(NozzleTotalizer.scraped_at)).filter_by(
-        operational_date=op_date + timedelta(days=1)
+    latest_boundary = db.session.query(func.max(IrasMidnightTotalizer.fetched_at)).filter_by(
+        operational_date=op_date
     ).scalar()
     latest_paytm = db.session.query(func.max(PaytmTransaction.imported_at)).filter_by(
         operational_date=op_date
@@ -340,7 +374,11 @@ def _source_snapshot(op_date: date, *, include_technical: bool) -> list[dict]:
     rows = [
         source("database", "PostgreSQL", None, expected=2, state="healthy", note="Connected through the web application"),
         source("iras_prices", "IRAS prices", latest_price, expected=36 * 60),
-        source("iras_totalizers", "IRAS nozzle boundaries", latest_boundary, expected=36 * 60),
+        source(
+            "iras_totalizers", "IRAS midnight nozzle boundaries", latest_boundary,
+            expected=36 * 60,
+            note="Shift Totalizer close effective at midnight; timestamp shown is fetch time",
+        ),
         source("paytm", "Paytm POS", latest_paytm, expected=36 * 60),
         source(
             "sdms", "SDMS / eLedger", (sdms.updated_at or sdms.created_at) if sdms else None,
@@ -438,15 +476,15 @@ def _derived_activity(op_date: date) -> list[dict]:
             "op_date": op_date.isoformat(), "at": _utc_iso(prices_at),
         })
 
-    boundary_at = db.session.query(func.max(NozzleTotalizer.scraped_at)).filter_by(
-        operational_date=op_date + timedelta(days=1)
+    boundary_at = db.session.query(func.max(IrasMidnightTotalizer.fetched_at)).filter_by(
+        operational_date=op_date
     ).scalar()
     if boundary_at:
-        count = NozzleTotalizer.query.filter_by(operational_date=op_date + timedelta(days=1)).count()
+        count = IrasMidnightTotalizer.query.filter_by(operational_date=op_date).count()
         items.append({
-            "key": f"iras-boundary:{op_date}:{boundary_at.isoformat()}", "kind": "nozzle", "severity": "info",
-            "title": "IRAS nozzle boundary received",
-            "detail": f"{count}/6 nozzle readings available for reconciliation",
+            "key": f"iras-midnight:{op_date}:{boundary_at.isoformat()}", "kind": "nozzle", "severity": "info",
+            "title": "IRAS midnight nozzle boundary received",
+            "detail": f"{count}/6 Shift Totalizer readings available for calculation and reconciliation",
             "source": "iras", "actor": "IRAS", "actor_role": "system",
             "op_date": op_date.isoformat(), "at": _utc_iso(boundary_at),
         })

@@ -75,7 +75,9 @@
       healthy:'Healthy', pending:'Pending', stale:'Stale', failed:'Failed', open:'Open',
       provisional:'Provisional', submitted:'Submitted', final:'Final', reconciled:'Reconciled',
       review:'Review', manual_submitted:'Manual submitted', manual_draft:'Manual draft',
-      iras_only:'IRAS only', sdms_only:'SDMS only', awaiting_sdms:'Awaiting SDMS'
+      iras_only:'IRAS only', iras_fallback:'IRAS fallback',
+      manual_outside_window:'Manual outside window',
+      sdms_only:'SDMS only', awaiting_sdms:'Awaiting SDMS'
     };
     return labels[value] || String(value || 'Unknown').replace(/_/g, ' ');
   }
@@ -177,7 +179,7 @@
     sources.forEach(function (row) { sourceMap[row.key] = row; });
     var rows = [
       {title:'Manual nozzle close', value:shift.liquid_locked + ' of 6 locked', note:shift.submitted_at ? 'Submitted ' + dt(shift.submitted_at, false) : 'Awaiting attendant submission', state:shift.liquid_locked >= 6 ? 'complete' : 'pending'},
-      {title:'IRAS nozzle close', value:shift.iras_received + ' of 6 received', note:sourceMap.iras_totalizers ? age(sourceMap.iras_totalizers.age_minutes) : 'Not received', state:shift.iras_received >= 6 ? 'complete' : 'pending'},
+      {title:'IRAS midnight close', value:shift.iras_received + ' of 6 received', note:sourceMap.iras_totalizers ? age(sourceMap.iras_totalizers.age_minutes) : 'Not received', state:shift.iras_received >= 6 ? 'complete' : 'pending'},
       {title:'CNG manual entry', value:shift.cng_entered + ' of 2 entered', note:cng.manual_at ? 'Updated ' + dt(cng.manual_at, false) : 'Awaiting attendant entry', state:shift.cng_entered >= 2 ? 'complete' : 'pending'},
       {title:'SDMS / eLedger', value:label(cng.state), note:cng.sdms_at ? 'Fetched ' + dt(cng.sdms_at, false) : 'Settlement data pending', state:cng.state === 'reconciled' || cng.state === 'sdms_only' ? 'complete' : cng.state === 'review' ? 'attention' : 'pending'}
     ];
@@ -196,16 +198,16 @@
   }
   function renderNozzles(rows) {
     document.getElementById('ops-nozzle-overview').innerHTML = rows.map(function (row) {
-      var reading = row.manual_at ? 'Manual ' + dt(row.manual_at, false) : row.iras_at ? 'IRAS ' + dt(row.iras_at, false) : 'No close reading';
+      var reading = row.calculation_source === 'manual' && row.manual_at ? 'Manual ' + dt(row.manual_at, false) : row.iras_at ? 'IRAS midnight boundary' : 'No close reading';
       return '<div class="ops-nozzle" data-state="' + e(row.status) + '"><b>' + e(row.label) + '</b><span>' + e(label(row.status)) + '</span><span>' + e(reading) + '</span></div>';
     }).join('');
     document.getElementById('ops-nozzles').innerHTML = rows.map(function (row) {
       return '<tr><td data-label="Nozzle"><b>' + e(row.label) + '</b><small>' + e(row.product) + ' · Nozzle ' + e(row.nozzle_no) + '</small></td>' +
         '<td data-label="Opening">' + readingCell(row.opening, null, 'L') + '</td>' +
         '<td data-label="Manual close">' + readingCell(row.manual, row.manual_at, 'L') + '</td>' +
-        '<td data-label="IRAS close">' + readingCell(row.iras, row.iras_at, 'L') + '</td>' +
+        '<td data-label="IRAS midnight close"><b class="num">' + e(number(row.iras, 'L')) + '</b><small>' + (row.iras_at ? 'Effective ' + e(dt(row.iras_at, true)) + '<br>Fetched ' + e(dt(row.iras_fetched_at, true)) : 'Not available') + '</small></td>' +
         '<td data-label="Variance"><b class="num">' + e(number(row.variance, 'L')) + '</b></td>' +
-        '<td data-label="Status">' + status(row.status) + '</td></tr>';
+        '<td data-label="Status">' + status(row.status) + (row.note ? '<small>' + e(row.note) + '</small>' : '') + '</td></tr>';
     }).join('');
   }
   function renderCng(cng) {
@@ -267,8 +269,9 @@
     document.getElementById('ops-nozzle-detail').innerHTML = '<div class="ops-reading-detail__head"><h4>' + e(row.label) + ' · Nozzle ' + e(row.nozzle_no) + '</h4>' + status(row.status) + '</div><div class="ops-reading-grid">' +
       '<div><span>Opening</span><b>' + e(number(row.opening, 'L')) + '</b><small>Cycle opening</small></div>' +
       '<div><span>Manual close</span><b>' + e(number(row.manual, 'L')) + '</b><small>' + e(row.manual_at ? dt(row.manual_at, false) : 'Not entered') + '</small></div>' +
-      '<div><span>IRAS close</span><b>' + e(number(row.iras, 'L')) + '</b><small>' + e(row.iras_at ? dt(row.iras_at, false) : 'Not received') + '</small></div>' +
+      '<div><span>IRAS midnight close</span><b>' + e(number(row.iras, 'L')) + '</b><small>' + e(row.iras_at ? 'Effective ' + dt(row.iras_at, true) : 'Not received') + (row.iras_fetched_at ? '<br>' + e('Fetched ' + dt(row.iras_fetched_at, true)) : '') + '</small></div>' +
       '<div><span>Variance</span><b>' + e(number(row.variance, 'L')) + '</b><small>Manual minus IRAS</small></div></div><p class="ops-reading-note">Every time shown is Indian Standard Time (IST).</p>';
+    if (row.note) document.getElementById('ops-nozzle-detail').insertAdjacentHTML('beforeend', '<p class="ops-reading-note"><b>Calculation note:</b> ' + e(row.note) + '</p>');
   }
 
   function mergeActivities(rows, announce) {

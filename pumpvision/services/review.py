@@ -25,9 +25,9 @@ NOZZLE_PRODUCT = {7: 'HS', 16: 'HS', 18: 'MS', 15: 'MS', 17: 'X2', 11: 'XG'}
 BUSY_NOZZLES = (7, 15, 18)
 VPS = os.environ.get("REVIEW_VPS", "ubuntu@100.96.147.27")
 
-# Acceptable (attendant reading - IRAS 06:00 boundary), litres. Tunable; see check_attendant_vs_boundary.
+# Acceptable (attendant reading - matching IRAS boundary), litres.
 PRE_CUTOVER_GAP = (-25, 150)      # read ~06:40: a little after the boundary
-POST_CUTOVER_GAP = (-300, 25)     # read 00:00-00:30: before the boundary, by ~30-60 min of sales
+POST_CUTOVER_GAP = (-1, 1)        # both sources describe the same midnight close
 
 
 def F(key, severity, category, title, detail="", suggestion="", audience="dev"):
@@ -42,7 +42,7 @@ def _now():
 # ── data freshness ───────────────────────────────────────────────────────────
 
 def check_data_freshness(now):
-    from pumpvision.models import IrasPrice, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db
+    from pumpvision.models import IrasMidnightTotalizer, IrasPrice, PaytmTransaction, SdmsSummary, TankReading, db
     out = []
     today = now.date()
 
@@ -63,14 +63,16 @@ def check_data_freshness(now):
                          "Usually one failed IRAS login; the next hourly run normally heals it."))
 
     if now.time() >= time(7, 30):
-        have = {r[0] for r in db.session.query(NozzleTotalizer.nozzle_no).filter_by(operational_date=today)}
+        closed_day = today - timedelta(days=1)
+        have = {r[0] for r in db.session.query(IrasMidnightTotalizer.nozzle_no).filter_by(
+            operational_date=closed_day
+        )}
         missing = sorted(set(NOZZLE_PRODUCT) - have)
         if missing:
-            out.append(F(f"boundary_missing:{today}", "critical", "data",
-                         f"Today's 06:00 meter boundary is missing nozzles {missing}",
-                         "Without it yesterday's sales cannot be computed for those products.",
-                         "Re-run `daily_scrape.py --completed-shift --date <yesterday>` on the VPS. If it fails with [STALE], "
-                         "IRAS data is lagging: wait and retry, or load the boundary from the Shift Totalizer file."))
+            out.append(F(f"midnight_boundary_missing:{closed_day}", "critical", "data",
+                         f"IRAS midnight close for {closed_day:%d %b} is missing nozzles {missing}",
+                         "Missing manual closes cannot be filled for those nozzles.",
+                         "Re-run the completed-shift scraper or import the cached Shift Totalizer file."))
 
     if now.time() >= time(8, 30):
         have = {r[0] for r in db.session.query(IrasPrice.product).filter(
@@ -262,19 +264,30 @@ def check_credit_maths(now):
 # ── reconciliation ───────────────────────────────────────────────────────────
 
 def check_attendant_vs_boundary(now):
-    from pumpvision.models import ManualTotalizerReading, NozzleTotalizer
+    from pumpvision.models import IrasMidnightTotalizer, ManualTotalizerReading, NozzleTotalizer
+    from pumpvision.services.totalizers import valid_manual_closes
     out = []
     for m in ManualTotalizerReading.query.filter(
             ManualTotalizerReading.operational_date >= now.date() - timedelta(days=5),
             ManualTotalizerReading.nozzle_no.isnot(None)):
-        nb = NozzleTotalizer.query.filter_by(nozzle_no=m.nozzle_no,
-                                             operational_date=m.operational_date + timedelta(days=1)).first()
+        if m.nozzle_no not in valid_manual_closes(m.operational_date):
+            continue
+        if m.operational_date >= cycle_cutover():
+            nb = IrasMidnightTotalizer.query.filter_by(
+                nozzle_no=m.nozzle_no, operational_date=m.operational_date
+            ).first()
+            boundary_value = nb.totalizer_close if nb else None
+            boundary_label = "IRAS midnight close"
+        else:
+            nb = NozzleTotalizer.query.filter_by(
+                nozzle_no=m.nozzle_no,
+                operational_date=m.operational_date + timedelta(days=1),
+            ).first()
+            boundary_value = nb.totalizer_end if nb else None
+            boundary_label = "IRAS 06:00 boundary"
         if nb is None:
             continue
-        gap = m.totalizer_value - nb.totalizer_end
-        # Before the cycle cutover the attendant read ~06:40, so a small positive gap (sales since
-        # 06:00) is normal. After it the close is at 00:00-00:30, before IRAS's 06:00 boundary, so
-        # the gap is negative by the fuel sold between the close and 01:00 (nothing sells after).
+        gap = m.totalizer_value - boundary_value
         if m.operational_date >= cycle_cutover():
             lo, hi = POST_CUTOVER_GAP
         else:
@@ -282,9 +295,8 @@ def check_attendant_vs_boundary(now):
         if gap < lo or gap > hi:
             out.append(F(f"att_gap:{m.nozzle_no}:{m.operational_date}", "warn", "reconciliation",
                          f"Nozzle {m.nozzle_no} {m.operational_date:%d %b}: attendant reading differs from the boundary by {gap:+,.1f} L",
-                         f"Attendant {m.totalizer_value:,.2f} vs stored boundary {nb.totalizer_end:,.2f}.",
-                         "Either the attendant mis-keyed or the stored boundary is wrong: check against the "
-                         "Shift Totalizer file (VPS reconcile job does this at 08:00 IST)."))
+                         f"Attendant {m.totalizer_value:,.2f} vs {boundary_label} {boundary_value:,.2f}.",
+                         "Check the attendant entry and the corresponding Shift Totalizer boundary."))
     return out
 
 
@@ -436,7 +448,7 @@ def _http(url, timeout=8):
 
 
 def collect_status(now):
-    from pumpvision.models import IrasPrice, NozzleTotalizer, PaytmTransaction, SdmsSummary, TankReading, db
+    from pumpvision.models import IrasMidnightTotalizer, IrasPrice, PaytmTransaction, SdmsSummary, TankReading, db
     out = []
     today = now.date()
     after = lambda h, m=0: now.time() >= time(h, m)             # noqa: E731
@@ -450,9 +462,9 @@ def collect_status(now):
         quiet = not (time(6, 30) <= now.time() or now.time() <= time(0, 30))
         out.append(_st("ATG tank snapshots", "scraper", "ok" if (mins <= 150 or quiet) else "warn" if mins <= 360 else "fail",
                        f"latest reading {t:%d %b %H:%M} ({_age(t, now)})"))
-    nb = db.session.query(func.max(NozzleTotalizer.operational_date)).scalar()
-    want = today if after(7, 30) else today - timedelta(days=1)
-    out.append(_st("IRAS boundary (meter totalizers)", "scraper", "ok" if nb and nb >= want else "fail",
+    nb = db.session.query(func.max(IrasMidnightTotalizer.operational_date)).scalar()
+    want = today - timedelta(days=1 if after(7, 30) else 2)
+    out.append(_st("IRAS midnight boundaries", "scraper", "ok" if nb and nb >= want else "fail",
                    f"latest boundary {nb:%d %b}, expected {want:%d %b}" if nb else "none"))
     pr = db.session.query(func.max(IrasPrice.effective_from)).scalar()
     out.append(_st("IRAS prices", "scraper", "ok" if pr and pr.date() >= today - timedelta(days=(0 if after(8, 30) else 1)) else "warn",

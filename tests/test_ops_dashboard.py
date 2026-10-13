@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 
 from werkzeug.security import generate_password_hash
@@ -14,7 +14,10 @@ os.environ["PUMPVISION_SKIP_BOOTSTRAP"] = "1"
 
 from pumpvision import create_app  # noqa: E402
 from pumpvision.extensions import db  # noqa: E402
-from pumpvision.models import Expense, OpsEvent, User  # noqa: E402
+from pumpvision.models import (  # noqa: E402
+    Expense, IrasMidnightTotalizer, IrasPrice, ManualTotalizerReading,
+    NozzleTotalizer, OpsEvent, User,
+)
 from pumpvision.services.ops import record_event  # noqa: E402
 
 
@@ -142,6 +145,78 @@ class OpsDashboardTestCase(unittest.TestCase):
             headers={"If-None-Match": response.headers["ETag"]},
         )
         self.assertEqual(conditional.status_code, 304)
+
+    def test_midnight_iras_fills_missing_manual_close_and_marks_no_sale(self):
+        op_date = date(2026, 10, 13)
+        nozzle_values = {7: 1000, 16: 2000, 18: 3000, 15: 4000, 17: 5000, 11: 6000}
+        with self.app.app_context():
+            for nozzle_no, value in nozzle_values.items():
+                db.session.add(IrasMidnightTotalizer(
+                    operational_date=op_date - timedelta(days=1),
+                    nozzle_no=nozzle_no,
+                    totalizer_open=value - 50,
+                    totalizer_close=value,
+                    effective_at=datetime(2026, 10, 13, 0, 0),
+                    fetched_at=datetime(2026, 10, 13, 1, 0),
+                    source_file="previous.xlsx",
+                ))
+                db.session.add(IrasMidnightTotalizer(
+                    operational_date=op_date,
+                    nozzle_no=nozzle_no,
+                    totalizer_open=value,
+                    totalizer_close=value if nozzle_no == 7 else value + 100,
+                    effective_at=datetime(2026, 10, 14, 0, 0),
+                    fetched_at=datetime(2026, 10, 14, 1, 0),
+                    source_file="current.xlsx",
+                ))
+            db.session.commit()
+
+        self.login("owner")
+        payload = self.client.get(
+            f"/ops/api/v1/snapshot?cycle_date={op_date.isoformat()}"
+        ).get_json()
+        hs1 = next(row for row in payload["nozzles"] if row["nozzle_no"] == 7)
+        self.assertEqual(hs1["status"], "iras_fallback")
+        self.assertEqual(hs1["opening"], 1000)
+        self.assertEqual(hs1["calculation_close"], 1000)
+        self.assertTrue(hs1["no_sale"])
+        self.assertIn("Manual close was not done", hs1["note"])
+        self.assertIn("No sale detected", hs1["note"])
+        self.assertIn("T00:00:00+05:30", hs1["iras_at"])
+        self.assertIn("T06:30:00+05:30", hs1["iras_fetched_at"])
+        self.assertEqual(payload["shift"]["state"], "iras_fallback")
+
+    def test_valid_manual_close_wins_over_midnight_iras(self):
+        op_date = date(2026, 10, 13)
+        with self.app.app_context():
+            db.session.add(IrasMidnightTotalizer(
+                operational_date=op_date,
+                nozzle_no=7,
+                totalizer_open=1000,
+                totalizer_close=1100,
+                effective_at=datetime(2026, 10, 14, 0, 0),
+                fetched_at=datetime(2026, 10, 14, 1, 0),
+            ))
+            db.session.add(ManualTotalizerReading(
+                operational_date=op_date,
+                nozzle_label="HSD 1",
+                nozzle_no=7,
+                product="HSD",
+                totalizer_value=1100.5,
+                recorded_at=datetime(2026, 10, 14, 0, 10),
+                is_locked=True,
+            ))
+            db.session.commit()
+
+        self.login("owner")
+        payload = self.client.get(
+            f"/ops/api/v1/snapshot?cycle_date={op_date.isoformat()}"
+        ).get_json()
+        hs1 = next(row for row in payload["nozzles"] if row["nozzle_no"] == 7)
+        self.assertEqual(hs1["calculation_source"], "manual")
+        self.assertEqual(hs1["calculation_close"], 1100.5)
+        self.assertEqual(hs1["variance"], 0.5)
+        self.assertEqual(hs1["status"], "reconciled")
 
     def test_monotonic_event_feed_exposes_actor_source_and_ist_time(self):
         with self.app.app_context():

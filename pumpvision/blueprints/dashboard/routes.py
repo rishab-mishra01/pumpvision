@@ -153,7 +153,8 @@ def _cash_for_date(op_date):
     """Derived cash for op_date. Returns None if no fuel data at all."""
     products = _product_sales(op_date)
     cng = _cng_sdms(op_date)
-    if not any(p['litres'] > 0 for p in products.values()) and not cng:
+    from pumpvision.services.totalizers import has_liquid_close_pair
+    if not has_liquid_close_pair(op_date) and not cng:
         return None
     fuel_rev = sum(p['revenue'] for p in products.values()) + (cng.revenue if cng else 0.0)
     lube = db.session.query(func.sum(LubeTransaction.amount)).filter_by(
@@ -231,7 +232,8 @@ def summary(date_str=None):
     products = _product_sales(op_date)
     tested = tested_litres(op_date)
     cng = _cng_sdms(op_date)
-    has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
+    from pumpvision.services.totalizers import has_liquid_close_pair
+    has_data = has_liquid_close_pair(op_date) or bool(cng)
 
     lube_cash = db.session.query(func.sum(LubeTransaction.amount)).filter_by(
         op_date=op_date, payment_mode='cash').scalar() or 0.0
@@ -325,7 +327,8 @@ def dashboard_view_data(first_name="there"):
     s = db.session.get(AppSetting, 'cng_rsp_per_kg')
     prices['CNG'] = cng.rsp_per_kg if cng and cng.rsp_per_kg else (float(s.value) if s else 93.40)
 
-    has_data = any(p['litres'] > 0 for p in products.values()) or bool(cng)
+    from pumpvision.services.totalizers import has_liquid_close_pair
+    has_data = has_liquid_close_pair(op_date) or bool(cng)
 
     drill = mock_drill_status()
     recent_tests = FuelTest.query.filter(

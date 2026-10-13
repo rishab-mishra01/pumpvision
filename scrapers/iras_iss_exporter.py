@@ -736,6 +736,68 @@ def parse_shift_totalizer_nozzle(filepath: Path, nozzle_no: int) -> "dict | None
     return {"open": open_val, "close": close_val}
 
 
+def save_midnight_totalizers_to_db(
+    op_date_str: str, readings: dict, source_file: str | None = None
+) -> bool:
+    """Upsert midnight Shift Totalizer readings without altering legacy 06:00 rows."""
+    if not readings:
+        print("  [db] No midnight Shift Totalizer readings to save.")
+        return False
+
+    try:
+        from sqlalchemy import create_engine, text
+
+        db_url = os.environ.get("DATABASE_URL")
+        if not db_url:
+            raise RuntimeError("DATABASE_URL is not set")
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        op_date = datetime.strptime(op_date_str, "%Y-%m-%d").date()
+        effective_at = datetime.combine(op_date + timedelta(days=1), datetime.min.time())
+        fetched_at = datetime.utcnow()
+        engine = create_engine(db_url, pool_pre_ping=True)
+        saved = 0
+        statement = text("""
+            INSERT INTO iras_midnight_totalizers
+                (operational_date, nozzle_no, totalizer_open, totalizer_close,
+                 effective_at, fetched_at, source_file)
+            VALUES
+                (:operational_date, :nozzle_no, :totalizer_open, :totalizer_close,
+                 :effective_at, :fetched_at, :source_file)
+            ON CONFLICT (operational_date, nozzle_no) DO UPDATE SET
+                totalizer_open = excluded.totalizer_open,
+                totalizer_close = excluded.totalizer_close,
+                effective_at = excluded.effective_at,
+                fetched_at = excluded.fetched_at,
+                source_file = excluded.source_file
+        """)
+        with engine.begin() as connection:
+            for nozzle_no, values in readings.items():
+                close = values.get("close")
+                if close is None:
+                    continue
+                connection.execute(statement, {
+                    "operational_date": op_date,
+                    "nozzle_no": int(nozzle_no),
+                    "totalizer_open": values.get("open"),
+                    "totalizer_close": float(close),
+                    "effective_at": effective_at,
+                    "fetched_at": fetched_at,
+                    "source_file": source_file,
+                })
+                saved += 1
+        print(f"  [db] Saved {saved} IRAS midnight boundary reading(s) for {op_date_str}")
+        return saved > 0
+    except Exception as e:
+        print(f"  [db] ERROR writing midnight Shift Totalizers: {e}")
+        db_spool.spool("iras_midnight_totalizers", op_date_str, {
+            "op_date": op_date_str,
+            "readings": readings,
+            "source_file": source_file,
+        }, error=e)
+        return False
+
+
 # ─────────────────────────────────────────────
 # XG PRE-CHECK
 # ─────────────────────────────────────────────

@@ -835,8 +835,12 @@ Recovered rows carry exact `tank_id`/`product`/`capacity_litres`/`is_reliable`
 Shift close is allowed **00:00–00:30 IST** only; a close at 00:15 on date E finalizes cycle E−1 and
 opens cycle E. Everything lives in `services/operational.py` (`PUMPVISION_CYCLE_CUTOVER`, default
 2026-10-11, = the first cycle closed this way). Cycles before it keep the 06:00 rule below, so history
-is untouched. Credit sales and Paytm are filed into a cycle by timestamp (`cycle_bounds`), IRAS/SDMS
-data stay on their own 06:00 / calendar-day windows.
+is untouched. Credit sales and Paytm are filed into a cycle by timestamp (`cycle_bounds`). Liquid
+fuel close calculations use a valid manual close first and otherwise the IRAS Shift Totalizer's
+midnight close from `iras_midnight_totalizers`; legacy `nozzle_totalizers` remains explicitly 06:00.
+When manual close is absent, the opening and closing fallback are both IRAS midnight boundaries.
+An unchanged pair means zero sale for that nozzle and is visibly annotated. SDMS remains on its
+calendar-day source window.
 
 ### Operational Day (legacy rule, before the cutover): 06:00 to 05:59
 RSPs effective 06:00:00 → 05:59:59 next day. Shift Totalizer is midnight-to-midnight.

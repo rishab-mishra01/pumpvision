@@ -22,7 +22,8 @@ from pumpvision.blueprints.attendant.routes import _cng_opening_reading, _shift_
 from pumpvision.blueprints.dashboard.routes import _credit_total, _paytm_cycle, _product_sales  # noqa: E402
 from pumpvision.extensions import db  # noqa: E402
 from pumpvision.models import (  # noqa: E402
-    AppNotification, CngShiftReading, CreditTransaction, ManualTotalizerReading, NozzleTotalizer,
+    AppNotification, CngShiftReading, CreditTransaction, IrasMidnightTotalizer,
+    ManualTotalizerReading, NozzleTotalizer,
     PaytmTransaction, User,
 )
 from pumpvision.services import operational as op  # noqa: E402
@@ -294,8 +295,14 @@ class TotalizersAndCash(_DbCase):
     def test_sales_fall_back_to_iras_when_the_close_is_outside_the_window(self):
         self._m(date(2026, 10, 10), 7, "HSD 1", 1010.0, at(CUT, 6, 10))
         self._m(CUT, 7, "HSD 1", 1105.0, at(self.E, 0, 45))               # too late to be the close
-        db.session.add_all([NozzleTotalizer(operational_date=CUT, nozzle_no=7, totalizer_end=1000.0),
-                            NozzleTotalizer(operational_date=self.E, nozzle_no=7, totalizer_end=1120.0)])
+        db.session.add_all([
+            NozzleTotalizer(operational_date=CUT, nozzle_no=7, totalizer_end=1000.0),
+            IrasMidnightTotalizer(
+                operational_date=CUT, nozzle_no=7, totalizer_open=1000.0,
+                totalizer_close=1120.0, effective_at=at(self.E, 0, 0),
+                fetched_at=at(self.E, 6, 30),
+            ),
+        ])
         db.session.commit()
         self.assertEqual(_product_sales(CUT)["HS"]["litres"], 120.0)
 
