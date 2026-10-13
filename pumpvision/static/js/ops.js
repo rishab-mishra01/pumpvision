@@ -409,7 +409,7 @@
       if (detail && detail.tagName === 'DETAILS') detail.open = true;
     });
   });
-  var auditDetail = document.getElementById('ops-audit-detail');
+  var auditDetail = document.getElementById('ops-records-detail');
   if (auditDetail) auditDetail.addEventListener('toggle', function () {
     if (auditDetail.open && !auditLoaded) fetchAudit();
   });

@@ -94,10 +94,25 @@ class OpsDashboardTestCase(unittest.TestCase):
                 self.assertIn("Shift close", body)
                 self.assertIn("Liquid nozzles", body)
                 self.assertIn("CNG", body)
-                self.assertIn("Shift close and reconciliation", body)
-                self.assertIn("Connected sources", body)
+                self.assertIn("Current completion", body)
+                self.assertIn("Data freshness", body)
+                self.assertIn("Source diagnostics", body)
                 self.assertIn("Back to PumpVision app", body)
                 self.assertIn("Accessibility", body)
+                stack_ids = (
+                    'id="ops-activity-workspace"',
+                    'id="ops-completion-workspace"',
+                    'id="ops-prices-workspace"',
+                    'id="ops-money-workspace"',
+                    'id="ops-records-detail"',
+                    'id="ops-alerts-workspace"',
+                    'id="ops-freshness-workspace"',
+                    'id="ops-sources-detail"',
+                )
+                positions = [body.index(marker) for marker in stack_ids]
+                self.assertEqual(positions, sorted(positions))
+                self.assertNotIn('id="ops-activity-workspace" open', body)
+                self.assertNotIn('id="ops-completion-workspace" open', body)
                 self.assertEqual(response.headers["Cache-Control"], "no-store")
                 parser = _OpsHtmlParser()
                 parser.feed(body)
@@ -169,8 +184,9 @@ class OpsDashboardTestCase(unittest.TestCase):
     def test_manager_gets_operational_views_but_not_audit_history(self):
         self.login("manager")
         body = self.client.get("/ops/").get_data(as_text=True)
-        self.assertIn("Nozzle and CNG reconciliation", body)
-        self.assertNotIn('id="ops-audit-detail"', body)
+        self.assertIn("Detailed records", body)
+        self.assertIn("CNG reconciliation", body)
+        self.assertNotIn('id="ops-audit-title"', body)
         self.assertEqual(self.client.get("/ops/api/v1/audit").status_code, 403)
 
 

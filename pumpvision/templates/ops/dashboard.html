@@ -21,18 +21,8 @@
       <div class="ops-cycle-select"><label for="ops-cycle-date">Operational date</label><input id="ops-cycle-date" type="date" value="{{ cycle_date.isoformat() if cycle_date else '' }}"></div>
     </section>
 
-    <section class="ops-now" aria-labelledby="ops-now-heading">
-      <div class="ops-now__state"><span class="ops-status ops-status--pending" id="ops-cycle-state">Loading</span><div><h2 id="ops-now-heading">Today’s operating cycle</h2><p id="ops-shift-summary">Checking manual and system records…</p></div></div>
-      <div class="ops-now__facts" aria-label="Cycle completion summary"><div><span>Manual close</span><b id="ops-fact-manual">—</b></div><div><span>IRAS readings</span><b id="ops-fact-iras">—</b></div><div><span>CNG entries</span><b id="ops-fact-cng">—</b></div></div>
-      <div class="ops-now__checked"><span>Dashboard checked</span><strong id="ops-last-check">—</strong></div>
-    </section>
-
-    <section class="ops-alert-band" id="ops-alert-band" aria-labelledby="ops-alerts-title">
-      <div class="ops-section-title"><span class="ops-section-icon ops-section-icon--attention" aria-hidden="true">!</span><div><p class="ops-eyebrow">Needs attention</p><h2 id="ops-alerts-title">Operational alerts <span class="ops-count" id="ops-alert-count">0</span></h2></div></div>
-      <div id="ops-alerts" class="ops-alert-list"><p class="ops-empty">Loading alerts…</p></div>
-    </section>
-
-    <details class="ops-workspace" id="ops-activity-workspace" open>
+    <div class="ops-stack">
+    <details class="ops-workspace" id="ops-activity-workspace">
       <summary>
         <span class="ops-workspace__title"><span class="ops-live-label"><i aria-hidden="true"></i>Live</span><span><b>Activity</b><small>Manager, attendant and system actions with IST timestamps</small></span></span>
         <span class="ops-workspace__toggle" aria-hidden="true">Collapse</span>
@@ -62,35 +52,53 @@
       </div>
     </details>
 
-    <div class="ops-command-grid"><div class="ops-command-main">
-      <section class="ops-card ops-card--shift" aria-labelledby="ops-shift-title">
-        <div class="ops-card__head"><div><p class="ops-eyebrow">Current completion</p><h2 id="ops-shift-title">Shift close and reconciliation</h2></div><a href="#ops-reconciliation" class="ops-text-link">View readings</a></div>
+    <details class="ops-workspace" id="ops-completion-workspace">
+      <summary><span class="ops-workspace__title"><span id="ops-cycle-state" class="ops-status ops-status--pending">Loading</span><span><b>Current completion</b><small id="ops-shift-summary">Checking manual and system records…</small></span></span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></summary>
+      <div class="ops-workspace__body">
+        <div class="ops-completion-meta"><div class="ops-now__facts" aria-label="Cycle completion summary"><div><span>Manual close</span><b id="ops-fact-manual">—</b></div><div><span>IRAS readings</span><b id="ops-fact-iras">—</b></div><div><span>CNG entries</span><b id="ops-fact-cng">—</b></div></div><div class="ops-now__checked"><span>Dashboard checked</span><strong id="ops-last-check">—</strong></div></div>
         <div class="ops-progress-track" aria-hidden="true"><span id="ops-shift-progress"></span></div>
         <div id="ops-shift-checklist" class="ops-checklist"><p class="ops-empty">Loading shift status…</p></div>
         <div id="ops-nozzle-overview" class="ops-nozzle-strip" aria-label="Nozzle reading status"></div>
-      </section>
+      </div>
+    </details>
 
-      <section class="ops-card" aria-labelledby="ops-finance-title">
-        <div class="ops-card__head"><div><p class="ops-eyebrow">Current operational totals</p><h2 id="ops-finance-title">Money snapshot</h2></div><span class="ops-provisional" id="ops-finance-state">Loading</span></div>
+    <details class="ops-workspace" id="ops-prices-workspace">
+      <summary><span class="ops-workspace__title"><span class="ops-stack-icon" aria-hidden="true">₹</span><span><b>Current fuel prices</b><small>Selling prices in effect with source and fetch time</small></span></span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></summary>
+      <div class="ops-workspace__body"><div id="ops-prices" class="ops-price-grid"><p class="ops-empty">Loading prices…</p></div></div>
+    </details>
+
+    <details class="ops-workspace" id="ops-money-workspace">
+      <summary><span class="ops-workspace__title"><span class="ops-stack-icon" aria-hidden="true">₹</span><span><b>Money snapshot</b><small>Sales, expected cash, expenses and collections</small></span></span><span class="ops-summary-end"><span class="ops-provisional" id="ops-finance-state">Loading</span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></span></summary>
+      <div class="ops-workspace__body">
         <div class="ops-kpis"><article class="ops-kpi ops-kpi--primary"><p>Expected sales cash</p><strong id="kpi-cash">—</strong><span id="kpi-cash-note">Awaiting source data</span></article><article class="ops-kpi"><p>Gross fuel sales</p><strong id="kpi-gross">—</strong><span id="kpi-gross-note">Awaiting shift data</span></article><article class="ops-kpi"><p>Expenses entered</p><strong id="kpi-expenses">—</strong><span id="kpi-expenses-note">No entries loaded</span></article><article class="ops-kpi"><p>Account collections</p><strong id="kpi-collections">—</strong><span id="kpi-collections-note">Separate from sales</span></article></div>
         <p class="ops-disclosure"><b>Physical cash is not yet tracked.</b> Expected cash appears only when the required sales and settlement sources are available.</p>
-      </section>
+      </div>
+    </details>
 
-      <section class="ops-card" aria-labelledby="ops-prices-title"><div class="ops-card__head"><div><p class="ops-eyebrow">Selling prices in effect</p><h2 id="ops-prices-title">Current fuel prices</h2></div></div><div id="ops-prices" class="ops-price-grid"><p class="ops-empty">Loading prices…</p></div></section>
-    </div>
-
-    <aside class="ops-command-side" aria-label="Data freshness">
-      <section class="ops-card ops-card--sources" aria-labelledby="ops-health-title"><div class="ops-card__head"><div><p class="ops-eyebrow">Data freshness</p><h2 id="ops-health-title">Connected sources</h2></div><a href="#ops-sources-detail" class="ops-text-link">Details</a></div><div id="ops-health-summary" class="ops-health-summary"><p class="ops-empty">Loading sources…</p></div></section>
-    </aside></div>
-
-    <section class="ops-records" aria-labelledby="ops-records-title"><div class="ops-records__head"><p class="ops-eyebrow">Drill down only when needed</p><h2 id="ops-records-title">Detailed records</h2></div>
-      <details class="ops-detail" id="ops-reconciliation"><summary><span><b>Nozzle and CNG reconciliation</b><small>Manual entries compared with IRAS and SDMS/eLedger</small></span><span aria-hidden="true">＋</span></summary><div class="ops-detail__body">
+    <details class="ops-workspace" id="ops-records-detail">
+      <summary><span class="ops-workspace__title"><span class="ops-stack-icon" aria-hidden="true">≡</span><span><b>Detailed records</b><small>Nozzle reconciliation, CNG comparison and audit trail</small></span></span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></summary>
+      <div class="ops-workspace__body" id="ops-reconciliation">
         <div class="ops-table-wrap"><table class="ops-table"><caption class="sr-only">Liquid-fuel nozzle readings and reconciliation status</caption><thead><tr><th scope="col">Nozzle</th><th scope="col">Opening</th><th scope="col">Manual close</th><th scope="col">IRAS close</th><th scope="col">Variance</th><th scope="col">Status</th></tr></thead><tbody id="ops-nozzles"><tr><td colspan="6">Loading reconciliation…</td></tr></tbody></table></div>
         <section class="ops-cng" aria-labelledby="ops-cng-title"><div class="ops-card__head"><div><p class="ops-eyebrow">Two independent streams</p><h2 id="ops-cng-title">CNG reconciliation</h2></div><span id="ops-cng-state" class="ops-status ops-status--pending">Loading</span></div><div id="ops-cng" class="ops-cng-grid"><p class="ops-empty">Loading CNG data…</p></div></section>
-      </div></details>
-      <details class="ops-detail" id="ops-sources-detail"><summary><span><b>Source diagnostics</b><small>Freshness and provenance for every connected system</small></span><span aria-hidden="true">＋</span></summary><div class="ops-detail__body"><div id="ops-sources" class="ops-source-grid"><p class="ops-empty">Loading source health…</p></div></div></details>
-      {% if current_user.role != 'manager' %}<details class="ops-detail" id="ops-audit-detail"><summary><span><b>Corrections and audit</b><small>Archived, restored and manually corrected records</small></span><span aria-hidden="true">＋</span></summary><div class="ops-detail__body"><div id="ops-audit" class="ops-list"><p class="ops-empty">Open this record to load audit history.</p></div></div></details>{% endif %}
-    </section>
+        {% if current_user.role != 'manager' %}<section class="ops-audit-section" aria-labelledby="ops-audit-title"><h3 id="ops-audit-title">Corrections and audit</h3><div id="ops-audit" class="ops-list"><p class="ops-empty">Open Detailed records to load audit history.</p></div></section>{% endif %}
+      </div>
+    </details>
+
+    <details class="ops-workspace" id="ops-alerts-workspace">
+      <summary><span class="ops-workspace__title"><span class="ops-section-icon ops-section-icon--attention" aria-hidden="true">!</span><span><b>Operational alerts</b><small>Items that may need review or action</small></span></span><span class="ops-summary-end"><span class="ops-count" id="ops-alert-count">0</span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></span></summary>
+      <div class="ops-workspace__body"><div class="ops-alert-band" id="ops-alert-band"><div id="ops-alerts" class="ops-alert-list"><p class="ops-empty">Loading alerts…</p></div></div></div>
+    </details>
+
+    <details class="ops-workspace" id="ops-freshness-workspace">
+      <summary><span class="ops-workspace__title"><span class="ops-stack-icon" aria-hidden="true">●</span><span><b>Data freshness</b><small>At-a-glance status of operational feeds</small></span></span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></summary>
+      <div class="ops-workspace__body"><div id="ops-health-summary" class="ops-health-summary"><p class="ops-empty">Loading sources…</p></div></div>
+    </details>
+
+    <details class="ops-workspace" id="ops-sources-detail">
+      <summary><span class="ops-workspace__title"><span class="ops-stack-icon" aria-hidden="true">↻</span><span><b>Source diagnostics</b><small>Freshness, provenance and observation time for every system</small></span></span><span class="ops-workspace__toggle" aria-hidden="true">Collapse</span></summary>
+      <div class="ops-workspace__body"><div id="ops-sources" class="ops-source-grid"><p class="ops-empty">Loading source health…</p></div></div>
+    </details>
+    </div>
   </main><div class="sr-only" id="ops-critical-announcer" aria-live="assertive" aria-atomic="true"></div>
 </div>
 
