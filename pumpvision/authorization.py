@@ -12,6 +12,7 @@ VIEW_ADMIN_DASHBOARD = "dashboard.admin.view"
 VIEW_MANAGER_DASHBOARD = "dashboard.manager.view"
 VIEW_ATTENDANT_DASHBOARD = "dashboard.attendant.view"
 VIEW_DEVELOPER_DASHBOARD = "dashboard.developer.view"
+VIEW_OPS_DASHBOARD = "dashboard.ops.view"
 
 DASHBOARD_VIEW_CAPABILITIES = frozenset({
     VIEW_ADMIN_DASHBOARD,
@@ -24,11 +25,11 @@ DASHBOARD_VIEW_CAPABILITIES = frozenset({
 # write capability.  A future audited action mode should introduce separate
 # capabilities rather than broadening any of the view capabilities below.
 ROLE_CAPABILITIES: Mapping[str, frozenset[str]] = {
-    "owner": frozenset({VIEW_ADMIN_DASHBOARD}),
-    "manager": frozenset({VIEW_MANAGER_DASHBOARD}),
+    "owner": frozenset({VIEW_ADMIN_DASHBOARD, VIEW_OPS_DASHBOARD}),
+    "manager": frozenset({VIEW_MANAGER_DASHBOARD, VIEW_OPS_DASHBOARD}),
     "attendant": frozenset({VIEW_ATTENDANT_DASHBOARD}),
-    "developer": frozenset({VIEW_DEVELOPER_DASHBOARD}),
-    "super_admin": DASHBOARD_VIEW_CAPABILITIES,
+    "developer": frozenset({VIEW_DEVELOPER_DASHBOARD, VIEW_OPS_DASHBOARD}),
+    "super_admin": DASHBOARD_VIEW_CAPABILITIES | frozenset({VIEW_OPS_DASHBOARD}),
 }
 
 

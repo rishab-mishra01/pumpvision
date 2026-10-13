@@ -37,7 +37,7 @@
 </style>
 
 <div class="dv">
-  <div class="dv-top"><h1>Developer</h1><a href="{{ url_for('auth.logout_confirm') }}" class="tap-link">Sign out</a></div>
+  <div class="dv-top"><h1>Developer</h1><div style="display:flex;gap:14px;"><a href="{{ url_for('ops.index') }}" class="tap-link">Live operations</a><a href="{{ url_for('auth.logout_confirm') }}" class="tap-link">Sign out</a></div></div>
   <p class="dv-sub">
     {% if last %}Last review {{ last.at }} IST · {{ last.open }} open · {{ last.new }} new · {{ last.resolved }} resolved
       {% if last.failed_checks %}· <b style="color:var(--error-600);">crashed: {{ last.failed_checks | join(', ') }}</b>{% endif %}

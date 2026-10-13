@@ -56,6 +56,12 @@
     </form>
 
     <div class="more-list">
+      <a class="more-item" href="{{ url_for('ops.index') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="M2 19h22"/>
+        </svg>
+        <span>Live operations<span class="sub">Activity, reconciliation and source health</span></span>
+      </a>
       <a class="more-item" href="{{ url_for('owner.tanks') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7"/>

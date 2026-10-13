@@ -514,3 +514,38 @@ class ReviewStatus(db.Model):
     status = db.Column(db.String(8), nullable=False)
     detail = db.Column(db.String(300))
     checked_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────
+# LIVE OPERATIONS EVENT LOG
+# ────────────────────────────────────────────
+
+class OpsEvent(db.Model):
+    """Append-only operational event used by the live dashboard.
+
+    The business mutation and its event are committed in the same transaction.
+    ``business_at`` is the IST wall-clock time the action applies to;
+    ``recorded_at`` is UTC and provides a stable monotonic feed order through ``id``.
+    """
+    __tablename__ = "ops_events"
+
+    # Integer is a PostgreSQL sequence and SQLite's required INTEGER PRIMARY KEY,
+    # keeping isolated test databases monotonic as well as production.
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    event_type = db.Column(db.String(60), nullable=False, index=True)
+    title = db.Column(db.String(180), nullable=False)
+    detail = db.Column(db.String(500))
+    source = db.Column(db.String(40), nullable=False)
+    severity = db.Column(db.String(12), nullable=False, default="info")
+    op_date = db.Column(db.Date, index=True)
+    business_at = db.Column(db.DateTime)
+    observed_at = db.Column(db.DateTime)
+    recorded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    actor_role = db.Column(db.String(20))
+    entity_type = db.Column(db.String(40))
+    entity_id = db.Column(db.String(80))
+    idempotency_key = db.Column(db.String(180), unique=True)
+    payload_json = db.Column(db.Text)
+
+    actor = db.relationship("User", foreign_keys=[actor_id], lazy="joined")

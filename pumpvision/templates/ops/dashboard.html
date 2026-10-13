@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Live Operations · Pumpvision{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ops.css') }}">
+{% endblock %}
+
+{% block page %}
+<a class="ops-skip" href="#ops-main">Skip to dashboard content</a>
+<div class="ops-shell" id="ops-app" data-role="{{ current_user.role }}">
+  <header class="ops-header">
+    <div class="ops-header__inner">
+      <a class="ops-brand" href="{{ url_for('dashboard.index') if current_user.role == 'owner' else url_for('manager.home') if current_user.role == 'manager' else url_for('dev.index') if current_user.role == 'developer' else url_for('super_admin.overview') }}">
+        <span class="ops-brand__mark" aria-hidden="true"></span>
+        <span>pump<span>vision</span></span>
+      </a>
+      <div class="ops-header__actions" aria-label="Dashboard controls">
+        <span class="ops-connection" id="ops-connection" role="status" aria-live="polite">
+          <span class="ops-dot" aria-hidden="true"></span><span id="ops-connection-text">Connecting…</span>
+        </span>
+        <button class="ops-button ops-button--quiet" id="ops-refresh" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+          <span>Refresh</span>
+        </button>
+        <button class="ops-button ops-button--quiet" id="ops-pause" type="button" aria-pressed="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
+          <span>Pause live</span>
+        </button>
+        <button class="ops-button ops-button--primary" id="ops-a11y-open" type="button" aria-haspopup="dialog">
+          <span aria-hidden="true">Aa</span><span>Accessibility</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="ops-main" id="ops-main" tabindex="-1">
+    <section class="ops-intro" aria-labelledby="ops-title">
+      <div>
+        <p class="ops-eyebrow">Shree Petroleum · RO 206858</p>
+        <h1 id="ops-title">Live Operations</h1>
+        <p class="ops-subtitle" id="ops-cycle-window">Loading operational cycle…</p>
+      </div>
+      <div class="ops-cycle-select">
+        <label for="ops-cycle-date">Operational date</label>
+        <input id="ops-cycle-date" type="date" value="{{ cycle_date.isoformat() if cycle_date else '' }}">
+      </div>
+    </section>
+
+    <section class="ops-cycle-card" aria-labelledby="ops-cycle-heading">
+      <div class="ops-cycle-card__state">
+        <span class="ops-status ops-status--pending" id="ops-cycle-state">Loading</span>
+        <div>
+          <h2 id="ops-cycle-heading">Current cycle</h2>
+          <p id="ops-shift-summary">Checking shift-close progress…</p>
+        </div>
+      </div>
+      <div class="ops-cycle-card__meta">
+        <span>Last successful check</span>
+        <strong id="ops-last-check">—</strong>
+      </div>
+    </section>
+
+    <section class="ops-kpis" aria-label="Financial snapshot">
+      <article class="ops-kpi ops-kpi--primary">
+        <p>Expected sales cash</p><strong id="kpi-cash">—</strong>
+        <span id="kpi-cash-note">Awaiting source data</span>
+      </article>
+      <article class="ops-kpi">
+        <p>Gross fuel sales</p><strong id="kpi-gross">—</strong>
+        <span id="kpi-gross-note">Awaiting shift data</span>
+      </article>
+      <article class="ops-kpi">
+        <p>Expenses</p><strong id="kpi-expenses">—</strong>
+        <span id="kpi-expenses-note">No entries loaded</span>
+      </article>
+      <article class="ops-kpi">
+        <p>Account collections</p><strong id="kpi-collections">—</strong>
+        <span id="kpi-collections-note">Kept separate from sales</span>
+      </article>
+    </section>
+    <p class="ops-cash-disclosure"><b>Physical cash is not shown:</b> PumpVision can calculate expected sales cash, but physical cash remains unknown until counted-cash movements are recorded.</p>
+
+    <nav class="ops-tabs" role="tablist" aria-label="Live Operations sections">
+      <button role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0" data-tab="overview">Overview</button>
+      <button role="tab" id="tab-activity" aria-controls="panel-activity" aria-selected="false" tabindex="-1" data-tab="activity">Activity <span class="ops-tab-count" id="ops-new-count" hidden>0</span></button>
+      <button role="tab" id="tab-reconciliation" aria-controls="panel-reconciliation" aria-selected="false" tabindex="-1" data-tab="reconciliation">Reconciliation</button>
+      <button role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="false" tabindex="-1" data-tab="sources">Sources</button>
+      {% if current_user.role != 'manager' %}<button role="tab" id="tab-audit" aria-controls="panel-audit" aria-selected="false" tabindex="-1" data-tab="audit">Audit</button>{% endif %}
+    </nav>
+
+    <div class="ops-panels">
+      <section class="ops-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+        <div class="ops-grid ops-grid--overview">
+          <section class="ops-card" aria-labelledby="ops-alerts-title">
+            <div class="ops-card__head"><div><p class="ops-eyebrow">Requires attention</p><h2 id="ops-alerts-title">Operational alerts</h2></div><span class="ops-count" id="ops-alert-count">0</span></div>
+            <div id="ops-alerts" class="ops-list"><p class="ops-empty">Loading alerts…</p></div>
+          </section>
+          <section class="ops-card" aria-labelledby="ops-health-title">
+            <div class="ops-card__head"><div><p class="ops-eyebrow">Data readiness</p><h2 id="ops-health-title">Source health</h2></div><a href="#panel-sources" class="ops-inline-link" data-open-tab="sources">View all</a></div>
+            <div id="ops-health-summary" class="ops-health-summary"><p class="ops-empty">Loading sources…</p></div>
+          </section>
+        </div>
+        <section class="ops-card" aria-labelledby="ops-prices-title">
+          <div class="ops-card__head"><div><p class="ops-eyebrow">Price provenance</p><h2 id="ops-prices-title">Current fuel prices</h2></div></div>
+          <div id="ops-prices" class="ops-price-grid"><p class="ops-empty">Loading prices…</p></div>
+        </section>
+      </section>
+
+      <section class="ops-panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" hidden>
+        <div class="ops-section-head"><div><p class="ops-eyebrow">Human and system events</p><h2>Live activity</h2><p>Business time, actor, source and operational date remain visible together.</p></div><button class="ops-button ops-button--primary" id="ops-show-new" type="button" hidden>Show new updates</button></div>
+        <div id="ops-activity" class="ops-timeline"><p class="ops-empty">Loading activity…</p></div>
+      </section>
+
+      <section class="ops-panel" id="panel-reconciliation" role="tabpanel" aria-labelledby="tab-reconciliation" hidden>
+        <div class="ops-section-head"><div><p class="ops-eyebrow">Manual versus system</p><h2>Nozzle reconciliation</h2><p>Every reading includes its source and observation time.</p></div></div>
+        <div class="ops-table-wrap">
+          <table class="ops-table">
+            <caption class="sr-only">Liquid-fuel nozzle readings and reconciliation status</caption>
+            <thead><tr><th scope="col">Nozzle</th><th scope="col">Opening</th><th scope="col">Manual close</th><th scope="col">IRAS close</th><th scope="col">Variance</th><th scope="col">Status</th></tr></thead>
+            <tbody id="ops-nozzles"><tr><td colspan="6">Loading reconciliation…</td></tr></tbody>
+          </table>
+        </div>
+        <section class="ops-card ops-cng" aria-labelledby="ops-cng-title">
+          <div class="ops-card__head"><div><p class="ops-eyebrow">Two independent streams</p><h2 id="ops-cng-title">CNG reconciliation</h2></div><span id="ops-cng-state" class="ops-status ops-status--pending">Loading</span></div>
+          <div id="ops-cng" class="ops-cng-grid"><p class="ops-empty">Loading CNG data…</p></div>
+        </section>
+      </section>
+
+      <section class="ops-panel" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" hidden>
+        <div class="ops-section-head"><div><p class="ops-eyebrow">Freshness and provenance</p><h2>Source and service health</h2><p>“Checked now” never replaces the source’s actual observation time.</p></div></div>
+        <div id="ops-sources" class="ops-source-grid"><p class="ops-empty">Loading source health…</p></div>
+      </section>
+
+      {% if current_user.role != 'manager' %}<section class="ops-panel" id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
+        <div class="ops-section-head"><div><p class="ops-eyebrow">Accountability</p><h2>Corrections and audit</h2><p>Manual corrections, archives and restorations are recorded with the responsible actor.</p></div></div>
+        <div id="ops-audit" class="ops-list"><p class="ops-empty">Open this view to load audit history.</p></div>
+      </section>{% endif %}
+    </div>
+  </main>
+
+  <div class="ops-sr-status sr-only" id="ops-critical-announcer" aria-live="assertive" aria-atomic="true"></div>
+</div>
+
+<dialog class="ops-a11y" id="ops-a11y" aria-labelledby="ops-a11y-title">
+  <form method="dialog">
+    <div class="ops-a11y__head"><div><p class="ops-eyebrow">Display preferences</p><h2 id="ops-a11y-title">Accessibility</h2></div><button class="ops-icon-button" value="cancel" aria-label="Close accessibility settings" type="submit">×</button></div>
+    <fieldset><legend>Text size</legend><label><input type="radio" name="text-size" value="standard" checked> Standard</label><label><input type="radio" name="text-size" value="large"> Large</label><label><input type="radio" name="text-size" value="xlarge"> Extra large</label></fieldset>
+    <fieldset><legend>Contrast</legend><label><input type="radio" name="contrast" value="standard" checked> Standard</label><label><input type="radio" name="contrast" value="high"> High contrast</label></fieldset>
+    <fieldset><legend>Information density</legend><label><input type="radio" name="density" value="comfortable" checked> Comfortable</label><label><input type="radio" name="density" value="compact"> Compact</label></fieldset>
+    <div class="ops-toggle-list">
+      <label><span><b>Reduce animation</b><small>Removes update highlights and transitions.</small></span><input id="ops-pref-motion" type="checkbox"></label>
+      <label><span><b>Update automatically</b><small>Pause or resume browser refreshes.</small></span><input id="ops-pref-live" type="checkbox" checked></label>
+      <label><span><b>Announce critical alerts</b><small>Allows urgent screen-reader announcements.</small></span><input id="ops-pref-announce" type="checkbox" checked></label>
+    </div>
+    <div class="ops-a11y__footer"><button class="ops-button ops-button--quiet" id="ops-pref-reset" type="button">Reset defaults</button><button class="ops-button ops-button--primary" value="default" type="submit">Done</button></div>
+  </form>
+</dialog>
+
+<script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
+<script src="{{ url_for('static', filename='js/ops.js') }}" defer></script>
+{% endblock %}

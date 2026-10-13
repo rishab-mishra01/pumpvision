@@ -634,7 +634,7 @@ def shift_cng_numpad(nozzle_no):
             return redirect(here)
 
         s = db.session.get(AppSetting, "cng_rsp_per_kg")
-        rsp = float(s.value) if s else 87.0
+        rsp = float(s.value) if s else 93.40
         eff_opening = opening if opening is not None else closing
         kg_sold = max(0.0, closing - eff_opening)
         revenue = round(kg_sold * rsp, 2)
@@ -646,7 +646,7 @@ def shift_cng_numpad(nozzle_no):
             existing.rsp_per_kg = rsp
             existing.revenue = revenue
         else:
-            db.session.add(CngShiftReading(
+            reading = CngShiftReading(
                 op_date=op_date,
                 nozzle_no=nozzle_no,
                 opening_reading=eff_opening,
@@ -655,7 +655,20 @@ def shift_cng_numpad(nozzle_no):
                 rsp_per_kg=rsp,
                 revenue=revenue,
                 submitted_by=current_user.id,
-            ))
+            )
+            db.session.add(reading)
+        from pumpvision.services.ops import record_event
+        record_event(
+            "cng_reading",
+            f"CNG {nozzle_no} manual reading entered",
+            detail=f"Closing {closing:,.2f} kg · {kg_sold:,.2f} kg sold",
+            source="manual",
+            op_date=op_date,
+            business_at=_op.now_ist(),
+            actor=current_user,
+            entity_type="cng_shift_reading",
+            entity_id=f"{op_date}:{nozzle_no}",
+        )
         db.session.commit()
         # Take the other nozzle next if it is still missing.
         done = {r.nozzle_no for r in CngShiftReading.query.filter_by(op_date=op_date)}
@@ -971,6 +984,21 @@ def shift_submit():
         notification_type="shift_close",
         reference_date=op_date,
     ))
+    from pumpvision.services.ops import record_event
+    record_event(
+        "shift_close",
+        "Shift close submitted manually",
+        detail=(f"6/6 liquid nozzles locked · {len(auto)} closed automatically from IRAS"
+                if auto else "6/6 liquid nozzles locked"),
+        source="manual",
+        op_date=op_date,
+        business_at=now,
+        actor=current_user,
+        entity_type="shift_close",
+        entity_id=op_date.isoformat(),
+        idempotency_key=f"shift-close:{op_date.isoformat()}",
+        payload={"auto_idle": auto, "liquid_nozzles": 6},
+    )
     db.session.commit()
     flash(HI["flash_shift_closed"], "success")
     return redirect(url_for("attendant.home"))

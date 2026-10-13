@@ -17,6 +17,12 @@
 
   <div class="mg-body" style="gap:22px;">
 
+    <a href="{{ url_for('ops.index') }}" class="mg-row"
+       style="background:var(--ink-900);color:var(--paper-50);border-color:var(--ink-900);">
+      <span style="flex:1;"><b style="color:inherit;">Live operations</b><small style="color:var(--paper-300);">Current shift, activity and source status</small></span>
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+    </a>
+
     <div>
       <p class="mg-h">{{ t('today_tasks') }}</p>
       <div class="mg-card">

@@ -312,14 +312,28 @@ def expense():
         if error:
             flash(error, "error")
         else:
-            db.session.add(Expense(
+            expense_row = Expense(
                 amount=amount,
                 category=category,
                 sub_category=sub_category or None,
                 description=description or None,
                 op_date=op_date,
                 logged_by=current_user.id,
-            ))
+            )
+            db.session.add(expense_row)
+            db.session.flush()
+            from pumpvision.services.ops import record_event
+            record_event(
+                "expense",
+                f"Expense added · ₹{amount:,.2f}",
+                detail=" / ".join(x for x in (category, sub_category, description) if x),
+                source="manual",
+                op_date=op_date,
+                business_at=datetime.combine(op_date, datetime.now().time()),
+                actor=current_user,
+                entity_type="expense",
+                entity_id=expense_row.id,
+            )
             db.session.commit()
             shown = i18n.label("cat", category)
             if sub_category:
@@ -479,7 +493,7 @@ def payment():
             flash(error, "error")
         else:
             status = "pending_verification" if payment_mode == "Bank Transfer" else "confirmed"
-            db.session.add(PaymentReceived(
+            payment_row = PaymentReceived(
                 invoice_id=None,
                 customer_id=customer.customer_id,
                 amount=amount,
@@ -488,9 +502,23 @@ def payment():
                 reference_number=reference_number or None,
                 notes=notes or None,
                 status=status,
-            ))
+            )
+            db.session.add(payment_row)
             if status == "confirmed":
                 customer.add_to_balance(-amount)
+            db.session.flush()
+            from pumpvision.services.ops import record_event
+            record_event(
+                "account_collection",
+                f"Account collection recorded · ₹{amount:,.2f}",
+                detail=f"{customer.company_name} · {payment_mode} · {status}",
+                source="manual",
+                op_date=get_operational_date(),
+                business_at=datetime.now(),
+                actor=current_user,
+                entity_type="payment_received",
+                entity_id=payment_row.payment_id,
+            )
             db.session.commit()
             if status == "confirmed":
                 flash(tr("payment_recorded", amount=f"{amount:,.2f}", customer=customer.company_name), "ok")

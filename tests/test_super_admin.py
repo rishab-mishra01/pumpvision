@@ -20,6 +20,7 @@ from pumpvision.authorization import (  # noqa: E402
     VIEW_ATTENDANT_DASHBOARD,
     VIEW_DEVELOPER_DASHBOARD,
     VIEW_MANAGER_DASHBOARD,
+    VIEW_OPS_DASHBOARD,
     capabilities_for_role,
     has_capability,
 )
@@ -84,11 +85,11 @@ class SuperAdminTestCase(unittest.TestCase):
             session["_fresh"] = True
 
     def test_capability_matrix_is_explicit_and_super_admin_is_view_only(self):
-        self.assertEqual(ROLE_CAPABILITIES["owner"], {VIEW_ADMIN_DASHBOARD})
-        self.assertEqual(ROLE_CAPABILITIES["manager"], {VIEW_MANAGER_DASHBOARD})
+        self.assertEqual(ROLE_CAPABILITIES["owner"], {VIEW_ADMIN_DASHBOARD, VIEW_OPS_DASHBOARD})
+        self.assertEqual(ROLE_CAPABILITIES["manager"], {VIEW_MANAGER_DASHBOARD, VIEW_OPS_DASHBOARD})
         self.assertEqual(ROLE_CAPABILITIES["attendant"], {VIEW_ATTENDANT_DASHBOARD})
-        self.assertEqual(ROLE_CAPABILITIES["developer"], {VIEW_DEVELOPER_DASHBOARD})
-        self.assertEqual(ROLE_CAPABILITIES["super_admin"], DASHBOARD_VIEW_CAPABILITIES)
+        self.assertEqual(ROLE_CAPABILITIES["developer"], {VIEW_DEVELOPER_DASHBOARD, VIEW_OPS_DASHBOARD})
+        self.assertEqual(ROLE_CAPABILITIES["super_admin"], DASHBOARD_VIEW_CAPABILITIES | {VIEW_OPS_DASHBOARD})
         self.assertEqual(capabilities_for_role("unknown"), frozenset())
         with self.app.app_context():
             user = User.query.filter_by(role="super_admin").one()
