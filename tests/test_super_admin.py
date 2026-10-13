@@ -152,6 +152,22 @@ class SuperAdminTestCase(unittest.TestCase):
                 self.assertEqual(response.status_code, 302)
                 self.assertEqual(response.headers["Location"], location)
 
+    def test_same_account_can_stay_logged_in_on_multiple_devices(self):
+        """A login/logout in one browser must not replace another browser's session."""
+        first_device = self.app.test_client()
+        second_device = self.app.test_client()
+        credentials = {"username": "owner", "password": "testing-password"}
+
+        self.assertEqual(first_device.post("/login", data=credentials).status_code, 302)
+        self.assertEqual(second_device.post("/login", data=credentials).status_code, 302)
+        self.assertEqual(first_device.get("/dashboard").status_code, 200)
+        self.assertEqual(second_device.get("/dashboard").status_code, 200)
+
+        # Signing out on one machine only clears that machine's cookie.
+        self.assertEqual(first_device.get("/logout").status_code, 302)
+        self.assertEqual(first_device.get("/dashboard").status_code, 302)
+        self.assertEqual(second_device.get("/dashboard").status_code, 200)
+
     def test_existing_dashboard_routes_still_render_for_their_roles(self):
         routes = {
             "owner": "/dashboard",
